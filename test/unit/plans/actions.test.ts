@@ -1,4 +1,4 @@
-// A work map's buttons, pressed (work-map/PlanFull.tsx PlanButtons, PlanBits.tsx usePlanAction): they are only those of
+// A work map's buttons, pressed (plans/PlanView.tsx PlanButtons, PlanBits.tsx usePlanAction): they are only those of
 // PlanInfo.can, each makes its own IPC call with the revision on screen, «Cambia il piano» opens the box and sends its
 // words, a second press while one runs does nothing, a refusal is told and keeps the words; and the line that says what
 // the state means (noteOf). React's hooks are replaced, no DOM.
@@ -22,7 +22,7 @@ vi.mock('../../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(), on: () => ()
 vi.mock('../../../src/renderer/actions', () => ({ openChatRef: () => {}, openPlan: () => {} }));
 vi.mock('../../../src/renderer/store/ui', () => ({ toast: hook.toast }));
 vi.mock('../../../src/renderer/store/store', () => ({ useApp: () => undefined }));
-import { noteOf, PlanButtons } from '../../../src/renderer/components/plans/PlanFull';
+import { noteOf, PlanButtons } from '../../../src/renderer/components/plans/PlanView';
 
 const invoke = vi.fn(async (..._a: unknown[]) => ({}));
 vi.stubGlobal('window', { sb: { invoke, on: () => () => {} } });
@@ -34,7 +34,7 @@ function walk(node: ReactNode): ReactElement<Record<string, unknown>>[] {
   return [el, ...walk(el.props.children as ReactNode)];
 }
 let seq = 0;
-const info = (can: PlanAction[], p: Partial<PlanInfo> = {}): PlanInfo => ({ id: `wm_m${++seq}`, title: 'M', touches: [], state: 'toApprove', steps: 3, done: 0, now: 0, blocked: 0, createdAt: 1, updatedAt: 1, planAt: 42, can, ...p });
+const info = (can: PlanAction[], p: Partial<PlanInfo> = {}): PlanInfo => ({ id: `wm_m${++seq}`, title: 'M', state: 'toApprove', steps: 3, done: 0, now: 0, blocked: 0, partial: 0, check: 0, percent: 0, ready: 0, createdAt: 1, updatedAt: 1, planAt: 42, can, ...p });
 const draw = (i: PlanInfo) => {
   hook.cursor = hook.refCursor = 0;
   const all = walk(PlanButtons({ info: i }) as ReactNode);

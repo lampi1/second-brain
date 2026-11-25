@@ -7,7 +7,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, errText: (e: unknown) => String(e) }));
 import type { ChatSummary, PendingRequest } from '../../../src/shared/contract';
 import type { LadderQuestion } from '../../../src/shared/question-ladder';
-import type { PlanPhase, PlanStep, StrategyPlan } from '../../../src/shared/strategy';
+import type { PlanPhase, StrategyPlan } from '../../../src/shared/strategy';
+import type { PlanStep } from '../../../src/shared/plan-steps';
 import type { Plan } from '../../../src/shared/plan';
 import { STALE_MS } from '../../../src/main/plans/live';
 import { LiveMemory } from '../../../src/main/plans/live-memory';
@@ -16,7 +17,8 @@ import { CRASH_GRACE_MS, Plans } from '../../../src/main/plans/service';
 let now: number, saved: Plan[], side: unknown, sideWrites: number, chats: ChatSummary[], asks: PendingRequest[], emitted: string[], told: { threadId: string; detail: string }[], untold: string[], takes: boolean, n: number;
 beforeEach(() => { now = 1_000_000; saved = []; side = null; sideWrites = 0; chats = []; asks = []; emitted = []; told = []; untold = []; takes = true; n = 0; });
 
-const step = (state: PlanStep['state'], ...ids: string[]): PlanStep => ({ title: 'Passo', state, ...(ids.length ? { chatIds: ids } : {}) });
+let stepSeq = 0;
+const step = (state: PlanStep['state'], ...ids: string[]): PlanStep => ({ id: `s${++stepSeq}`, title: 'Passo', state, ...(state === 'done' ? { proof: { at: 1, by: 'report' as const, text: 'ok' } } : {}), ...(ids.length ? { chatIds: ids } : {}) });
 const plan = (phase: PlanPhase, ...steps: PlanStep[]): StrategyPlan => ({ phase, at: 100, clarified: [], steps });
 function chat(id: string, extra: Partial<ChatSummary> = {}): ChatSummary {
   return { id, harness: 'claude', origin: 'app', title: `Lavoro ${id}`, cwd: 'C:/repo', state: 'running', pending: 0, isOrchestrator: false, lastText: '', updatedAt: 0,
@@ -51,7 +53,7 @@ function job(w: Plans) {
 describe('the page is told of a real change, and no version is written for it', () => {
   it('each thing a step\'s chat does is one event and no version', () => {
     const w = maps(), id = job(w), versions = saved.length;
-    const says = () => w.view(id)!.boxes[0]!.live;
+    const says = () => w.view(id)!.steps[0]!.live;
     expect(info(w).live).toMatchObject({ say: 'working', working: [{ chatId: 'k' }] });
     const held: LadderQuestion = { id: 'q-1', asks: [{ question: 'Anche i resi?', options: [] }], level: 'strategist', holder: 'own', at: now, levelAt: now, trail: [], via: 'message' };
     const steps: [Partial<ChatSummary>, object][] = [
@@ -99,20 +101,20 @@ describe('the page is told of a real change, and no version is written for it', 
     change(w, 'k', { state: 'idle', lastResult: { at: now, isError: false } as unknown as ChatSummary['lastResult'] });
     emitted.length = 0;
     saw(w, kid('g', 'k'));
-    expect(w.view(id)!.boxes[0]!.live).toMatchObject({ say: 'working', chats: [{ chatId: 'g', below: true }, { chatId: 'k' }] });
+    expect(w.view(id)!.steps[0]!.live).toMatchObject({ say: 'working', chats: [{ chatId: 'g', below: true }, { chatId: 'k' }] });
     asks = [{ id: 'q', chatId: 'g', type: 'question' } as unknown as PendingRequest];
     w.observe('pending:added', asks[0]);
-    expect(w.view(id)!.boxes[0]!.live).toMatchObject({ say: 'waiting', waits: 'user' });
+    expect(w.view(id)!.steps[0]!.live).toMatchObject({ say: 'waiting', waits: 'user' });
     asks = [];
     w.observe('pending:resolved', { chatId: 'g', requestId: 'q' });
-    expect(w.view(id)!.boxes[0]!.live).toMatchObject({ say: 'working' });
+    expect(w.view(id)!.steps[0]!.live).toMatchObject({ say: 'working' });
     expect(emitted).toEqual([id, id, id]);
   });
 
   it('a step\'s chat that leaves the app is gone from its step at once', () => {
     const w = maps(), id = job(w);
     remove(w, 'k', 'user');
-    expect(w.view(id)!.boxes[0]!.live).toMatchObject({ say: 'gone' });
+    expect(w.view(id)!.steps[0]!.live).toMatchObject({ say: 'gone' });
     expect(info(w).live).toMatchObject({ lost: [{ chatId: 'k', say: 'gone' }] });
     expect(emitted).toEqual([id]);
   });
@@ -269,10 +271,10 @@ describe('time and a restart', () => {
     const at = now, versions = saved.length;
     change(w, 'k', { state: 'idle', lastResult: { at, isError: false } as unknown as ChatSummary['lastResult'] });
     now += STALE_MS; w.tick();
-    expect(w.view(id)!.boxes[0]!.live!.stale).toBeUndefined();
+    expect(w.view(id)!.steps[0]!.live!.stale).toBeUndefined();
     emitted.length = 0;
     now += 1; w.tick();
-    expect(w.view(id)!.boxes[0]!.live).toMatchObject({ say: 'between', stale: at });
+    expect(w.view(id)!.steps[0]!.live).toMatchObject({ say: 'between', stale: at });
     expect(info(w).live!.stale).toBe(at);
     now += STALE_MS; w.tick();
     expect(emitted).toEqual([id]);
@@ -290,11 +292,11 @@ describe('time and a restart', () => {
     chats = chats.map(c => ({ ...c, state: 'closed', lastResult: undefined }) as unknown as ChatSummary);
     const again = maps();
     again.adopt();
-    expect(again.view(id)!.boxes[0]!.live).toMatchObject({ say: 'unknown', stale: seen });
+    expect(again.view(id)!.steps[0]!.live).toMatchObject({ say: 'unknown', stale: seen });
     expect(again.get(id)!.state).toBe('running');
     change(again, 'k', { state: 'running' });
-    expect(again.view(id)!.boxes[0]!.live).toMatchObject({ say: 'working' });
-    expect(again.view(id)!.boxes[0]!.live!.stale).toBeUndefined();
+    expect(again.view(id)!.steps[0]!.live).toMatchObject({ say: 'working' });
+    expect(again.view(id)!.steps[0]!.live!.stale).toBeUndefined();
   });
 
   it('a restart tells nothing twice, and keeps a dead engine\'s stop', () => {

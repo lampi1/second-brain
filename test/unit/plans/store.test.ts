@@ -11,7 +11,7 @@ import type { Plan } from '../../../src/shared/plan';
 let dir: string, store: PlanStore;
 beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-workmaps-')); store = new PlanStore(dir); });
 afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
-const map = (version: number, extra: Partial<Plan> = {}): Plan => ({ id: 'wm_abc123', version, title: `Sconti ${version}`, touches: [], state: 'idea', createdAt: 10, updatedAt: 10 + version, by: 'user', summary: `v${version}`, ...extra });
+const map = (version: number, extra: Partial<Plan> = {}): Plan => ({ id: 'wm_abc123', version, title: `Sconti ${version}`, constraints: [], links: [], state: 'idea', createdAt: 10, updatedAt: 10 + version, by: 'user', summary: `v${version}`, ...extra });
 
 describe('PlanStore', () => {
   it('a new store on the same folder reads the maps and their versions', () => {

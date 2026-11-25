@@ -5,7 +5,8 @@
 // The same through the service: test/unit/workmap-live-service.test.ts.
 import { describe, expect, it } from 'vitest';
 import type { ChatSummary, PendingRequest } from '../../../src/shared/contract';
-import type { PlanStep, StrategyPlan } from '../../../src/shared/strategy';
+import type { StrategyPlan } from '../../../src/shared/strategy';
+import type { PlanStep } from '../../../src/shared/plan-steps';
 import type { LadderQuestion } from '../../../src/shared/question-ladder';
 import { liveWords, type Plan, type PlanLive, type StepLive } from '../../../src/shared/plan';
 import { asksOf, liveOf, movesBelow, readingOf, STALE_MS, type LiveInput } from '../../../src/main/plans/live';
@@ -18,10 +19,11 @@ function chat(id: string, extra: Partial<ChatSummary> = {}): ChatSummary {
 const turn = (at: number, extra: object = {}) => ({ lastResult: { at, isError: false, ...extra } }) as unknown as Partial<ChatSummary>;
 const reported = (outcome: 'done' | 'partial' | 'blocked', at = NOW - 10) => ({ run: { runId: 'r', goal: 'g', startedAt: 1, report: { outcome, at } }, ...turn(at) }) as unknown as Partial<ChatSummary>;
 const kid = (id: string, extra: Partial<ChatSummary> = {}) => chat(id, { parentId: 'own', ...extra });
-const step = (state: PlanStep['state'], chatIds?: string[], extra: Partial<PlanStep> = {}): PlanStep => ({ title: 'Passo', state, ...(chatIds ? { chatIds } : {}), ...extra });
+let stepSeq = 0;
+const step = (state: PlanStep['state'], chatIds?: string[], extra: Partial<PlanStep> = {}): PlanStep => ({ id: `s${++stepSeq}`, title: 'Passo', state, ...(state === 'done' ? { proof: { at: 1, by: 'report' as const, text: 'ok' } } : {}), ...(chatIds ? { chatIds } : {}), ...extra });
 function map(steps: PlanStep[], extra: Partial<Plan> = {}): Plan {
   const plan: StrategyPlan = { phase: 'running', at: 100, clarified: [], steps };
-  return settle({ id: 'wm_live01', version: 3, title: 'Sconti', touches: [], plan, owner: { chatId: 'own', task: 't' }, createdAt: 1, updatedAt: 500, by: 'app', summary: '', ...extra });
+  return settle({ id: 'wm_live01', version: 3, title: 'Sconti', constraints: [], links: [], plan, owner: { chatId: 'own', task: 't' }, createdAt: 1, updatedAt: 500, by: 'app', summary: '', ...extra });
 }
 const ask = (chatId: string): PendingRequest => ({ id: `q-${chatId}`, chatId, type: 'question', title: '?', at: 1 }) as unknown as PendingRequest;
 function live(m: Plan, chats: ChatSummary[], x: Partial<LiveInput> = {}): { boxes: (StepLive | undefined)[]; map: PlanLive | undefined } {

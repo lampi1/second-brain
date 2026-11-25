@@ -7,7 +7,7 @@ import { demoPlans } from '../../src/main/demo-plans';
 import { DemoChats, seed } from '../../src/main/demo';
 import { WORK_MAPS_EN } from '../../src/main/demo-plans-text';
 import { setDemoLang } from '../../src/main/demo-text';
-import { Plans } from '../../../src/main/plans/service';
+import { Plans } from '../../src/main/plans/service';
 
 const E = Date.UTC(2026, 9, 11, 8, 30, 0);
 afterEach(() => setDemoLang('it'));
@@ -47,7 +47,7 @@ describe('the demo\'s work maps', () => {
     expect(of('offline').live).toMatchObject({ why: 'closedByApp' });
     expect(of('loyalty').doubts).toEqual({ open: 1, total: 3, first: 'I punti scadono?' });
     expect(of('coupon').doubts).toEqual({ open: 0, total: 4 });
-    expect(maps.view(of('coupon').id)!.map.plan!.doubts!.map(x => x.by)).toEqual(['user', 'code', 'brain', 'choice']);
+    expect(maps.view(of('coupon').id)!.record.plan!.doubts!.map(x => x.by)).toEqual(['user', 'code', 'brain', 'choice']);
     expect(maps.view(of('returns').id)!.questions.map(x => [x.n, x.question.answered?.by ?? x.question.level])).toEqual([[3, 'orchestrator'], [2, 'strategist']]);
     expect(maps.view(of('push').id)!.questions.map(x => x.question.level)).toEqual(['user']);
     expect(maps.list().slice(0, 3).map(m => m.state)).not.toContain('stopped');

@@ -4,6 +4,7 @@
 // (#351); the plan to approve is a row with «Apri la mappa»: on its map «Cambia il piano» asks for another plan and
 // «Approva e parti» starts it. Hidden window (SB_HIDDEN).
 // Screenshots: test-results/shots/strategist-plan-*.png.
+import type { PlanStep } from '../../src/shared/plan-steps';
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import type { StrategyPlan } from '../../src/shared/strategy';
 import type { ChatItem, PendingRequest } from '../../src/shared/contract';
@@ -12,11 +13,11 @@ import { goPage, launchDemo, openAsk, shot } from './helpers';
 const LEAD = 'tree-plan';
 const demo = <T,>(app: ElectronApplication, fn: string, ...args: unknown[]): Promise<T> =>
   app.evaluate((_e, [f, a]) => ((globalThis as unknown as { __sbDemo: Record<string, (...x: unknown[]) => unknown> }).__sbDemo[f as string]!)(...(a as unknown[])), [fn, args] as const) as Promise<T>;
-const STEPS = [
-  { title: 'Trovo dove si calcola lo sconto oggi', role: 'scout', state: 'todo' },
-  { title: 'Applico lo sconto % sul prezzo pieno', role: 'artisan', state: 'todo' },
-  { title: 'Scrivo le note di rilascio', role: 'herald', state: 'todo' },
-] as const;
+const STEPS: PlanStep[] = [
+  { id: 's1', title: 'Trovo dove si calcola lo sconto oggi', role: 'scout', state: 'todo' },
+  { id: 's2', title: 'Applico lo sconto % sul prezzo pieno', role: 'artisan', state: 'todo', after: ['s1'] },
+  { id: 's3', title: 'Scrivo le note di rilascio', role: 'herald', state: 'todo', after: ['s2'] },
+];
 const plan = (p: Partial<StrategyPlan>): StrategyPlan => ({ phase: 'asking', at: Date.now(), clarified: [], steps: [], ...p } as StrategyPlan);
 const QUESTION = 'Lo sconto vale anche sui prodotti già in offerta?';
 const ask = (app: ElectronApplication) => demo(app, 'ask', LEAD, { type: 'question', tool: 'AskUserQuestion', title: QUESTION, detail: '', input: {},
@@ -163,7 +164,7 @@ test('a finished partial plan is one line on its strip and its map says what is 
   const { app, page } = await launchDemo();
   try {
     await demo(app, 'tree');
-    await demo(app, 'plan', LEAD, plan({ phase: 'done', steps: STEPS.map(s => ({ ...s, state: 'done', outcome: 'partial' })) }));
+    await demo(app, 'plan', LEAD, plan({ phase: 'done', steps: STEPS.map(s => ({ ...s, state: 'partial', proof: { at: 1, by: 'report', text: 'ok' } })) }));
     const card = page.getByTestId(`plan-${LEAD}`);
     await expect(card.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '3');
     await expect(card).toContainText('risultato parziale');
@@ -179,11 +180,11 @@ test('a compact plan distinguishes blocked execution from an unavailable final r
   const { app, page } = await launchDemo();
   try {
     await demo(app, 'tree');
-    await demo(app, 'plan', LEAD, plan({ phase: 'running', steps: STEPS.map(s => ({ ...s, state: 'blocked', outcome: 'blocked' })) }));
+    await demo(app, 'plan', LEAD, plan({ phase: 'running', steps: STEPS.map(s => ({ ...s, state: 'blocked' })) }));
     const line = page.getByTestId(`plan-${LEAD}`);
     await expect(line).toContainText('bloccato');
     await expect(line).not.toContainText('risultato parziale');
-    await demo(app, 'plan', LEAD, plan({ phase: 'done', steps: STEPS.map(s => ({ ...s, state: 'done', outcome: 'blocked' })) }));
+    await demo(app, 'plan', LEAD, plan({ phase: 'done', steps: STEPS.map(s => ({ ...s, state: 'blocked' })) }));
     await expect(line).toContainText('risultato non ottenuto');
     await expect(line).not.toContainText('risultato parziale');
     await top(page);

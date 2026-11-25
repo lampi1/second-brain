@@ -1,6 +1,6 @@
 // The project maps button on the Orchestrator's head (ADR 0301): ADR 0287 removed it while cleaning the head and the
 // user lost the way to the maps from where they talk to the Orchestrator. This renders the real head and fails if the
-// button leaves it; a click opens the maps (openMaps, the same action as the top bar's button and Ctrl+Shift+S).
+// button leaves it; a click opens the plans (openPlans, the same action as the top bar's button and Ctrl+Shift+S).
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -8,7 +8,7 @@ vi.mock('../../src/renderer/sb', () => ({ sb: {} }));
 vi.mock('../../src/renderer/store/store', () => ({ useApp: vi.fn(), ensureOrchestrator: vi.fn(), stop: vi.fn() }));
 vi.mock('../../src/renderer/lib/engines', () => ({ engineName: () => 'Claude Code', useEngines: () => [], useAllEngines: () => [] }));
 vi.mock('../../src/renderer/store/ui', () => ({ ui: { use: (fn: (s: unknown) => unknown) => fn({ focused: null, focusReq: null }) }, setFocused: vi.fn() }));
-vi.mock('../../src/renderer/actions', () => ({ awaitingCard: () => false, clearOrchestratorNow: vi.fn(), go: vi.fn(), openMaps: vi.fn() }));
+vi.mock('../../src/renderer/actions', () => ({ awaitingCard: () => false, clearOrchestratorNow: vi.fn(), go: vi.fn(), openPlans: vi.fn() }));
 vi.mock('../../src/renderer/lib/pairs', () => ({ usePair: () => ({ cls: '' }), pairHover: () => ({}) }));
 vi.mock('../../src/renderer/components/AwayToggle', () => ({ AwayButton: () => null, AwayLine: () => null }));
 vi.mock('../../src/renderer/components/RemoteControl', () => ({ RemoteButton: () => null, RemoteLine: () => null }));
@@ -26,9 +26,9 @@ vi.mock('../../src/renderer/components/ChatTile', () => ({ useFlash: () => false
 vi.mock('../../src/renderer/components/StrategyPanel', () => ({ StrategyPanel: () => null }));
 vi.mock('../../src/renderer/components/QuestionsWindow', () => ({ OrchestratorAsks: () => createElement('div', { 'data-testid': 'orchestrator-asks' }) }));
 import { useApp } from '../../src/renderer/store/store';
-import { openMaps } from '../../src/renderer/actions';
+import { openPlans } from '../../src/renderer/actions';
 import { OrchestratorTile } from '../../src/renderer/components/OrchestratorTile';
-import { MapsButton } from '../../src/renderer/components/MapsButton';
+import { PlansButton } from '../../src/renderer/components/PlansButton';
 
 const chat = { id: 'o1', title: 'Orchestrator', harness: 'claude', status: 'idle', agent: { name: 'Orchestrator' }, createdAt: 0, updatedAt: 0 };
 function render() {
@@ -47,10 +47,10 @@ describe('the project maps button on the Orchestrator', () => {
     expect(head).toContain('data-testid="orchestrator-maps"');
   });
   it('opens the maps on click, like the top bar\'s button', () => {
-    const el = MapsButton({ testid: 'orchestrator-maps' }) as unknown as { props: { onClick: () => void; testid: string; shortcut: string } };
-    expect(el.props.testid).toBe('orchestrator-maps');
+    const el = PlansButton({ testid: 'orchestrator-plans' }) as unknown as { props: { onClick: () => void; testid: string; shortcut: string } };
+    expect(el.props.testid).toBe('orchestrator-plans');
     expect(el.props.shortcut).toBe('Ctrl+Shift+S');
     el.props.onClick();
-    expect(openMaps).toHaveBeenCalledTimes(1);
+    expect(openPlans).toHaveBeenCalledTimes(1);
   });
 });

@@ -19,7 +19,7 @@ import { strategyTools } from '../../../src/main/agents/strategy-tools';
 import { CoordinationStore } from '../../../src/main/coordination/store';
 import { Plans } from '../../../src/main/plans/service';
 import { strategistStarter } from '../../../src/main/plans/start';
-import { jobAction } from '../../../src/main/plans/tools';
+import { planAction } from '../../../src/main/plans/tools';
 import { PlanStore } from '../../../src/main/plans/store';
 import type { AgentCatalog } from '../../../src/shared/agents';
 import type { NewChat } from '../../../src/shared/contract';
@@ -97,8 +97,7 @@ describe('a Strategist always has a work map', () => {
     await f.enough(s.id);
     await f.call('plan_propose', s.id, { steps: [{ id: 's1', title: 'Un passo solo', role: 'artisan', preset: 'max' }] });
     expect(f.mapOf(s.id)).toMatchObject({ state: 'toApprove', plan: { steps: [{ id: 's1', title: 'Un passo solo', role: 'artisan', preset: 'max' }] } });
-    expect(f.mapOf(s.id).plan!.map).toBeUndefined();
-    expect(f.maps().view(f.mapOf(s.id).id)!.boxes).toMatchObject([{ n: 1, title: 'Un passo solo', role: 'artisan', preset: 'max', state: 'todo' }]);
+    expect(f.maps().view(f.mapOf(s.id).id)!.steps).toMatchObject([{ n: 1, title: 'Un passo solo', role: 'artisan', preset: 'max', state: 'todo' }]);
     expect(f.maps().list()).toHaveLength(1);
   });
 
@@ -189,7 +188,7 @@ describe('an open doubt holds the yes on every path (ADR 0344)', () => {
     const blocked = /dubbio aperto/;
     for (const action of ['approve', 'keep'] as const) {
       await expect(act(f, s.id, action)).rejects.toThrow(blocked);
-      await expect(jobAction(f.maps(), action, { job })).rejects.toThrow(blocked);
+      await expect(planAction(f.maps(), { kind: 'orchestrator' }, { action, plan: job })).rejects.toThrow(blocked);
     }
     for (const keep of [false, true]) await expect(f.m.planDecide(s.id, 'approve', at, undefined, 'pc', keep)).rejects.toThrow(blocked);
     await expect(f.m.planDecide(s.id, 'approve', at, undefined, 'phone')).rejects.toThrow(blocked);
@@ -218,7 +217,7 @@ describe('an open doubt holds the yes on every path (ADR 0344)', () => {
     plant(f, s.id, [OPEN]);
     const sent = f.sent.get(s.id)?.length ?? 0;
     await expect(act(f, s.id, 'start')).rejects.toThrow(/dubbio aperto/);
-    await expect(jobAction(f.maps(), 'start', { job: f.mapOf(s.id).id })).rejects.toThrow(/dubbio aperto/);
+    await expect(planAction(f.maps(), { kind: 'orchestrator' }, { action: 'start', plan: f.mapOf(s.id).id })).rejects.toThrow(/dubbio aperto/);
     await expect(f.m.planStart(s.id)).rejects.toThrow(/dubbio aperto/);
     await expect(f.m.send(s.id, 'parti')).rejects.toThrow(/dubbio aperto/);
     expect(f.mapOf(s.id).state).toBe('planned');
@@ -226,9 +225,9 @@ describe('an open doubt holds the yes on every path (ADR 0344)', () => {
   });
 
   it('a job the Orchestrator resumes elsewhere gets that folder (review of ADR 0358)', async () => {
-    const maps = { get: () => ({ id: 'wm_1', title: 'x', plan: { at: 3 } }), act: vi.fn(async () => ({ id: 'wm_1', state: 'running' })) };
-    await jobAction(maps as never, 'resume', { job: 'wm_1', cwd: '/altra' });
-    expect(maps.act).toHaveBeenCalledWith('wm_1', 'resume', { at: 3, cwd: '/altra' }, 'Orchestrator');
+    const maps = { get: () => ({ id: 'pl_wm1', title: 'x', plan: { at: 3 } }), act: vi.fn(async () => ({ id: 'pl_wm1', state: 'running' })) };
+    await planAction(maps as never, { kind: 'orchestrator' }, { action: 'resume', plan: 'pl_wm1', cwd: '/altra' });
+    expect(maps.act).toHaveBeenCalledWith('pl_wm1', 'resume', { at: 3, cwd: '/altra' }, 'Orchestrator');
   });
 
   it('the map is told when a doubt opens and when it closes, with what closed it', async () => {
@@ -243,7 +242,7 @@ describe('an open doubt holds the yes on every path (ADR 0344)', () => {
     await f.m.answer(s.id, 'q-d', { kind: 'question', answers: { [q.question]: 'No' } }, 'pc');
     expect(info().doubts).toEqual({ open: 0, total: 2 });
     expect(f.mapOf(s.id).version).toBeGreaterThan(v);
-    expect(f.maps().view(info().id)!.map.plan!.doubts).toMatchObject([{ state: 'closed', by: 'user', answer: 'No' }, { state: 'closed', by: 'code', source: 'src/mobile.ts:3' }]);
+    expect(f.maps().view(info().id)!.record.plan!.doubts).toMatchObject([{ state: 'closed', by: 'user', answer: 'No' }, { state: 'closed', by: 'code', source: 'src/mobile.ts:3' }]);
   });
 
   it('night mode: the plan waits with its doubt open, and starts once it is closed', async () => {
@@ -467,7 +466,7 @@ describe('a step is never «now» for ever (live status)', () => {
     const f = fixture(), s = await f.proposed();
     await act(f, s.id, 'approve');
     await f.call('agent_delegate', s.id, f.task('scout', 'Sconti · Dove', 1));
-    return { f, s, kid: f.kids(s.id)[0]!.id, box: (g: F = f) => g.maps().view(g.mapOf(s.id).id)!.boxes[0]! };
+    return { f, s, kid: f.kids(s.id)[0]!.id, box: (g: F = f) => g.maps().view(g.mapOf(s.id).id)!.steps[0]! };
   };
 
   it('its chat closed without a report: blocked, and it says so; open again: it goes on', async () => {
