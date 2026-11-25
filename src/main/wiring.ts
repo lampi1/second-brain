@@ -239,7 +239,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const creditWaitRef: { current?: () => void } = {};
   const credits = creditLive({ file: path.join(ctx.userData, 'credits.json'), usage: brain, changed: () => creditWaitRef.current?.() });
   const agents = createAgentCatalog(ctx, brain, engines, () => ({ ...cliCache, ...engineReadiness() }), undefined, {
-    room: (engine, model, asker) => credits.room(engine, model, asker),
+    room: (engine, model, asker, o) => credits.room(engine, model, asker, o),
     claim: (engine, model, owner) => credits.claim(engine, model, owner),
     engineBlock: engine => openRefusal(brain.settings(), engine),
   });
@@ -343,13 +343,17 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       // the user's own model for the work (recorded on the chat the Orchestrator opened with userModel) holds for the
       // chats its Strategist opens for it, when their role's levels have that model (ADR 0354 point 7); an agent never
       // passes one itself (agent_delegate has no such field)
-      req = inheritUserModel(req, manager.list(), (roleId, m) => agents.namesModel(roleId, m));
-      // what the user said for the whole tree (ADR 0359): the model per role and the engines left out, from the nearest
-      // ancestors' records at this launch (so a change made while the tree runs holds); a delegation never opens an excluded engine
-      const tree = req.parentId && !req.orchestrator ? routingFor(req.parentId, manager.list()) : null;
+      // what the user said for the whole tree (ADR 0359): the model per role and the engines left out, from the request's own
+      // record (a root) and the ancestors' records at this launch (so a change made while the tree runs holds); a launch
+      // never opens an excluded engine. The tree's pick comes before an inherited userModel, so a changed record wins.
+      const own = req.routing && !req.orchestrator ? req.routing : null;
+      const up = req.parentId && !req.orchestrator ? routingFor(req.parentId, manager.list()) : null;
+      const tree = own || up ? { picks: { ...(up?.picks ?? {}), ...(own?.picks ?? {}) }, exclude: [...new Set([...(up?.exclude ?? []), ...(own?.exclude ?? [])])] } : null;
       const treePick = tree && !req.userModel && req.roleId ? tree.picks[req.roleId] : undefined;
       if (treePick) req = { ...req, userModel: treePick };
-      const resolved = agents.resolve(req, { claim: true, ...(tree?.exclude.length ? { exclude: tree.exclude } : {}), ...(treePick ? { freePick: true } : {}) });
+      req = inheritUserModel(req, manager.list(), (roleId, m) => agents.namesModel(roleId, m));
+      // only a pick named at the root is the user's explicit one: children inheriting it never skip a pause (ADR 0359)
+      const resolved = agents.resolve(req, { claim: true, ...(tree?.exclude.length ? { exclude: tree.exclude } : {}), ...(treePick ? { freePick: true } : {}), ...(req.parentId ? { inherited: true } : {}) });
       const roleId = req.orchestrator ? 'orchestrator' : req.roleId;
       if (!roleId || (req.orchestrator && !brain.info().brainRoot)) return resolved;
       // only the brain skills this launch gives exist in its plugin

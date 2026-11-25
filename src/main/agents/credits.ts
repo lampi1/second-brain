@@ -186,18 +186,18 @@ export class CreditBook {
   /** A new reading of a pool: another account, or a login after a signed-out reading, drops the old pause. */
   onReading(pool: string, r: { account: string | null; status: string; prevAccount?: string | null }): void {
     const f = this.pools.get(pool);
-    if (!f?.error) return;
+    if (!f || (!f.error && !f.models)) return;
     // the account the error was seen on; unknown then, the one of the reading before this one
     const was = f.account ?? r.prevAccount ?? null;
     if (r.status === 'ok' && r.account && was && r.account !== was) {
-      this.set({ ...f, account: r.account, error: null, probe: null });
+      this.set({ ...f, account: r.account, error: null, probe: null, models: undefined });
       log.info('agents', 'credit pause dropped: another account', { data: { pool } });
     }
   }
   /** The user logged in again (a signed-out reading, then a good one): the old pause goes. */
   relogged(pool: string): void {
     const f = this.pools.get(pool);
-    if (f?.error) { this.set({ ...f, error: null, probe: null }); log.info('agents', 'credit pause dropped: new login', { data: { pool } }); }
+    if (f?.error || f?.models) { this.set({ ...f, error: null, probe: null, models: undefined }); log.info('agents', 'credit pause dropped: new login', { data: { pool } }); }
   }
 
   /** Reads again, once and shared, the pools that look stopped and whose reading is not valid; waits at most `ms`. */
@@ -224,6 +224,13 @@ export class CreditBook {
     if (v.state === 'out' && v.source === 'error' && f?.error && !(f.probe && this.clock() - f.probe.at < PROBE_TTL_MS)) {
       const now = this.clock();
       this.set({ ...f, error: { ...f.error, pauseFrom: now - f.error.pauseMs, at: Math.min(f.error.at, now - f.error.pauseMs) }, probe: null });
+    }
+    // a pause of single models ends now too (ADR 0359): one chat of each tries
+    const g = this.pools.get(pool);
+    if (g?.models) {
+      const now = this.clock();
+      const models = Object.fromEntries(Object.entries(g.models).map(([k, m]) => [k, m.error && !(m.probe && now - m.probe.at < PROBE_TTL_MS) ? { ...m, error: { ...m.error, pauseFrom: now - m.error.pauseMs, at: Math.min(m.error.at, now - m.error.pauseMs) }, probe: null } : m]));
+      this.set({ ...g, models });
     }
     return this.verdict(pool, null);
   }

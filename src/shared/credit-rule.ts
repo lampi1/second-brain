@@ -156,7 +156,7 @@ export function skipLine(name: string, v: Pick<CreditVerdict, 'why'>): string { 
 /** Does a limit error's text say the limit is the whole account's or plan's (ADR 0359)? Otherwise it stops that model only
  *  (seen: gpt-6.2-astra refused with «The usage limit has been reached», two hours later gpt-6.2-sol answered). */
 export function accountWideLimit(text: string | null | undefined): boolean {
-  return /(credit balance|insufficient[_ ]quota|exceeded your current quota|out of credits|subscribe to |hit your (?:usage )?limit|(?:your|account|plan|subscription|weekly|monthly|5-hour|five-hour)[^.]{0,40}\blimit)/i.test(String(text ?? ''));
+  return /(credit balance|insufficient[_ ]quota|exceeded your current quota|out of credits|subscribe to |hit your (?:usage )?limit|claude (?:ai )?usage limit|free usage limit|(?:your|account|plan|subscription|weekly|monthly|5-hour|five-hour)[^.]{0,40}\blimit)/i.test(String(text ?? ''));
 }
 
 /** The pause the provider's own words give: «try again in 2 hours», «resets in 45 minutes», «retry after 90 seconds», an

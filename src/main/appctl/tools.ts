@@ -50,6 +50,7 @@ import type { PullResult } from '../update/source';
 import type { AgentCatalog } from '../../shared/agents';
 import { isWorkRole, ROLE_IDS } from '../../shared/roles';
 import { contractField, taskPrompt } from './task-contract';
+import { routingFor } from '../agents/catalog';
 import { agentCatalogTool, routingOf, userModelOf, type SkillToolsSource } from '../agents/discovery';
 import { splitMode } from '../../shared/newchat';
 import { gapLines, skillGaps } from '../agents/skill-needs';
@@ -646,7 +647,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const treePick = !ownPick && roleId ? routing?.picks?.[String(roleId)] : undefined;
         const userModel = ownPick ?? treePick;
         if (userModel && !authed()) throw new Error('userModel: only the authenticated Orchestrator passes the user\'s own pick.');
-        if (userModel && a.preset !== undefined) throw new Error('userModel and preset: one or the other (the user\'s pick must be one of the card\'s presets).');
+        if (ownPick && a.preset !== undefined) throw new Error('userModel and preset: one or the other (the user\'s pick must be one of the card\'s presets).');
         await d.creditFresh?.();
         const resolved = d.resolveRole({ harness: from, cwd, roleId, title, prompt, ...presetFields, ...(links.roleVersion ? { roleVersion: links.roleVersion } : {}), ...(userModel ? { userModel } : {}) },
           { ...(routing?.exclude?.length ? { exclude: routing.exclude } : {}), ...(treePick ? { freePick: true } : {}) });
@@ -667,7 +668,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const refused = openRefusal(s, harness);
         if (refused) throw new Error(`bloccato: ${refused}`);
         const chat = await d.chats.create({ harness, cwd, title, prompt: `${voice()}\n\n${prompt}`, ...links, orchestrator: false, roleId, ...presetFields, ...(skills.length ? { skills } : {}),
-          ...(model ? { model } : {}), ...(effort ? { effort } : {}), route, ...(userModel ? { userModel } : {}), ...(routing ? { routing } : {}) }, 'agent', undefined, undefined,
+          ...(model ? { model } : {}), ...(effort ? { effort } : {}), route, ...(ownPick ? { userModel: ownPick } : {}), ...(routing ? { routing } : {}) }, 'agent', undefined, undefined,
           // the plain /mcp/app mount is open to any local process: its chats run no wider than the Orchestrator
           { boundByOrchestrator: !authed(), ...intake });
         if (mapLink) d.projectMaps!.link(mapLink.project, chat.id, mapLink.on);
@@ -943,7 +944,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
    *  Refused, with the reason, when the card's engine cannot run either. */
   async function moveToCard(target: ChatSummary, roleId: string, prompt: string, why: string): Promise<ChatSummary> {
     if (!d.resolveRole) throw new ToolRefusal(`bloccato: ${why}.`);
-    const card = d.resolveRole({ harness: target.harness, cwd: target.cwd, roleId, title: target.title, prompt }).request;
+    // the tree's excluded engines (ADR 0359): the work never moves onto one
+    const exclude = routingFor(target.id, d.chats.list()).exclude;
+    const card = d.resolveRole({ harness: target.harness, cwd: target.cwd, roleId, title: target.title, prompt }, exclude.length ? { exclude } : undefined).request;
     const also = card.harness === target.harness ? why : openRefusal(d.brain.settings(), card.harness);
     if (also) throw new ToolRefusal(`bloccato: ${why}${card.harness !== target.harness ? `, e la scheda del ruolo parte su ${engineLabel(card.harness)}: ${also}` : ''}. Il lavoro riparte quando un motore della scheda è acceso e consentito (Impostazioni → Motori).`);
     return d.chats.continueChat(target.id, { allowStart: false, ask: false, on: { harness: card.harness, model: card.model ?? null, effort: card.effort ?? null },

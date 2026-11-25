@@ -165,6 +165,32 @@ describe('the user\'s explicit pick during an assumed pause', () => {
   });
 });
 
+describe('review fixes', () => {
+  it('a pick that came down from an ancestor does not skip a pause; the root\'s own does', () => {
+    const c = catalog((e, m, _a, o) => e === 'opencode' && m === SOL && !o?.ignoreError ? { state: 'out', why: 'errore di limite', resetsAt: T + 1 } : { state: 'ok', why: '', resetsAt: null });
+    const pick = { userModel: { engine: 'opencode', model: SOL } };
+    expect(start(c, pick, { freePick: true }).request.harness).toBe('opencode');
+    expect(start(c, pick, { freePick: true, inherited: true }).request.harness).toBe('opencode');
+    // inherited: the pause holds, so the only model (the pick) is out and the launch still starts on it only when all are out
+    expect(start(c, pick, { freePick: true, inherited: true }).presetChoice?.allOut).toBe(true);
+  });
+  it('Claude\'s and the free plan\'s words are account-wide', () => {
+    expect(accountWideLimit('Claude AI usage limit reached|1700000000')).toBe(true);
+    expect(accountWideLimit('Free usage limit reached. Add credits')).toBe(true);
+  });
+  it('«Riprova ora», a new account and a new login end the pause of single models too', async () => {
+    const clock = { t: T };
+    const b = new CreditBook(null, { reading: () => null, now: () => clock.t }, () => clock.t);
+    b.observe('opencode', ASTRA, MODEL_LIMIT, true, T - 1000);
+    expect(b.verdict('opencode:openai', ASTRA).state).toBe('out');
+    await b.retry('opencode:openai');
+    expect(b.verdict('opencode:openai', ASTRA).state).not.toBe('out');
+    b.observe('opencode', ASTRA, MODEL_LIMIT, true, clock.t - 10);
+    b.relogged('opencode:openai');
+    expect(b.verdict('opencode:openai', ASTRA).state).not.toBe('out');
+  });
+});
+
 describe('a chat that waits on its credits never moves to an excluded engine', () => {
   it('creditMove passes the tree\'s excluded engines to the card', () => {
     const chat = (id: string, extra: Partial<ChatSummary>) => ({ id, state: 'idle', harness: 'claude', agent: { source: 'catalog', id: 'scout' }, ...extra }) as unknown as ChatSummary;

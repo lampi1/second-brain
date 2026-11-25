@@ -79,7 +79,9 @@ export interface ResolveOptions { asker?: string; skip?: readonly string[]; hold
   /** engines the user left out for this work tree (ADR 0359): never picked, never a fallback; with nothing left the launch is refused */
   exclude?: readonly Harness[];
   /** the model of `userModel` is the tree's pick for this role (ADR 0359): it needs not be on the card's levels */
-  freePick?: boolean }
+  freePick?: boolean;
+  /** the user's pick came down from an ancestor, not named for this launch: it does not skip an assumed pause (ADR 0359) */
+  inherited?: boolean }
 /** What a role's card gives a chat of that role now, for a preset (credit-wait.ts): its pick and why. */
 export interface CardPick { engine: Harness; model: string | null; effort: Effort | null; preset: PresetId; allOut: boolean; skipped: SkipNote[]; route: string; rooms: NonNullable<PresetChoice['rooms']> }
 /** What a chat starts with: the request with the role's engine, model and effort, its owner snapshot, the composed
@@ -626,7 +628,7 @@ export class AgentCatalogService {
       candidates = [{ ...named.at, ...(effortOf ? { effort: effortOf } : {}) }];
     }
     // the model of the level (ADR 0347): the first whose engine is on and whose plan has room, in the user's order
-    const got = this.pickIn(candidates, user || o.holdLevel ? undefined : req.delegator, o.asker, o.skip, { ...(o.exclude?.length ? { exclude: o.exclude } : {}), ignoreError: !!user });
+    const got = this.pickIn(candidates, user || o.holdLevel ? undefined : req.delegator, o.asker, o.skip, { ...(o.exclude?.length ? { exclude: o.exclude } : {}), ignoreError: !!user && !o.inherited });
     if (!got) throw new Error(user ? `${user.model} non può partire: ${this.unusable(candidates[0]!, o.exclude) ?? 'motore non pronto'}.`
       : `Nessun modello del livello ${choice.preset} di ${p.name} può partire: ${candidates.map(x => `${x.model ?? 'predefinito'} su ${x.engine} (${this.unusable(x, o.exclude)})`).join(', ')}. Accendi un motore dal menu ⚙ o aggiungi un modello al livello.`);
     const engine = got.chosen.engine;
