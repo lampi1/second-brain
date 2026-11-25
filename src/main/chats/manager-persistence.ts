@@ -3,7 +3,6 @@
 // the update checkpoint, the history read back from the transcript, archive bookkeeping (unarchive, prune).
 import fs from 'node:fs';
 import path from 'node:path';
-import { isDeepStrictEqual } from 'node:util';
 import type { ChatItem } from '../../shared/contract';
 import { errText, log } from '../log';
 import type { HarnessSession } from './session';
@@ -14,7 +13,6 @@ import { findTranscript, readHistory } from './transcript';
 import type { AgentRun, AgentRunEnd, AgentRunEndCause } from '../../shared/agents';
 import type { AgentRunStore} from '../agents/runs';
 import { endRun } from '../agents/runs';
-import { FAIL_CLOSED } from '../agents/tool-policy';
 import { AgentChildrenReducer } from './agent-children';
 import { initialEffort } from './effort';
 import { pausedState } from './remote-control';
@@ -88,28 +86,12 @@ export abstract class ManagerPersistence extends ManagerCore {
     return moved;
   }
 
-  /** At load: a delegated chat saved before ADR 0352 kept the tool classes of its contract as its policy, and asked the
-   *  user for reads. It gets its parent's, as a new one does; its ceiling stays. A damaged policy (FAIL_CLOSED), a chat
-   *  whose parent is gone and the API engine (no tools, read-only) keep what they have. True = something changed. */
+  /** At load, do not replace a delegated chat's tools with its parent's. The contract's classes and the role's own
+   *  limits (tool classes and MCP servers) are not stored apart, so a saved list can be either. Widening would drop a
+   *  limit the role had, including on a chat this version already saved. The saved limit stays (fail closed). A later
+   *  load sees the same policy. True would mean a policy changed; this does not. */
   protected override widenDelegated(): boolean {
-    const done = new Set<string>();
-    let changed = false;
-    const widen = (r: Rec): void => {
-      if (done.has(r.s.id)) return;
-      done.add(r.s.id);
-      const parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
-      if (!parent) return;
-      widen(parent);
-      const own = r.policy;
-      if (!r.s.delegation || !own?.tools || engineOf(r.s.harness)?.kind === 'api' || isDeepStrictEqual(own, FAIL_CLOSED)) return;
-      const tools = parent.policy?.tools ?? null;
-      if (isDeepStrictEqual(tools, own.tools)) return;
-      if (tools || own.ceiling) r.policy = { tools: tools && structuredClone(tools), ceiling: own.ceiling };
-      else delete r.policy;
-      changed = true;
-    };
-    for (const r of this.chats.values()) widen(r);
-    return changed;
+    return false;
   }
 
   /** Only the newest MAX_ARCHIVED archived chats stay in the app. */

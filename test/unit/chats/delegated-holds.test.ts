@@ -1,10 +1,11 @@
-// What a delegated chat never does without the user (chats/delegated-holds.ts, ADR 0352, #472): a database write, a
+// What a delegated chat never does without the user (chats/delegated-holds.ts, ADR 0355, #472): a database write, a
 // production release, a cloud write; every read passes. Pure: scripts come from a fake reader.
 import { describe, expect, it } from 'vitest';
 import { heldForUser } from '../../../src/main/chats/delegated-holds';
 
 const files: Record<string, string> = {
   'reset.sh': '#!/bin/bash\n# restarts\naz webapp restart -n x\n', 'report.sh': 'az webapp list -o table\n', 'ops.ps1': 'param($what)\naz webapp restart -n $what',
+  'ops-status.ps1': 'param($what)\naz webapp show -n $what',
   'fix.sql': 'update t set a = 1 where id = 2', 'look.sql': 'select * from t', 'tool.mjs': 'import { readFileSync } from "node:fs";\n// az webapp restart\nconsole.log(readFileSync("x"))',
 };
 const ctx = { cwd: '/repo', readFile: (abs: string) => files[abs.split(/[\\/]/).pop()!] ?? null };
@@ -21,7 +22,7 @@ describe('heldForUser', () => {
     'cd x && rg "deploy to production" .', 'git commit -m "docs: how to release to production"', "cat > notes.md <<'EOF'\nDeploy to production with az webapp restart\nEOF",
     'aws ec2 describe-instances', 'aws s3 ls', 'aws s3 cp s3://b/k ./k', 'kubectl -n app get deploy', 'kubectl logs pod', 'kubectl rollout status deploy/x', 'terraform plan', 'helm list',
     'sqlcmd -S srv -d db -Q "select top 5 * from t"', 'sqlcmd -S srv -i look.sql', 'sqlcmd -S localhost -Q "update t set a=1"', 'psql -h localhost -c "drop table t"', 'psql -h srv -c "select 1 as updated"',
-    'npx vitest run test/deploy-prod.test.ts', 'npm run build', 'bash report.sh', 'node tool.mjs', 'pwsh ops.ps1 status', 'curl -s https://example.com/release/prod',
+    'npx vitest run test/deploy-prod.test.ts', 'npm run build', 'bash report.sh', 'node tool.mjs', 'pwsh ops-status.ps1 status', 'curl -s https://example.com/release/prod',
     'rm -rf dist && npm ci', 'Get-AzWebApp -Name x', 'Get-ChildItem | Where-Object { $_.Name -match "x" }',
   ])('passes: %s', command => expect(run(command)).toBeNull());
 
@@ -36,7 +37,7 @@ describe('heldForUser', () => {
     'az webapp restart -n x -g y', 'cd a && az group delete -n list', 'for s in a b; do az webapp stop -n $s; done', 'az webapp $ACTION -n x', '"C:/Program Files/Azure/wbin/az.cmd" webapp restart -n x', 'bash -c "az vm start -n x"',
     'az rest --method put --url https://management.azure.com/x --body "{}"', 'az webapp log config --web-server-logging off', 'aws s3 rm s3://b/k', 'aws logs put-retention-policy --x 1', 'kubectl apply -f x.yml', 'kubectl rollout restart deploy/x',
     'helm upgrade x y', 'terraform apply -auto-approve', 'Restart-AzWebApp -Name x', 'curl -X POST https://management.azure.com/subscriptions/x/restart', 'python -c "import subprocess; subprocess.run([\'az\',\'webapp\',\'restart\'])"',
-    'bash reset.sh', './reset.sh', 'pwsh ops.ps1 app1', 'echo "az group delete -n x" | bash', "cat > a.sh <<'EOF'\naz group delete -n x\nEOF\nbash a.sh", 'echo don\'t # it\'s\naz group delete -n x # it\'s',
+    'bash reset.sh', './reset.sh', 'pwsh ops.ps1 app1', 'pwsh ops.ps1 status', 'echo "az group delete -n x" | bash', "cat > a.sh <<'EOF'\naz group delete -n x\nEOF\nbash a.sh", 'echo don\'t # it\'s\naz group delete -n x # it\'s',
   ])('cloud write held: %s', command => expect(run(command)).toBe('cloud-write'));
 
   it.each(['./deploy.sh --env production', 'npm run release:prod', 'gh workflow run release.yml', 'gh release create v1', 'npm publish', 'bash tools/x.sh promote', 'az pipelines release create --x', 'az pipelines run --name deploy-prod', 'node ship.mjs deploy prod'])(

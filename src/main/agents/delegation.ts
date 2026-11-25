@@ -7,7 +7,7 @@
 // climbs the ladder one level at a time (ADR 0344, chats/manager-ladder.ts): its parent answers it with
 // agent_answer_child from what it knows or passes it up with askUser, and only what no agent may or can decide reaches
 // the user. What holds whoever asks: permissions only go down (a contract asking for a
-// tool class beyond the parent's is refused, and the child's policy is narrowed by the parent's, chats/manager.ts; contract.tools only chooses its folder, ADR 0352), the
+// tool class beyond the parent's is refused, and the child's policy is narrowed by the parent's, chats/manager.ts; contract.tools only chooses its folder, ADR 0355), the
 // depth limit of Impostazioni → Ruoli e deleghe is checked and a refusal shows in the parent's chat. A child's folder
 // is any existing one, also of another repository (ADR 0345, #460: a plan often spans several projects); the folder is
 // no permission. Only the Orchestrator and the Strategist delegate (2026-11-23; the Orchestrator through

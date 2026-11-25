@@ -45,7 +45,7 @@ export interface DelegationContract {
   /** checkable criteria: the child reports each one met or not, with evidence */
   doneWhen: string[];
   /** the tool classes the part needs: they choose a shared folder or its own worktree, not what the child may run
-   *  (ADR 0352); a class beyond the parent's is refused */
+   *  (ADR 0355); a class beyond the parent's is refused */
   tools?: ToolClass[];
   /** brain skills the child may use, on top of its role's own */
   skills?: string[];
@@ -104,7 +104,7 @@ export interface ChatDelegation {
   goal: string;
   doneWhen: string[];
   at: number;
-  /** the tool classes its contract asked for (absent = its role's); no limit on what it runs (ADR 0352) */
+  /** the tool classes its contract asked for (absent = its role's); no limit on what it runs (ADR 0355) */
   tools?: ToolClass[];
   /** its agent_report, once given */
   result?: { outcome: DelegationOutcome; summary: string; at: number; doneWhen?: { criterion: string; met: boolean }[]; noReport?: true; corrections?: number;

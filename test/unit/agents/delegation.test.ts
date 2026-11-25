@@ -354,7 +354,7 @@ describe('agent_delegate', () => {
     const review = (await f.call('agent_delegate', root.id, { tasks: [{ ...f.task('sentinel', 'Revisione'), reviewOf: runId }] })).children[0].chatId as string;
     expect(f.m.list().find(c => c.id === review)!.run).toMatchObject({ reviewOf: runId });
     expect(JSON.stringify(f.tool('agent_delegate').inputSchema)).toMatch(/only for role sentinel: the runId of your child's run it reviews/);
-    // what contract.tools does now (ADR 0352)
+    // what contract.tools does now (ADR 0355)
     expect(JSON.stringify(f.tool('agent_delegate').inputSchema)).toMatch(/only chooses the folder: it does not limit what the child may run/);
   });
 

@@ -213,7 +213,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     const renewed = req.orchestrator && by === 'user' && !!agent.policy;
     const parent = delegator ?? forkSrc ?? (req.replaces && !renewed ? this.chats.get(req.replaces) : undefined) ?? bound;
     // a delegated chat: its role's policy, below its parent's. The contract's tool classes say what the part needs: they
-    // choose its folder (prepareDelegation), never what it may run (ADR 0352, #472). A chat from
+    // choose its folder (prepareDelegation), never what it may run (ADR 0355, #472). A chat from
     // the unauthenticated mount reads only, in plan mode, whatever the Orchestrator may (ADR 0085: the Orchestrator's
     // default is every permission, the mount is any local process)
     const policy = delegator ? belowParent(agent.policy, delegator.policy, this.boundMode(delegator))

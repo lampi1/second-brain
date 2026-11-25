@@ -1,7 +1,7 @@
-// A delegated chat through the real ChatManager (ADR 0352, #472): whatever tool classes its contract names, on every
+// A delegated chat through the real ChatManager (ADR 0355, #472): whatever tool classes its contract names, on every
 // engine that asks the gate, in a shared folder and in its own copy, a read runs with no panel; a database write, a
-// production release and a cloud write wait for the user; a chat saved with the old narrowed policy stops asking at
-// load; what the gate leaves to the user logs why. No engine runs: a fake session.
+// production release and a cloud write wait for the user; a saved tool list stays at load when it cannot be told from
+// the role; what the gate leaves to the user logs why. No engine runs: a fake session.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -107,7 +107,7 @@ describe('a delegated chat (#472)', () => {
     }
   });
 
-  it('chats saved with the old narrowed policy stop asking at load; a damaged policy, the ceiling and an orphan keep theirs', async () => {
+  it('a saved allow list stays at load when it cannot be told from the role; a damaged policy, the ceiling and an orphan keep theirs', async () => {
     const f = fixture();
     const narrowed = await f.child('claude', ['read', 'shell-read', 'web']), capped = await f.child('claude', ['read']), damaged = await f.child('claude', ['read']), orphan = await f.child('claude', ['read']);
     const nested = await f.m.create({ harness: 'claude', cwd: f.dir, parentId: narrowed.id, prompt: 'z', delegation: { role: 'scout', goal: 'g', doneWhen: ['Fatto'], at: 1 } }, 'agent', { owner: { ...plainOwner('claude', null), id: 'scout' }, instructions: 'Cerca.', policy: null });
@@ -125,19 +125,58 @@ describe('a delegated chat (#472)', () => {
     saved.chats.reverse();
     fs.writeFileSync(file, JSON.stringify(saved));
     const g = fixture({ userData: f.dir });
-    expect(g.m.agentPolicy(narrowed.id)).toBeNull();
-    expect(g.m.agentPolicy(nested.id)).toBeNull();
-    expect(g.m.agentPolicy(capped.id)).toEqual({ tools: null, ceiling: 'acceptEdits' });
+    const cappedPolicy = { ...old, ceiling: 'acceptEdits' as const };
+    expect(g.m.agentPolicy(narrowed.id)).toEqual(old);
+    expect(g.m.agentPolicy(nested.id)).toEqual(old);
+    expect(g.m.agentPolicy(capped.id)).toEqual(cappedPolicy);
     expect(g.m.agentPolicy(damaged.id)).toEqual(FAIL_CLOSED);
     expect(g.m.agentPolicy(orphan.id)).toEqual(old);
     await g.m.send(narrowed.id, 'continua');
-    expect(g.starts.at(-1)?.toolPolicy).toBeUndefined();
-    for (const r of READS) expect(g.ask(r), r).toBe('allow');
-    for (const h of HELD) expect(g.ask(h), h).toBe('user');
-    // and the widened policy is the one saved
+    expect(g.starts.at(-1)?.toolPolicy).toEqual(old.tools);
     await g.m.shutdown();
     const after = JSON.parse(fs.readFileSync(file, 'utf8')) as { chats: { id: string; agentPolicy?: unknown }[] };
-    expect(after.chats.find(c => c.id === narrowed.id)!.agentPolicy).toBeUndefined();
+    expect(after.chats.find(c => c.id === narrowed.id)!.agentPolicy).toEqual(old);
+    const h = fixture({ userData: f.dir });
+    expect(h.m.agentPolicy(narrowed.id)).toEqual(old);
+    expect(h.m.agentPolicy(nested.id)).toEqual(old);
+    expect(h.m.agentPolicy(capped.id)).toEqual(cappedPolicy);
+  });
+
+  it('a restart keeps a restricted role (tools and MCP servers), and a contract does not widen it', async () => {
+    const role = { tools: { allow: ['read', 'mcp'] as ToolClass[], mcp: ['docs'] }, ceiling: null };
+    const f = fixture();
+    const parent = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' }, 'user');
+    const own = { owner: { ...plainOwner('claude', null), id: 'scout' }, instructions: 'Cerca.', policy: role };
+    const delegation = { role: 'scout' as const, goal: 'Cerca', doneWhen: ['Fatto'], at: 1 };
+    const plain = await f.m.create({ harness: 'claude', cwd: f.dir, parentId: parent.id, prompt: 'y', delegation }, 'agent', own);
+    const limited = await f.m.create({ harness: 'claude', cwd: f.dir, parentId: parent.id, prompt: 'z', delegation: { ...delegation, tools: ['read'] } }, 'agent', own);
+    // a new child keeps the role (belowParent), contract classes included
+    expect(f.m.agentPolicy(plain.id)).toEqual(role);
+    expect(f.m.agentPolicy(limited.id)).toEqual(role);
+    await f.m.shutdown();
+    const g = fixture({ userData: f.dir });
+    expect(g.m.agentPolicy(plain.id)).toEqual(role);
+    expect(g.m.agentPolicy(limited.id)).toEqual(role);
+    await g.m.shutdown();
+    const h = fixture({ userData: f.dir });
+    expect(h.m.agentPolicy(plain.id)).toEqual(role);
+    expect(h.m.agentPolicy(limited.id)).toEqual(role);
+  });
+
+  it('a saved allow list inside the contract stays: it cannot be told from the role, and a second load does not change it', async () => {
+    const f = fixture();
+    const c = await f.child('claude', ['read', 'shell-read', 'web']);
+    await f.m.shutdown();
+    const file = path.join(f.dir, 'chats.json');
+    const saved = JSON.parse(fs.readFileSync(file, 'utf8')) as { chats: { id: string; agentPolicy?: unknown }[] };
+    const old = { tools: { allow: ['read', 'shell-read', 'web'] }, ceiling: null };
+    saved.chats.find(x => x.id === c.id)!.agentPolicy = old;
+    fs.writeFileSync(file, JSON.stringify(saved));
+    const g = fixture({ userData: f.dir });
+    expect(g.m.agentPolicy(c.id)).toEqual(old);
+    await g.m.shutdown();
+    const h = fixture({ userData: f.dir });
+    expect(h.m.agentPolicy(c.id)).toEqual(old);
   });
 
   it('what the gate leaves to the user logs a reason', async () => {

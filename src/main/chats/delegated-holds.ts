@@ -1,20 +1,20 @@
-// What a delegated chat never does without the user (ADR 0352, issue #472): a write on a database, a production release,
+// What a delegated chat never does without the user (ADR 0355, issue #472): a write on a database, a production release,
 // a write on a cloud account. A delegated chat's requests pass the gate without a panel, so these three keep waiting
 // here also where no rule of the user's brain names them (manager-requests.ts permitDecision, after the user's own
 // rules: those may only refuse more). Read from the text of the command, of a script it runs (with its arguments), or of
 // a connector's call. A cloud or database client passes only when its words are known to read; a database on this
-// machine is free. A net over what the app can read, not a wall (known gaps: ADR 0352). Pure apart from reading a
+// machine is free. A net over what the app can read, not a wall (known gaps: ADR 0355). Pure apart from reading a
 // script's file; pinned by test/unit/chats/delegated-holds.test.ts and delegated-holds-review.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
-import { COMMAND_TOOLS, readOnlyCommand, type ReadScripts } from '../agents/tool-policy';
-import { cliWrite, cloudWords, httpMethods, httpWrite, PASSES_ON, PLAIN_READ, PLAIN_SWITCH, positionals, READ, sdkWrite, WRITE } from './cloud-verbs';
+import { COMMAND_TOOLS, type ReadScripts } from '../agents/tool-policy';
+import { cliWrite, cloudCommand, cloudWords, httpMethods, httpWrite, PLAIN_READ, PLAIN_SWITCH, positionals, READ, releaseRead, sdkWrite, WRITE } from './cloud-verbs';
 import { toolClass } from './permit-policy';
 import { command, readCommands, type Command, type Shell } from './shell-commands';
-import { clientCall, looksLikeStatement, looseWrite, statementReads, statementWrites } from './sql-writes';
+import { clientCall, looksLikeStatement, looseWrite, mongoRead, statementReads, statementWrites, wholeStatementReads } from './sql-writes';
 
 export type HoldKind = 'db-write' | 'prod-release' | 'cloud-write' | 'unreadable';
-/** why: English, for the log */
+/** why: reason shown by the gate's log */
 export interface Hold { kind: HoldKind; why: string }
 export interface HoldContext { cwd: string; readScripts?: ReadScripts; readFile?: (abs: string) => string | null }
 export interface HoldRequest { type: string; tool: string; title?: string; input?: unknown; whole?: boolean }
@@ -36,6 +36,8 @@ const CLIENT_NAME = /^(?:sqlcmd|invoke-sqlcmd|osql|bcp|psql|mysql|mariadb|mongos
 const CLIENT = /(?<=^|[\s;&|(){}=!"'`]|bin[\\/])(?:sqlcmd|invoke-sqlcmd|osql|bcp|psql|mysql|mariadb|mongosh|mongo|redis-cli|sqlplus|sqlpackage)(?:\.exe)?(?=["'\s]|$)/im;
 const REACHES = /\b(?:pyodbc|pymssql|psycopg\w*|asyncpg|mssql|tedious|sqlalchemy|pymongo|mongodb|mongoose|oracledb|npgsql|SqlClient|SqlConnection|SqlCommand|OleDb\w*|Odbc\w*|database\.windows\.net|mysql2?|pg)\b|\b[\w-]*(?:query|sql)[\w-]*\.(?:sh|ps1|mjs|js|py)\b|\b(?:jdbc|postgres(?:ql)?|mysql|mssql|mongodb(?:\+srv)?|sqlserver):/i;
 const MIGRATES = /\bdotnet[\s-]+ef\s+database\s+(?:update|drop)\b|\bsqlpackage\b[^\n]*[/-]a(?:ction)?:(?:publish|import)|\b(?:flyway|liquibase)\b[^\n]*\b(?:migrate|update|clean|rollback|repair)\b|\bprisma\s+(?:migrate\s+(?:deploy|reset|dev)|db\s+push)\b|\balembic\b[^\n]*\b(?:upgrade|downgrade)\b|\bknex\b[^\n]*\bmigrate:|\bmanage\.py\s+(?:migrate|flush|loaddata)\b|\b(?:mongorestore|mongoimport|pg_restore|mysqlimport|dropdb|createdb)\b/i;
+const MIGRATION_TOOL = /^(?:flyway|liquibase|alembic)$/i;
+const MIGRATION_READ = /^(?:info|status|validate|history|current|heads|branches|list|show|help|version|changelog-sync-sql|update-sql)$/i;
 const RELEASE = /(?:^|[^a-z])(?:deploy|release|publish|roll-?out|promote|swap)(?![a-z])/i, PROD = /(?:^|[^a-z])(?:prod|production|prd|produzione)(?![a-z])/i;
 const TEST_TARGET = /^(?:test|tst|dev|develop|development|staging|stage|qa|uat|local|localhost|sandbox|preview|demo|canary)(?:[-_.:]?\d+)?$/i;
 const PUBLISHES = /\bgh\s+(?:release\s+(?:create|edit|delete|upload)|workflow\s+run)\b|\bgh\s+api\b[^\n]*(?:dispatches|deployments|releases)[^\n]*(?:-X|--method|-f|-F|--input)[ =]|\b(?:npm|pnpm|yarn|cargo|vsce)\s+publish\b(?![^;&|\n]*--dry-run)|\bnuget\s+push\b|\btwine\s+upload\b/i;
@@ -109,11 +111,14 @@ const piece = (c: Command): string => c.body ? `${c.text}\n${c.body}` : c.text;
 function cloudHold(run: Run): Hold | null {
   const whole = run.kept.map(piece).join('\n'), strict = !!run.code && !RUNS_PROGRAMS.test(whole);
   for (const c of run.kept) {
-    const text = piece(c), cli = strict ? null : cliWrite(text, s => PROD.test(s));
+    const text = piece(c), isProd = (s: string): boolean => PROD.test(s);
+    const direct = cloudCommand(prog(c), c.words.slice(progAt(c) + 1), isProd);
+    if (direct) return direct;
+    const cli = strict ? null : cliWrite(text, isProd);
     if (cli) return cli;
-    if (!strict && cloudWords(text)) return { kind: 'cloud-write', why: 'a cloud command that writes' };
-    if (!/^az$/i.test(prog(c)) && httpWrite(text, whole)) return { kind: 'cloud-write', why: 'a request that writes to a cloud account' };
-    if (sdkWrite(text, strict)) return { kind: 'cloud-write', why: 'code that changes a cloud account' };
+    if (!strict && cloudWords(text)) return { kind: 'cloud-write', why: 'il comando modifica un servizio cloud' };
+    if (!/^(?:az|invoke-azrestmethod)$/i.test(prog(c)) && httpWrite(text, whole)) return { kind: 'cloud-write', why: 'non riconosco la richiesta al servizio cloud come lettura' };
+    if (sdkWrite(text, strict)) return { kind: 'cloud-write', why: 'il codice modifica un servizio cloud' };
   }
   return null;
 }
@@ -121,30 +126,62 @@ function cloudHold(run: Run): Hold | null {
 /** a program's name that is only looked for or installed */
 const MENTION = /^(?:which|where|type|get-command|gcm|hash|for|foreach|alias|apt|apt-get|brew|choco|winget|npm|pip3?)$/i;
 
-/** @param given the arguments of the script, and the text of the .sql files the line names */
-function dbHold(run: Run, given: readonly string[], file: boolean): Hold | null {
+/** @param given the script's arguments; a read is evidence only for the call that consumes it. */
+function dbHold(run: Run, given: readonly string[], ctx: HoldContext): Hold | null {
   const code = run.kept.map(piece).join('\n');
-  if (MIGRATES.test(code)) return { kind: 'db-write', why: 'a command that changes a database' };
+  if (MIGRATES.test(code)) return { kind: 'db-write', why: 'il comando modifica un database' };
+  for (const c of run.kept) {
+    const p = prog(c).toLowerCase();
+    const [area = '', action = '', verb = ''] = positionals(c.words.slice(progAt(c) + 1), PLAIN_SWITCH).sure;
+    const family = MIGRATION_TOOL.test(p) || (p === 'dotnet' && area === 'ef' && /^(?:database|migrations|dbcontext)$/.test(action)) || (p === 'prisma' && /^(?:migrate|db)$/.test(area));
+    if (family && !MIGRATION_READ.test(p === 'dotnet' ? verb : p === 'prisma' ? action : area) && !c.words.some(w => /^(?:-h|--help|--version)$/.test(w))) return { kind: 'db-write', why: 'non riconosco il comando di migrazione come lettura' };
+  }
   const whole = [...run.all.map(piece), ...given].join('\n');
-  const statements: string[] = [], loose: string[] = [], calls: { reads: boolean }[] = [];
+  const statements: string[] = [], loose: string[] = [];
+  let client = false, unknown = false;
+  const load = (name: string): string => /\.sql$/i.test(name) && !/[\r\n$`]/.test(name) ? scriptText(name, ctx) ?? '' : '';
+  const previous = new Map<Command, Command>(), last = new Map<number, Command>();
+  for (const c of run.all) {
+    const prev = last.get(c.pipe);
+    if (prev && c.pipe !== -1) previous.set(c, prev);
+    last.set(c.pipe, c);
+  }
   for (const g of given) (looksLikeStatement(g) || /\s--\s|;/.test(g) ? statements : loose).push(g);
   for (const c of run.kept) {
     const at = run.code || c.words.includes('-v') && c.words.includes('command') || MENTION.test(prog(c)) ? -1
       : c.words.findIndex((w, n) => CLIENT_NAME.test(base(w)) || (n === progAt(c) && /^["']?\$\{?\w+\}?$/.test(w) && CLIENT.test(code) && !/^[+-]?=$/.test(c.words[n + 1] ?? '')));
     if (at >= 0) {
+      client = true;
       const call = clientCall(c.words.slice(at));
-      calls.push(call);
-      statements.push(...call.statements, ...(c.body ? [c.body] : []));
+      const payloads = [...call.statements, ...call.files.map(load), ...(c.body ? [c.body] : c.inputs.map(load))];
       loose.push(call.rest.join(' '), c.words.slice(0, at).join(' '));
-      for (const m of run.all) if (m.pipe === c.pipe && m !== c && m.pipe !== -1) statements.push(m.words.slice(1).join(' '), m.body);
+      const source = previous.get(c);
+      if (source) {
+        if (/^(?:cat|type|get-content|gc)$/i.test(prog(source))) payloads.push(...source.words.slice(progAt(source) + 1).map(load));
+        else if (/^(?:echo|printf|write-output)$/i.test(prog(source))) payloads.push(source.words.slice(progAt(source) + 1).join(' '));
+        else if (source.body) payloads.push(source.body); else if (!call.reads && !payloads.length) payloads.push('');
+      }
+      statements.push(...payloads);
+      if ((!call.reads && !payloads.length) || payloads.some(s => !(call.mongo ? mongoRead(s) : wholeStatementReads(s)))) unknown = true;
     } else {
       loose.push(piece(c).replace(/^exec\s+/, ''));
-      if ((run.code || INTERPRETER.test(prog(c))) && CLIENT.test(piece(c))) calls.push({ reads: false });
+      if (run.code || INTERPRETER.test(prog(c))) {
+        if (CLIENT.test(piece(c))) client = unknown = true;
+        if (REACHES.test(code)) {
+          const text = run.code ? c.text : [...c.words.slice(progAt(c) + 1), c.body].join('\n');
+          if (/\b(?:sql|conn(?:ection)?|pool|cursor|db)\.(?!(?:query|execute(?:Query|Many)?|exec|executemany|run|raw|sql|connect|close|end|release|request|input|cursor|collection|find|findOne|count|countDocuments|distinct|get)(?=\s*\())\w+\s*\(/i.test(text)) client = unknown = true;
+          for (const m of text.matchAll(/\.(?:query|execute(?:Query|Many)?|exec|executemany|run|raw|sql)\s*\(\s*(?:(["'`])((?:(?!\1)[^\\]|\\.)*)\1\s*(?=[,)])|sys\.argv\[(\d+)\]|process\.argv\[(\d+)\])?/gi)) {
+            client = true;
+            const sql = m[2] ?? (m[3] ? given[+m[3] - 1] : m[4] ? given[+m[4] - 2] : undefined) ?? '';
+            if (!wholeStatementReads(sql)) unknown = true;
+          }
+        }
+      }
     }
   }
-  if ((!calls.length && !REACHES.test(code)) || onThisMachine(whole)) return null;
-  if (statements.some(statementWrites) || loose.some(looseWrite)) return { kind: 'db-write', why: 'a statement that writes on a database' };
-  if (calls.some(c => !c.reads) && !file && ![...statements, ...loose].some(statementReads)) return { kind: 'db-write', why: 'a database client whose statement the app cannot read' };
+  if ((!client && !REACHES.test(code)) || onThisMachine(whole)) return null;
+  if (statements.some(statementWrites) || loose.some(looseWrite)) return { kind: 'db-write', why: 'l’istruzione modifica un database' };
+  if (unknown) return { kind: 'db-write', why: 'non riconosco tutte le istruzioni al database come letture' };
   return null;
 }
 
@@ -186,25 +223,33 @@ function promotes(r: Ref): boolean {
 
 const NO_RELEASE = /^(?:\[\[?|test|function|case|for|foreach|param|export|local|declare|readonly|typeset|set|az|aws|gcloud|kubectl|helm|git)$/i;
 const CALLS_OUT = /exec|spawn|system\s*\(|subprocess|popen|\bfetch\s*\(|requests\.|axios|urlopen/i;
+const GH_WRAPPER = /^(?:ssh|wsl|xargs|timeout|watch|start-process|docker|kubectl)$/i;
 function releaseHold(run: Run): Hold | null {
-  const publishes: Hold = { kind: 'prod-release', why: 'a command that publishes a release' }, releases: Hold = { kind: 'prod-release', why: 'a release in production' };
+  const publishes: Hold = { kind: 'prod-release', why: 'il comando pubblica una release' }, releases: Hold = { kind: 'prod-release', why: 'non riconosco il comando di rilascio in produzione come lettura' };
   for (const c of run.kept) {
     for (const said of (run.code ? c.text : c.body).split('\n')) {
       const line = said.replace(/\b(?:console\.\w+|print)\s*\([^)]*\)/g, '');
       if (!CALLS_OUT.test(line)) continue;
       if (PUBLISHES.test(line)) return publishes;
+      const gh = /\bgh\s+release(?:\s+([\w-]+))?/i.exec(line);
+      if (gh && !releaseRead.test(gh[1] ?? '')) return releases;
       if (RELEASE.test(line) && PROD.test(line)) return releases;
     }
     if (run.code) continue;
     const at = progAt(c), p = prog(c);
+    const rest = c.words.slice(at + 1), action = positionals(rest, PLAIN_SWITCH).sure;
+    const gh = /^gh$/i.test(p) ? at : GH_WRAPPER.test(p) ? c.words.findIndex((w, n) => n > at && /^gh$/i.test(base(w))) : -1;
+    if (gh >= 0) {
+      const args = c.words.slice(gh + 1), [area = '', verb = ''] = positionals(args, PLAIN_SWITCH).sure;
+      if (/^release$/i.test(area) && !releaseRead.test(verb) && !args.some(w => /^--?(?:help|h)$/.test(w))) return releases;
+    }
     // a quoted phrase is text, unless it is code that calls out (what a shell is given is a command of its own here)
     const text = c.words.filter(w => !/\s/.test(w) || (INTERPRETER.test(p) && CALLS_OUT.test(w))).join(' ');
     if (PUBLISHES.test(text) || scripts(c).some(promotes)) return publishes;
     if (!p || c.value || NO_RELEASE.test(p) || /^\[[\w.]+\]?(?!.*::)/.test(p) || ((run.shell === 'powershell' || /^\$/.test(p)) && OPERATOR.test(c.words[at + 1] ?? '')) || /\(\)$/.test(p) || CHECKERS.test(c.words.slice(at).join(' '))) continue;
     if (/^(?:curl|wget|iwr|irm)$/i.test(p)) { const h = httpMethods(c.text); if (!h.writes && !h.posts) continue; }
     if (!RELEASE.test(text) || !PROD.test(text)) continue;
-    const rest = c.words.slice(at + 1);
-    if (!rest.some(w => /^--?(?:help|h|dry-run)$/.test(w)) && !positionals(rest, PLAIN_SWITCH).sure.some(w => READ.test(w) || /^logs$/i.test(w))) return releases;
+    if (!rest.some(w => /^--?(?:help|h|dry-run)$/.test(w)) && !releaseRead.test(action[0] ?? '')) return releases;
   }
   return null;
 }
@@ -212,26 +257,20 @@ function releaseHold(run: Run): Hold | null {
 /** @param script its arguments, when this is a script's own text */
 function judge(run: Run, ctx: HoldContext, script?: readonly string[]): Hold | null {
   if (!run.kept.length) return null;
-  if (UNREADABLE.test(run.raw) || run.kept.some(c => UNREADABLE.test(c.text))) return { kind: 'unreadable', why: 'code the app cannot read' };
+  if (UNREADABLE.test(run.raw) || run.kept.some(c => UNREADABLE.test(c.text))) return { kind: 'unreadable', why: 'l’app non può leggere il codice da eseguire' };
   if (!run.code) for (const c of run.kept) {
     const w = c.words.slice(progAt(c));
     if (!/^\$(?:\w+$|\{)/.test(w[0] ?? '') || OPERATOR.test(w[1] ?? '') || (run.shell === 'powershell' && !c.called)) continue;
     const verb = w.slice(1).find(x => WRITE.test(x) || PLAIN_READ.test(x));
-    if (verb && !PLAIN_READ.test(verb)) return { kind: 'unreadable', why: 'a program named by a variable, asked to write' };
+    if (verb && !PLAIN_READ.test(verb)) return { kind: 'unreadable', why: 'il nome del programma è in una variabile e il comando indica una scrittura' };
   }
   const cloud = cloudHold(run);
   if (cloud) return cloud;
-  const given = [...(script ?? [])];
-  let file = false;
-  for (const name of new Set([...run.kept.flatMap(c => [...c.words, ...c.inputs]).flatMap(w => /([\w./\\:~+-]+\.sql)$/i.exec(w)?.[1] ?? []), ...given.filter(a => /\.sql$/i.test(a))])) {
-    const text = scriptText(name, ctx);
-    if (text !== null) { given.push(`${text}\n;`); file = true; }
-  }
   if (!script) for (const c of run.kept) for (const r of scripts(c)) {
     const text = scriptText(r.file, ctx), h = text === null ? null : scriptHold(r, text, ctx);
     if (h) return { ...h, why: `${path.basename(r.file)}: ${h.why}` };
   }
-  return dbHold(run, given, file) ?? releaseHold(run);
+  return dbHold(run, script ?? [], ctx) ?? releaseHold(run);
 }
 
 /** PowerShell's parameters by name, from how the script is called */
@@ -247,12 +286,19 @@ function namedArgs(text: string, args: readonly string[]): Map<string, string> {
   return out;
 }
 
+/** Select the arm only for a whole Bash script that is a literal, non-fallthrough case on $1. */
+function caseBody(text: string, args: readonly string[]): string {
+  const body = /^\s*case\s+"\$1"\s+in\s+([\s\S]+)\s+esac\s*$/.exec(text)?.[1];
+  if (!body) return text;
+  const arms = body.split(';;');
+  if (arms.pop()?.trim()) return text;
+  const parsed = arms.map(arm => /^\s*([\w-]+)\)\s*([^;&|\n`$()]+(?: "\$2")?)\s*$/.exec(arm));
+  if (parsed.some(arm => !arm)) return text;
+  const selected = parsed.find(arm => arm?.[1] === args[0]) ?? (args[0] === '-v' ? parsed.find(arm => arm?.[1] === args[1]) : undefined);
+  return selected?.[2] ?? text;
+}
+
 function scriptHold(r: Ref, text: string, ctx: HoldContext): Hold | null {
-  const { sure, after } = positionals(r.args, PLAIN_SWITCH);
-  // a script that does several things by its first word, asked to read; not one that hands its words to a cloud program
-  const reads = sure.length ? READ.test(sure[0]!) : after.some(w => READ.test(w)) && !after.some(w => WRITE.test(w));
-  const carries = r.args.some(a => /\s/.test(a) && (looksLikeStatement(a) ? statementWrites(a) : looseWrite(a)));
-  if (reads && !carries && !PASSES_ON.test(text) && /\$\{?[1-9@*]|\$args\b|\bparam\s*\(|\bargv\b|%[1-9*]/i.test(text)) return null;
   let run: Run;
   if (/\.(?:py|js|mjs|cjs|ts)$/i.test(r.file) || !r.shell) {
     const body = text.replace(/^[ \t]*(?:#|\/\/).*$/gm, '');
@@ -261,7 +307,7 @@ function scriptHold(r: Ref, text: string, ctx: HoldContext): Hold | null {
   else if (/\.(?:cmd|bat)$/i.test(r.file)) {
     const body = text.replace(/\^\r?\n/g, ' ').replace(/^[ \t]*@?(?:(?:rem\b|::).*|echo\b[^|&\r\n]*)$/gim, '').replace(/%(?:~?([1-9])|\*)/g, (_, n: string) => n ? r.args[+n - 1] ?? '' : r.args.join(' '));
     run = runOf(body.replace(/\r\n/g, '\n'), 'powershell');
-  } else run = runOf(text.replace(/\r\n/g, '\n').replace(/\\\n/g, ' '), 'bash', r.args);
+  } else run = runOf(caseBody(text.replace(/\r\n/g, '\n').replace(/\\\n/g, ' '), r.args), 'bash', r.args);
   return judge(run, ctx, r.args);
 }
 
@@ -320,9 +366,8 @@ export function heldForUser(req: HoldRequest, ctx: HoldContext): Hold | null {
   const cls = toolClass(req.tool, COMMAND_TOOLS), input = obj(req.input);
   if (cls === 'command' || req.tool === 'Monitor') {
     const raw = Array.isArray(input.command) ? input.command.join(' ') : input.command;
-    if (typeof raw !== 'string' || !raw.trim()) return { kind: 'unreadable', why: 'the request does not say what it runs' };
-    if (readOnlyCommand(raw, ctx.readScripts)) return null;
-    if ((!req.whole && CUT.test(raw)) || raw.length > MAX_TEXT) return { kind: 'unreadable', why: 'the command is not all there to read' };
+    if (typeof raw !== 'string' || !raw.trim()) return { kind: 'unreadable', why: 'la richiesta non indica il comando da eseguire' };
+    if ((!req.whole && CUT.test(raw)) || raw.length > MAX_TEXT) return { kind: 'unreadable', why: 'la richiesta non contiene il comando completo' };
     const own = [input.cwd, input.workdir, input.working_directory].find((x): x is string => typeof x === 'string' && !!x);
     // a leading cd moves where the scripts are read from
     const moved = /^\s*cd\s+["']?([^\s"';&|$]+)["']?\s*(?:&&|;|\n)/.exec(raw)?.[1];

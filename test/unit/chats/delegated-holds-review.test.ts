@@ -1,4 +1,4 @@
-// The review findings on the three held writes (chats/delegated-holds.ts, ADR 0352, #472): scripts judged with their
+// The review findings on the three held writes (chats/delegated-holds.ts, ADR 0355, #472): scripts judged with their
 // caller's arguments, the verb of a cloud command, the whole check inside scripts, SQL shapes, text that only looks like
 // a write. Pure: scripts come from a fake reader.
 import { describe, expect, it } from 'vitest';
@@ -14,8 +14,7 @@ db="\${1:-}"; file="\${2:-}"
 shift 2
 bad='\\b(INSERT|UPDATE|DELETE|MERGE|EXEC|KILL|RECONFIGURE|SHUTDOWN|INTO)\\b'
 if hit="$(grep -Eio "$bad" "$file" | sort -u)" && [ -n "$hit" ]; then echo "REFUSED: $hit" >&2; exit 2; fi
-tmp="$(mktemp --suffix=.sql)"
-sqlcmd -S "$SERVER" -d "$db" -l 30 -i "$(cygpath -w "$tmp")" | head -n "\${MAX:-500}"
+sqlcmd -S "$SERVER" -d "$db" -l 30 -i "$file" | head -n "\${MAX:-500}"
 `;
 const files: Record<string, string> = {
   'ro-query.sh': 'sqlcmd -S srv -Q "$1"\n', 'flagged.sh': 'while getopts "d:" o; do DB="$OPTARG"; done; shift 2\nsqlcmd -S srv -d "$DB" -Q "$1"\n',

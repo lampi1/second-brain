@@ -1,4 +1,4 @@
-// The simple commands of a shell line or script, with their words out of the quotes (ADR 0352): quotes, comments,
+// The simple commands of a shell line or script, with their words out of the quotes (ADR 0355): quotes, comments,
 // substitutions, blocks, heredocs, and the variables and arguments whose value the text itself gives. Bash and PowerShell
 // read the same characters differently, so the caller names the shell. Linear; null when the text cannot be trusted
 // (an open quote, nesting too deep). Used by delegated-holds.ts; not an interpreter: a net over what the text says.

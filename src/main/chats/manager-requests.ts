@@ -597,7 +597,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
   /** ADR 0103, 0254: the app answers a permission request itself (chats/auto-permit.ts): everything passes but what the
    *  user's brain rules hold (permissions.json: refused visibly with the rule's reason, or sent to the user), what
    *  the user's own role limits keep for them and, in a delegated chat, the three writes that always wait for the user
-   *  (delegated-holds.ts, ADR 0352). Each request left to the user logs why. */
+   *  (delegated-holds.ts, ADR 0355). Each request left to the user logs why. */
   private permitDecision(r: Rec, req: Omit<PendingRequest, 'chatId'>, whole = false): GateDecision {
     const policy = loadPolicy(this.opts.brainRoot?.() ?? null);
     if (policy.state === 'broken' && r.policyWarned !== policy.error) {
