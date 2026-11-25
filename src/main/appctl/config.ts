@@ -42,7 +42,7 @@ export interface ConfigDeps {
   userAsked(): boolean;
   /** what the user's last «Sì» to this Orchestrator was about, when recent (user-words.ts answeredText); null = none */
   saidYesTo?(): { text: string; used(): void } | null;
-  /** a change that is not applied stays «da applicare» on its own panel (pending-config.ts, ADR 0357) */
+  /** a change that is not applied stays «da applicare» on its own panel (pending-config.ts, ADR 0358) */
   held?: { hold(c: Omit<PendingChange, 'id' | 'at'>): PendingChange; applied(c: HeldChange): void };
   brain: {
     settings(): Settings; settingsSchema(): SettingDef[]; settingsHistory(limit?: number): SettingChange[];
@@ -343,7 +343,7 @@ export function configTool(d: ConfigDeps): ToolDef {
       if (!(AREAS as readonly string[]).includes(area)) throw new Error(`area: ${AREAS.join(' | ')}`);
       const q = typeof a.query === 'string' ? a.query : '';
       const reason = typeof a.reason === 'string' ? a.reason.slice(0, 300) : undefined;
-      /** The proof of a change (ADR 0357): the user's ask as always, or their recent «Sì» to a card that names this very
+      /** The proof of a change (ADR 0358): the user's ask as always, or their recent «Sì» to a card that names this very
        *  change. Else it is not applied and stays «da applicare» on a panel the app writes. */
       const proven = (c: HeldChange, what: string, words: ChangeWords) => {
         if (d.userAsked()) return;

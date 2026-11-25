@@ -1,4 +1,4 @@
-// The folder a chat works in (ADR 0358): whoever opens it names any existing folder (folderProblem is the only refusal)
+// The folder a chat works in (ADR 0359): whoever opens it names any existing folder (folderProblem is the only refusal)
 // and how: `here`, in that folder itself (the default: nothing is copied, uncommitted changes are only said), or `copy`,
 // an isolated worktree of the folder's repository, made only when asked. The folder is no permission: tool classes and
 // the ceiling still only go down (agents/tool-policy.ts). Used by agents/delegation.ts and appctl/tools.ts (the early
@@ -25,7 +25,7 @@ const samePath = (a: string, b: string): boolean => {
   return process.platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y;
 };
 
-/** Why a chat may not work in a folder, naming it (ADR 0358); null = it may. The only refusal about a folder. */
+/** Why a chat may not work in a folder, naming it (ADR 0359); null = it may. The only refusal about a folder. */
 export function folderProblem(cwd: unknown): string | null {
   const f = typeof cwd === 'string' ? cwd.trim() : '';
   if (!f) return 'Cartella non valida: (vuota).';
@@ -269,7 +269,7 @@ export class DelegateWorktrees {
         this.allocations.set(real(cwd), owned);
       } };
     }
-    // in the folder itself (ADR 0358): nothing is copied, nothing is refused
+    // in the folder itself (ADR 0359): nothing is copied, nothing is refused
     if (req.place !== 'copy') return { cwd, ...provenance, notes: await this.uncommitted(cwd) };
     // One checkout is verified once, through one session (each checkout's policy read once): each Git spawn costs up to
     // seconds on Windows with real-time antivirus scanning (ADR 0227 measured the steps)

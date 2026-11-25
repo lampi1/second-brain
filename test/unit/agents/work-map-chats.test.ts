@@ -225,7 +225,7 @@ describe('an open doubt holds the yes on every path (ADR 0344)', () => {
     expect(f.sent.get(s.id)?.length ?? 0).toBe(sent);
   });
 
-  it('a job the Orchestrator resumes elsewhere gets that folder (review of ADR 0358)', async () => {
+  it('a job the Orchestrator resumes elsewhere gets that folder (review of ADR 0359)', async () => {
     const maps = { get: () => ({ id: 'wm_1', title: 'x', plan: { at: 3 } }), act: vi.fn(async () => ({ id: 'wm_1', state: 'running' })) };
     await jobAction(maps as never, 'resume', { job: 'wm_1', cwd: '/altra' });
     expect(maps.act).toHaveBeenCalledWith('wm_1', 'resume', { at: 3, cwd: '/altra' }, 'Orchestrator');
