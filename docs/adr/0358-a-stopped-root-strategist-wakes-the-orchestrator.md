@@ -17,8 +17,10 @@ Strategist had finished, and the Orchestrator knew nothing.
 1. **The turn end of a root Strategist is `group`** (delivered within `ORCHESTRATOR_GROUP_MS`, 30 s) only when all
    hold (`stuckStrategist` in `src/main/chats/orchestrator-wake.ts`): a catalog Strategist with no parent, started by
    the Orchestrator, its run still open and no `agent_report` for that run; no question, permission or command open
-   (the chat's `pending` and the requests seen on `pending:added` / `pending:resolved`) and no plan `proposed`; no
-   chat under it, at any depth, running, waiting, starting or queued; no `agent_wake_later` set (`useWakeLater`,
+   (the chat's `pending`, the requests seen on `pending:added` / `pending:resolved`, an unanswered ladder question)
+   and no plan in `asking`, `proposed`, `revising` or `approved` (the phases `manager-delegation.ts` never nudges);
+   no background task, `waitsOnWork` or active provider agent; no chat under it, at any depth, running, waiting,
+   starting or queued; no `agent_wake_later` set (`useWakeLater`,
    wired in `wiring.ts`); no `creditWait` and no `plan.stopped` («Ferma»). Otherwise it stays `quiet`.
 2. **Read again at delivery**: the class is computed from the live chat list every time the buffer is timed and sent,
    so a new turn, a report or a request within the window makes it quiet again, and nothing goes by itself.

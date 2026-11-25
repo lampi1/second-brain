@@ -73,7 +73,13 @@ export function stuckStrategist(c: ChatSummary, all: readonly ChatSummary[], ope
   if (c.agent?.source !== 'catalog' || c.agent.id !== 'strategist') return false;
   if (!run || run.startedBy !== 'orchestrator' || run.endedAt) return false;
   if (run.report?.via === 'agent_report' && (!run.report.canonical || run.report.canonical.runId === run.runId)) return false;
-  if (c.pending > 0 || open > 0 || c.plan?.phase === 'proposed' || c.plan?.stopped || scheduled || c.creditWait) return false;
+  // waiting on the user: a request, a ladder question, a plan in its interview, to approve, being revised or put aside
+  // (the same phases manager-delegation.ts never nudges); waitsOn stays out: «a decision from above» is this case
+  const plan = c.plan?.phase;
+  if (c.pending > 0 || open > 0 || c.questions?.some(q => !q.answered) || plan === 'asking' || plan === 'proposed' || plan === 'revising' || plan === 'approved') return false;
+  if (c.plan?.stopped || scheduled || c.creditWait) return false;
+  // waiting on work: background tasks, a build it said it waits for, provider agents it started
+  if ((c.background ?? 0) > 0 || c.waitsOnWork || (c.agentChildren?.active ?? 0) > 0) return false;
   // a chat under it (at any depth) still works or waits for a slot
   const under = new Set([c.id]);
   for (let grew = true; grew;) {
@@ -209,6 +215,8 @@ export class OrchestratorWake {
   /** A plain turn end of a root Strategist stopped without a result (stuckStrategist), read now. */
   private stuck(e: WakeEvent): boolean {
     if (e.kind !== 'done' || e.report || e.child || e.silent || e.requestId) return false;
+    const seen = this.chats.get(e.chatId);
+    if (!seen || seen.parentId || seen.agent?.id !== 'strategist') return false; // no list read for any other chat
     const all = this.d.list?.();
     const c = all?.find(x => x.id === e.chatId);
     return !!all && !!c && stuckStrategist(c, all, this.openAsks.get(c.id)?.size ?? 0, this.wakeScheduled(c.id));
@@ -474,8 +482,8 @@ export class OrchestratorWake {
     // (quiet news rides along), chats told too recently wait for their turn
     if (this.nextDue(gate) > now) { this.reschedule(); return; }
     const ready = [...this.buffer.values()].filter(e => passes(gate, this.cls(e)) && this.readyAt(slotOf(e)) <= now);
-    const told = ready.map(e => (this.stuck(e) ? { ...e, stuck: true as const } : e));
     ready.sort((a, b) => a.at - b.at);
+    const told = ready.map(e => (this.stuck(e) ? { ...e, stuck: true as const } : e));
     for (const e of ready) this.lastSent.set(slotOf(e), now);
     this.changed();
     this.sending = true;

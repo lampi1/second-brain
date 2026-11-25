@@ -94,9 +94,12 @@ describe('OrchestratorWake: a root Strategist stopped without a result', () => {
     w.stop();
   });
 
-  it('a request, a plan to approve, credits or «Ferma»: no wake', async () => {
+  it('a request, a plan with the user, work in the background, credits or «Ferma»: no wake', async () => {
     const cases: Partial<ChatSummary>[] = [
       { plan: { phase: 'proposed', clarified: [], steps: [], at: 1 } },
+      ...(['asking', 'revising', 'approved'] as const).map(phase => ({ plan: { phase, clarified: [], steps: [], at: 1 } })),
+      { background: 1 },
+      { waitsOnWork: true },
       { plan: { phase: 'running', clarified: [], steps: [], at: 1, stopped: true } },
       { creditWait: { at: 1, model: 'gpt-5' } },
     ];
