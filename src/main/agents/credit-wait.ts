@@ -59,6 +59,8 @@ export interface CreditWaitDeps {
   card(roleId: string, ask: PresetAsk, o: { asker: string; skip: readonly string[] }): CardNow;
   /** the move runs now on this model: if its pool is on probation, this chat is its one try (credit-live.ts claim) */
   claim?(on: CardNow, owner: string): void;
+  /** the move did not run after all: the claim goes */
+  release?(on: CardNow, owner: string): void;
   /** a short key of a role's level lists: «Annulla» holds until it changes */
   levelsKey?(roleId: string): string;
   now?: () => number;
@@ -150,10 +152,12 @@ export function creditWaitWatch(d: CreditWaitDeps): () => void {
       if (moving.size >= MAX_MOVING || now() - lastStart < STAGGER_MS) { again(Math.max(STAGGER_MS - (now() - lastStart), 500)); continue; }
       lastStart = now();
       moving.add(c.id);
-      d.claim?.(move.do === 'resume' ? { engine: c.harness, ...move.to } : move.on, c.id);
+      const on: CardNow = move.do === 'resume' ? { engine: c.harness, ...move.to } : move.on;
+      d.claim?.(on, c.id);
       const done = move.do === 'resume' ? d.chats.creditResume(c.id, move.to, move.note) : d.chats.creditContinue(c.id, move.on, move.note);
-      void done.then(ok => { if (ok) log.info('agents', 'chat out of credits goes on in its level', { chat: c.id, data: { how: move.do, card: move.card, level: move.note.level } }); })
+      void done.then(ok => { if (!ok) d.release?.(on, c.id); if (ok) log.info('agents', 'chat out of credits goes on in its level', { chat: c.id, data: { how: move.do, card: move.card, level: move.note.level } }); })
         .catch(e => {
+          d.release?.(on, c.id);
           const permanent = e instanceof CreditMoveRefused;
           const tries = (w.failed ?? []).find(f => f.card === move.card)?.n ?? 0;
           const wait = RETRY_MS[tries];

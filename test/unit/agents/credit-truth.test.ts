@@ -310,3 +310,24 @@ describe('review fixes', () => {
     expect(claim).toHaveBeenCalledWith(expect.objectContaining({ model: 'm-next' }), 'a');
   });
 });
+
+describe('a claim the move never used', () => {
+  it('is released, so the next chat may try', async () => {
+    const clock = { t: 1000 };
+    const claim = vi.fn(), release = vi.fn();
+    const chat = { id: 'a', harness: 'claude', model: 'm-old', state: 'idle', agent: { id: 'scout', source: 'catalog' }, creditWait: { at: 1, model: 'm-old', card: 'claude:m-old' } } as unknown as ChatSummary;
+    const chats = { list: () => [chat], creditPlan: (_id: string, next: { card: string; at: number }) => { chat.creditWait = { ...chat.creditWait!, next }; },
+      creditResume: vi.fn(async () => false), creditContinue: vi.fn(async () => true), creditWaiting() {}, creditHold() {}, creditFailed() {} };
+    const watch = creditWaitWatch({ chats, card: () => ({ engine: 'claude', model: 'm-next', effort: null }), claim, release, now: () => clock.t, later: () => {} });
+    watch(); clock.t += GRACE_MS + 1; watch(); await new Promise(r => setImmediate(r));
+    expect(release).toHaveBeenCalledWith(expect.objectContaining({ model: 'm-next' }), 'a');
+    const { book, clock: c2 } = bookOf();
+    book.observe('opencode', SOL, LIMIT, true, T);
+    c2.t = T + SHORT_PAUSE_MS + 1;
+    book.claim('opencode:openai', 'chat-1');
+    book.release('opencode:openai', 'chat-2');
+    expect(book.facts('opencode:openai')!.probe!.owner).toBe('chat-1');
+    book.release('opencode:openai', 'chat-1');
+    expect(book.verdict('opencode:openai', SOL, 'chat-2').state).toBe('probation');
+  });
+});

@@ -47,6 +47,8 @@ export interface CreditLive {
   freshAll(): Promise<void>;
   /** a chat starts on (engine, model): if that pool is on probation, this chat is its one try */
   claim(engine: Harness, model: string | null, owner: string): void;
+  /** the chat that claimed did not start on it: the probe is free again */
+  release(engine: Harness, model: string | null, owner: string): void;
   observe(engine: Harness, model: string | null, errorText: string | null | undefined, isError: boolean, startedAt: number): void;
   retry(pool: string): Promise<CreditVerdict>;
   /** schedules the next read at the end of the nearest pause or spent window */
@@ -126,6 +128,7 @@ export function creditLive(d: CreditLiveDeps): CreditLive {
     fresh: async models => book.fresh(models.map(m => poolOf(m.engine, m.model))),
     freshAll: async () => book.fresh(pools()),
     claim: (engine, model, owner) => book.claim(poolOf(engine, model), owner),
+    release: (engine, model, owner) => book.release(poolOf(engine, model), owner),
     observe: (engine, model, errorText, isError, startedAt) => {
       const pool = book.observe(engine, model, errorText, isError, startedAt);
       // a limit error: read the pool now (it says which window ended and when it comes back)

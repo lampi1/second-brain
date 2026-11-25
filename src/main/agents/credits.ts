@@ -110,6 +110,12 @@ export class CreditBook {
     this.set({ ...f, probe: { owner, at: this.clock() } });
   }
 
+  /** A chat that claimed the probe did not start there after all: the next one may try. */
+  release(pool: string, owner: string): void {
+    const f = this.pools.get(pool);
+    if (f?.probe?.owner === owner) this.set({ ...f, probe: null });
+  }
+
   /** A limit error seen in a chat's turn (`startedAt` = the turn's start): the pool pauses, see nextError. */
   signal(pool: string, startedAt: number, text = ''): void {
     const now = this.clock(), f = this.pools.get(pool) ?? this.empty(pool);
