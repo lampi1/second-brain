@@ -15,14 +15,14 @@ function fixture() {
   const dir = tmp('user-close-keep'), em = recEmitter();
   const started: SessionOptions[] = [], sinks = new Map<string, SessionSink>(), busy = new Map<string, boolean>();
   let exitMs = 0;
-  const m = new ChatManager({ userData: dir, emitter: em, coldEveryMs: 0, runEveryMs: 0, claudeHome: `${dir}/home`, env: { CLAUDE_CONFIG_DIR: `${dir}/home` },
+  const m = new ChatManager({ userData: dir, emitter: em, coldEveryMs: 0, runEveryMs: 0, claudeHome: `${dir}/cfg`, env: { CLAUDE_CONFIG_DIR: `${dir}/cfg` },
     sessionFactory: (harness, o, s) => {
       started.push(o); sinks.set(o.chatId, s);
       let closed = false;
       return { harness, sessionId: o.sessionId, pid: null, root: null, get alive() { return !closed; }, get busy() { return !!busy.get(o.chatId); },
         start() {
           // the CLI's transcript of its session: what a resume looks for
-          mkdirSync(`${dir}/home/projects/p`, { recursive: true }); writeFileSync(`${dir}/home/projects/p/${o.sessionId}.jsonl`, '{}\n');
+          mkdirSync(`${dir}/cfg/projects/p`, { recursive: true }); writeFileSync(`${dir}/cfg/projects/p/${o.sessionId}.jsonl`, '{}\n');
           s.childrenCoverage?.('complete'); s.changed({ state: 'idle' });
         },
         send(text: string) {
