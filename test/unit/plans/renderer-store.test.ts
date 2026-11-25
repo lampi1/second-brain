@@ -2,8 +2,8 @@
 // for the whole app and again at each plans:changed; a change that comes while it reads makes it read once more; a
 // failed reading keeps the rows it had; a chat's map is read fresh.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type * as Store from '../../src/renderer/store/plans';
-import type { PlanInfo } from '../../src/shared/plan';
+import type * as Store from '../../../src/renderer/store/plans';
+import type { PlanInfo } from '../../../src/shared/plan';
 
 const row = (id: string, p: Partial<PlanInfo> = {}) => ({ id, title: id, state: 'running', touches: [], can: [], ...p }) as PlanInfo;
 let open: PlanInfo[], put: PlanInfo[], changed: () => void, gate: Promise<void> | null;
@@ -16,7 +16,7 @@ beforeEach(async () => {
   vi.resetModules(); invoke.mockClear(); on.mockClear();
   open = [row('wm_open')]; put = [row('wm_put', { state: 'archived' })]; gate = null;
   vi.stubGlobal('window', { sb: { invoke, on } });
-  store = await import('../../src/renderer/store/plans');
+  store = await import('../../../src/renderer/store/plans');
 });
 
 describe('the rows', () => {

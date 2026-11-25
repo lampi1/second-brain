@@ -3,10 +3,10 @@
 // the search, the first message of a new Strategist and the Orchestrator's actions. The same on a real ChatManager:
 // test/unit/agents/work-map-chats.test.ts.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-vi.mock('../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, errText: (e: unknown) => String(e) }));
-import type { ChatSummary } from '../../src/shared/contract';
-import { STRATEGY_FLOW, type PlanPhase, type PlanStep, type StrategyPlan } from '../../src/shared/strategy';
-import type { Plan } from '../../src/shared/plan';
+vi.mock('../../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, errText: (e: unknown) => String(e) }));
+import type { ChatSummary } from '../../../src/shared/contract';
+import { STRATEGY_FLOW, type PlanPhase, type PlanStep, type StrategyPlan } from '../../../src/shared/strategy';
+import type { Plan } from '../../../src/shared/plan';
 import { requestOf } from '../../../src/main/plans/follow';
 import { Plans, type PlansDeps } from '../../../src/main/plans/service';
 import { startPrompt, strategistStarter } from '../../../src/main/plans/start';
@@ -97,7 +97,7 @@ describe('which map a chat has', () => {
     const w = maps({ projectsOf: c => (c.id === 'k' ? ['magazzino'] : ['negozio']) });
     put(chat('k', { parentId: 'a' }));
     saw(w, chat('a'));
-    const m = saw(w, chat('a', { plan: { ...plan('running', 100, [{ title: 'x', state: 'now', chatIds: ['k'] }]), map: 'cassa' } }));
+    const m = saw(w, chat('a', { plan: { ...plan('running', 100, [{ title: 'x', state: 'now', chatIds: ['k'] }]) } }));
     expect(m.touches).toEqual(['negozio', 'cassa', 'magazzino']);
     expect(m.project).toBe('negozio');
     expect(w.touching('magazzino').map(i => i.id)).toEqual([m.id]);
@@ -295,7 +295,7 @@ describe('at load', () => {
     again.adopt();
     expect(again.get(idea.id)).toEqual(before.idea);
     expect(again.get(kept.id)).toEqual(before.kept);
-    expect(again.get(lost.id)).toMatchObject({ state: 'stopped', stopped: { by: 'gone' }, plan: { steps: [{ title: 'Passo 1' }, { title: 'Passo 2' }] } });
+    expect(again.get(lost.id)).toMatchObject({ state: 'stopped', stopped: { by: 'gone' }, plan: { steps: [{ id: 's1', title: 'Passo 1' }, { id: 's2', after: ['s1'], title: 'Passo 2' }] } });
   });
 
   it('a map that cannot be saved never breaks the chat\'s own event', () => {

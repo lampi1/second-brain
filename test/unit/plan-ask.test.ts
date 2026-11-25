@@ -19,7 +19,7 @@ import { setLang } from '../../src/renderer/i18n';
 
 afterEach(() => setLang('it'));
 const plan = (p: Partial<StrategyPlan> = {}): StrategyPlan => ({ phase: 'proposed', at: 42, clarified: [{ q: 'Offerte', a: 'No' }], doneWhen: 'I test passano',
-  steps: [{ title: 'Trovo dove', detail: 'carrello e reso', role: 'scout', state: 'todo' }, { title: 'Applico lo sconto', role: 'artisan', state: 'todo' }, { title: 'Riassumo', state: 'todo' }], ...p });
+  steps: [{ id: 's1', title: 'Trovo dove', detail: 'carrello e reso', role: 'scout', state: 'todo' }, { id: 's2', after: ['s1'], title: 'Applico lo sconto', role: 'artisan', state: 'todo' }, { id: 's3', after: ['s2'], title: 'Riassumo', state: 'todo' }], ...p });
 const html = (at = 42) => renderToStaticMarkup(createElement(PlanAskCard, { ask: { type: 'plan', id: `plan@${at}`, chatId: 's/1', at }, onEscape: () => {}, testid: 'qp' }));
 
 describe('lib/plan-ask.ts', () => {

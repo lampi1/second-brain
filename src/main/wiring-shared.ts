@@ -26,6 +26,7 @@ import { CommandAsks } from './run/asks';
 import { RunResults } from './run/results';
 import { precheckCommand } from './run/precheck';
 import { PlanStore } from './plans/store';
+import { migratePlans } from './plans/migrate';
 import { Plans } from './plans/service';
 import { strategistStarter } from './plans/start';
 import { OrchestratorWake } from './chats/orchestrator-wake';
@@ -159,7 +160,14 @@ export function attachRunResults(ctx: Pick<Ctx, 'emitter'>, chats: Pick<ChatServ
 /** The plans (ADR 0359): one per Strategist job or idea, kept by the app from the chats' own events (the emitter tapped once
  *  more); in the app's data, so they outlive the chats and a restart. Their live status is read again once a minute until
  *  stop(); tellTo(wake) says who hears of a job stopped by itself. */
-export function attachPlans(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: ChatService, brain: Pick<BrainService, 'info' | 'settings'>, now?: () => number): Plans {
+export function attachPlans(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: ChatService, brain: Pick<BrainService, 'info' | 'settings' | 'publish'>, now?: () => number): Plans {
+  // the old work maps and project maps become plans, once; the old files stay as they were (plans/migrate.ts)
+  const moved = migratePlans({ userData: ctx.userData, brainRoot: brain.info().brainRoot, ...(now ? { now } : {}), reportOf: id => {
+    const c = chats.list().find(x => x.id === id), r = c?.delegation?.result ?? (c?.run?.report && c.run.report.via === 'agent_report' ? c.run.report : null);
+    return r && c ? { outcome: r.outcome, summary: ('summary' in r ? String(r.summary) : '') || c.lastText || 'Report consegnato.', at: r.at } : null;
+  } });
+  if (moved.error) brain.publish([{ kind: 'plans-migration', title: 'Piani: la migrazione non è riuscita', detail: `${moved.error}. I dati vecchi sono intatti e riprovo al prossimo avvio.` }]);
+  else if (moved.report) brain.publish([{ kind: 'plans-migration', title: `Piani: ${moved.report.before.workMaps + moved.report.before.projectMaps + moved.report.before.folders} record diventano ${moved.report.after.plans} piani`, detail: `${moved.report.after.steps} passi, ${moved.report.after.check} da verificare (nessuna prova leggibile), ${moved.report.after.versions} versioni. Copia di sicurezza con impronte in backups/. I dati vecchi non sono toccati.` }]);
   const orchestrator = (): ChatSummary | undefined => chats.list().find(c => c.isOrchestrator && !c.closedAt);
   const maps = new Plans({ store: new PlanStore(path.join(ctx.userData, 'plans')), chats, emit: id => ctx.emitter.emit('plans:changed', { id }),
     startStrategist: strategistStarter({ chats, harness: () => brain.settings().orchestratorChats.harness,

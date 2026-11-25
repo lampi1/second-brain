@@ -1,8 +1,8 @@
 // Unit tests of shared/plan.ts (ADR 0342): the state a record is in, what can be done on it, the drawing made from the
 // plan's steps, the list row, the text for an agent and the lenient reader of a saved file.
 import { describe, expect, it } from 'vitest';
-import type { PlanPhase, PlanStep, StrategyPlan } from '../../src/shared/strategy';
-import { drawingOf, readPlanRecord, PLAN_STATES, planActions, planInfo, planStateOf, planText, type Plan } from '../../src/shared/plan';
+import type { PlanPhase, PlanStep, StrategyPlan } from '../../../src/shared/strategy';
+import { drawingOf, readPlanRecord, PLAN_STATES, planActions, planInfo, planStateOf, planText, type Plan } from '../../../src/shared/plan';
 
 const step = (title: string, state: PlanStep['state'] = 'todo', extra: Partial<PlanStep> = {}): PlanStep => ({ title, state, ...extra });
 const plan = (phase: PlanPhase, steps: PlanStep[] = [step('Uno'), step('Due')]): StrategyPlan => ({ phase, at: 50, clarified: [], steps });

@@ -4,11 +4,11 @@
 // stale, and the user's stop and the approval never overwritten. The pure reading: test/unit/workmap-live.test.ts; on a
 // real ChatManager: test/unit/agents/work-map-chats.test.ts.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-vi.mock('../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, errText: (e: unknown) => String(e) }));
-import type { ChatSummary, PendingRequest } from '../../src/shared/contract';
-import type { LadderQuestion } from '../../src/shared/question-ladder';
-import type { PlanPhase, PlanStep, StrategyPlan } from '../../src/shared/strategy';
-import type { Plan } from '../../src/shared/plan';
+vi.mock('../../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, errText: (e: unknown) => String(e) }));
+import type { ChatSummary, PendingRequest } from '../../../src/shared/contract';
+import type { LadderQuestion } from '../../../src/shared/question-ladder';
+import type { PlanPhase, PlanStep, StrategyPlan } from '../../../src/shared/strategy';
+import type { Plan } from '../../../src/shared/plan';
 import { STALE_MS } from '../../../src/main/plans/live';
 import { LiveMemory } from '../../../src/main/plans/live-memory';
 import { CRASH_GRACE_MS, Plans } from '../../../src/main/plans/service';

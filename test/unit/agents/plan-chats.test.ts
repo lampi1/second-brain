@@ -17,10 +17,10 @@ import { appControlTools } from '../../../src/main/appctl/tools';
 import { delegationTools } from '../../../src/main/agents/delegation';
 import { strategyTools } from '../../../src/main/agents/strategy-tools';
 import { CoordinationStore } from '../../../src/main/coordination/store';
-import { Plans } from '../../../../src/main/plans/service';
-import { strategistStarter } from '../../../../src/main/plans/start';
-import { jobAction } from '../../../../src/main/plans/tools';
-import { PlanStore } from '../../../../src/main/plans/store';
+import { Plans } from '../../../src/main/plans/service';
+import { strategistStarter } from '../../../src/main/plans/start';
+import { jobAction } from '../../../src/main/plans/tools';
+import { PlanStore } from '../../../src/main/plans/store';
 import type { AgentCatalog } from '../../../src/shared/agents';
 import type { NewChat } from '../../../src/shared/contract';
 import { DELEGATION_DEFAULTS, isWorkRole, ROLE_DEFAULTS, ROLE_IDS, type RoleId } from '../../../src/shared/roles';
@@ -79,7 +79,7 @@ function fixture(opts: { dir?: string; away?: boolean; withMaps?: boolean } = {}
   const mapOf = (id: string) => maps!.ofChat(id)!;
   return { m, dir, sent, sinks, interrupted, call, root, enough, proposed, task, kids, mapOf, attach, maps: () => maps! };
 }
-const PLAN = { steps: [{ title: 'Trovo dove si calcola lo sconto', role: 'scout' }, { title: 'Applico lo sconto', role: 'artisan' }, { title: 'Scrivo il riepilogo' }], doneWhen: 'I test passano' };
+const PLAN = { steps: [{ id: 's1', title: 'Trovo dove si calcola lo sconto', role: 'scout' }, { id: 's2', after: ['s1'], title: 'Applico lo sconto', role: 'artisan' }, { id: 's3', after: ['s2'], title: 'Scrivo il riepilogo' }], doneWhen: 'I test passano' };
 type F = ReturnType<typeof fixture>;
 const planAt = (f: F, id: string) => f.mapOf(id).plan!.at;
 const act = (f: F, id: string, action: Parameters<Plans['act']>[1], text?: string) => f.maps().act(f.mapOf(id).id, action, { at: f.mapOf(id).plan?.at, text });
@@ -95,8 +95,8 @@ describe('a Strategist always has a work map', () => {
   it('plan_propose without a map cannot leave it without one; a plan of one step has one too', async () => {
     const f = fixture(), s = await f.root();
     await f.enough(s.id);
-    await f.call('plan_propose', s.id, { steps: [{ title: 'Un passo solo', role: 'artisan', preset: 'max' }] });
-    expect(f.mapOf(s.id)).toMatchObject({ state: 'toApprove', plan: { steps: [{ title: 'Un passo solo', role: 'artisan', preset: 'max' }] } });
+    await f.call('plan_propose', s.id, { steps: [{ id: 's1', title: 'Un passo solo', role: 'artisan', preset: 'max' }] });
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'toApprove', plan: { steps: [{ id: 's1', title: 'Un passo solo', role: 'artisan', preset: 'max' }] } });
     expect(f.mapOf(s.id).plan!.map).toBeUndefined();
     expect(f.maps().view(f.mapOf(s.id).id)!.boxes).toMatchObject([{ n: 1, title: 'Un passo solo', role: 'artisan', preset: 'max', state: 'todo' }]);
     expect(f.maps().list()).toHaveLength(1);
@@ -153,8 +153,8 @@ describe('planned and started later', () => {
     await act(f, s.id, 'keep');
     expect((await act(f, s.id, 'replan', 'Meno passi')).state).toBe('idea');
     expect(f.sent.get(s.id)!.at(-1)).toContain('Meno passi');
-    await f.call('plan_propose', s.id, { steps: [{ title: 'Tutto insieme', role: 'artisan' }] });
-    expect(f.mapOf(s.id)).toMatchObject({ state: 'toApprove', plan: { steps: [{ title: 'Tutto insieme' }] } });
+    await f.call('plan_propose', s.id, { steps: [{ id: 's1', title: 'Tutto insieme', role: 'artisan' }] });
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'toApprove', plan: { steps: [{ id: 's1', title: 'Tutto insieme' }] } });
   });
 
   it('a kept plan survives a restart and starts after it', async () => {
@@ -324,12 +324,12 @@ describe('replanning a running job', () => {
   it('a removed step goes on until the approval, and its chat stops then', async () => {
     const { f, s, kid } = await running();
     await act(f, s.id, 'replan', 'Senza la ricerca');
-    await expect(f.call('plan_propose', s.id, { revise: true, steps: [{ title: 'Applico', role: 'artisan' }], remove: [2] })).rejects.toThrow(/has not started/);
-    await f.call('plan_propose', s.id, { revise: true, steps: [{ title: 'Applico', role: 'artisan' }], remove: [1] });
+    await expect(f.call('plan_propose', s.id, { revise: true, steps: [{ id: 's1', title: 'Applico', role: 'artisan' }], remove: [2] })).rejects.toThrow(/has not started/);
+    await f.call('plan_propose', s.id, { revise: true, steps: [{ id: 's1', title: 'Applico', role: 'artisan' }], remove: [1] });
     expect(f.mapOf(s.id).plan!.steps).toMatchObject([{ title: 'Applico', state: 'todo' }, { title: 'Trovo dove si calcola lo sconto', state: 'now', drop: true }]);
     expect(f.m.list().find(c => c.id === kid)!.run?.endedAt).toBeUndefined();
     await act(f, s.id, 'approve');
-    expect(f.mapOf(s.id)).toMatchObject({ state: 'running', plan: { steps: [{ title: 'Applico', state: 'todo' }] } });
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'running', plan: { steps: [{ id: 's1', title: 'Applico', state: 'todo' }] } });
     const gone = f.m.list().find(c => c.id === kid);
     expect(!gone || gone.closedAt !== undefined || gone.run?.endedAt !== undefined).toBe(true);
   });
@@ -557,7 +557,7 @@ describe('night mode (ADR 0191)', () => {
     await f.call('plan_propose', s.id, PLAN);
     expect(f.mapOf(s.id)).toMatchObject({ state: 'running', plan: { phase: 'running' } });
     await act(f, s.id, 'stop');
-    await f.call('plan_propose', s.id, { revise: true, steps: [{ title: 'Altro', role: 'artisan' }] });
+    await f.call('plan_propose', s.id, { revise: true, steps: [{ id: 's1', title: 'Altro', role: 'artisan' }] });
     expect(f.mapOf(s.id)).toMatchObject({ state: 'stopped', plan: { phase: 'proposed' } });
   });
 });

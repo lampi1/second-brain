@@ -2,8 +2,8 @@
 // what waits for the user on top and the finished apart, search in both, project filter, sort; the place in the Mappa
 // page; which map is a chat's; the buttons, only those of PlanInfo.can, and the IPC call of each; the plan in rows.
 import { describe, expect, it } from 'vitest';
-import { planInfo, planStateOf, PLAN_STATES, type WorkBox, type Plan, type PlanAction, type PlanInfo, type PlanState } from '../../src/shared/plan';
-import { allProjects, arrange, buttonsOf, callOf, chatsOf, earlier, groupOf, heldBy, liveKind, mapOfChat, rowsOf, planPlace, planPlaceOf, PLAN_BUTTONS, WORK_GROUPS, PLAN_SORTS, type PlanFilter } from '../../src/renderer/lib/plans';
+import { planInfo, planStateOf, PLAN_STATES, type WorkBox, type Plan, type PlanAction, type PlanInfo, type PlanState } from '../../../src/shared/plan';
+import { allProjects, arrange, buttonsOf, callOf, chatsOf, earlier, groupOf, heldBy, liveKind, mapOfChat, rowsOf, planPlace, planPlaceOf, PLAN_BUTTONS, WORK_GROUPS, PLAN_SORTS, type PlanFilter } from '../../../src/renderer/lib/plans';
 
 const info = (id: string, state: PlanState, p: Partial<PlanInfo> = {}): PlanInfo => ({ id: `wm_${id}`, title: id, touches: [], state, steps: 0, done: 0, now: 0, blocked: 0, createdAt: 1, updatedAt: 1, can: [], ...p });
 const F: PlanFilter = { tab: 'open', query: '', project: '', sort: 'recent' };

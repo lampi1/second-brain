@@ -193,7 +193,7 @@ export function readProof(v: unknown): StepProof | null {
 export function readSteps(v: unknown): PlanStep[] | null {
   if (!Array.isArray(v) || v.length > STEPS_ALL_MAX) return null;
   const raw = v as Record<string, unknown>[];
-  if (!raw.every(s => s && typeof s === 'object' && text(s.title, STEP_TITLE_MAX) && STEP_STATES.includes(s.state as StepState))) return null;
+  if (!raw.every(s => s && typeof s === 'object' && text(s.title, STEP_TITLE_MAX) && (s.detail === undefined || text(s.detail, STEP_DETAIL_MAX)) && STEP_STATES.includes(s.state as StepState))) return null;
   const out: PlanStep[] = [];
   let turn: string[] = [], before: string[] = [];
   for (const [i, s] of raw.entries()) {

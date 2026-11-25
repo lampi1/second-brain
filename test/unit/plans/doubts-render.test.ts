@@ -4,13 +4,13 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-vi.mock('../../src/renderer/actions', () => ({ openChatRef: () => {} }));
-import { PlanDoubts } from '../../src/renderer/components/plans/PlanDoubts';
-import { sayLabel } from '../../src/renderer/components/plans/LiveBits';
-import { setLang } from '../../src/renderer/i18n';
-import type { PlanDoubt } from '../../src/shared/plan-doubts';
-import type { LadderQuestion, LadderStep } from '../../src/shared/question-ladder';
-import type { PlanFull } from '../../src/shared/plan';
+vi.mock('../../../src/renderer/actions', () => ({ openChatRef: () => {} }));
+import { PlanDoubts } from '../../../src/renderer/components/plans/PlanDoubts';
+import { sayLabel } from '../../../src/renderer/components/plans/LiveBits';
+import { setLang } from '../../../src/renderer/i18n';
+import type { PlanDoubt } from '../../../src/shared/plan-doubts';
+import type { LadderQuestion, LadderStep } from '../../../src/shared/question-ladder';
+import type { PlanFull } from '../../../src/shared/plan';
 
 const view = (doubts: PlanDoubt[], questions: LadderQuestion[] = [], state = 'toApprove'): PlanFull =>
   ({ map: { id: 'wm_1', state, plan: { doubts } }, questions: questions.map(question => ({ chatId: 'k', title: 'Prova', n: 2, question })) }) as unknown as PlanFull;

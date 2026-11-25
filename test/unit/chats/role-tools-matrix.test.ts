@@ -13,7 +13,6 @@ import { askTools } from '../../../src/main/chats/ask-tool';
 import { mailTools } from '../../../src/main/chats/mail';
 import { artifactSaveTool } from '../../../src/main/library/tools';
 import { brainSearchTool } from '../../../src/main/search/hybrid/tool';
-import { chatMapTools } from '../../../src/main/projectmap/tools';
 import { memoryTools } from '../../../src/main/rules/memory-tool';
 import { brainQueriesTool, chatQueryAddTool } from '../../../src/main/brain/queries-tools';
 import { brainScriptsTool, chatScriptAddTool } from '../../../src/main/brain/scripts-tools';
@@ -27,7 +26,7 @@ import type { McpTool } from '../../../src/main/mcp/server';
 const d = {} as never;
 /** the chat endpoint's tools as wiring.ts adds them (the factories only read their deps when a tool runs) */
 const ALL: McpTool[] = [...delegationTools(d), ...strategyTools(d), ...workDecisionTools(d), agentCatalogTool(d), ...askTools(d), ...mailTools(d), artifactSaveTool(d),
-  brainSearchTool(d), ...chatMapTools(d), ...memoryTools(d), brainQueriesTool(d), chatQueryAddTool(d, d), brainScriptsTool(d), chatScriptAddTool(d, d), showUiTool(d),
+  brainSearchTool(d), ...memoryTools(d), brainQueriesTool(d), chatQueryAddTool(d, d), brainScriptsTool(d), chatScriptAddTool(d, d), showUiTool(d),
   new QuestionRelay(d).tool()] as McpTool[];
 
 type Shape = 'root' | 'child' | 'plan';
@@ -95,7 +94,7 @@ describe('problem 1 of 2026-11-25: Antigravity dropped agent_report (red before 
   const need = new Set(['show_ui', 'agent_report', 'agent_ask_parent', 'ask_user']);
   it('before: over the budget, with agent_report the largest after project_map_save (the order agy dropped them in)', () => {
     const bySize = [...served].sort((a, b) => toolListSize([b]) - toolListSize([a])).map(t => t.name);
-    expect(bySize.slice(0, 2)).toEqual(['project_map_save', 'agent_report']);
+    expect(bySize.slice(0, 2)).toEqual(['plans', 'agent_report']);
     expect(toolListSize(served)).toBeGreaterThan(COMPACT_BUDGET);
   });
   it('now: under the budget, only optional tools left out, agent_report and agent_ask_parent kept', () => {

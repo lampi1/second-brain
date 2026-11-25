@@ -15,8 +15,8 @@ import { DELEGATION_DEFAULTS, ROLE_DEFAULTS, ROLE_IDS, isWorkRole, type RoleId }
 import type { AgentCatalog } from '../../../src/shared/agents';
 import type { ChatSummary, Harness, NewChat } from '../../../src/shared/contract';
 import { closeAppDbs } from '../../../src/main/app-db';
-import { readingOf } from '../../../../src/main/plans/live';
-import { sayOf } from '../../../src/main/projectmap/follow';
+import { readingOf } from '../../../src/main/plans/live';
+import { sayOf } from '../../../src/main/plans/chat-say';
 import { markOf } from '../../../src/main/appctl/agents-recap';
 import { wakeLine } from '../../../src/main/chats/orchestrator-wake';
 import { waitsOnUser } from '../../../src/shared/plan';
@@ -370,7 +370,7 @@ describe('a delegated child out of credits (ChatManager)', () => {
     // a Strategist with a plan the user approved, whose first step this child does
     const f = fixture();
     const parent = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'strategist', title: 'Piano', prompt: 'Trova l\'errore nei log' }, 'agent');
-    const plan = f.m.planPropose(parent.id, [{ title: 'Leggo i log', role: 'scout', state: 'todo' }, { title: 'Riassumo', state: 'todo' }]);
+    const plan = f.m.planPropose(parent.id, [{ id: 's1', title: 'Leggo i log', role: 'scout', state: 'todo' }, { id: 's2', title: 'Riassumo', state: 'todo', after: ['s1'] }]);
     await f.m.planDecide(parent.id, 'approve', plan.at);
     await f.call('agent_delegate', parent.id, { tasks: [{ role: 'scout', title: 'Log', step: 1, contract: { goal: 'Leggi i log', doneWhen: ['trovato'] } }] });
     const child = f.m.list().find(c => c.parentId === parent.id)!;

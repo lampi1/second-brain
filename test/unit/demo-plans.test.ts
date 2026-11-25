@@ -54,7 +54,7 @@ describe('the demo\'s work maps', () => {
   });
   it('keep a plan to approve that was archived, then reopened, stopped with «Riprendi», as the real manager does', async () => {
     const chats = new DemoChats(() => {}, { freeze: true }, seed(E)), id = 'mappa';
-    chats.patch(id, { plan: { phase: 'proposed', at: E, clarified: [], steps: [{ title: 'Uno', role: 'scout', state: 'todo' }] } });
+    chats.patch(id, { plan: { phase: 'proposed', at: E, clarified: [], steps: [{ id: 's1', title: 'Uno', role: 'scout', state: 'todo' }] } });
     chats.planPutAway(id);
     expect(chats.list().find(c => c.id === id)!.plan).toMatchObject({ phase: 'revising', stopped: true, putAway: true });
     await chats.archive(id);

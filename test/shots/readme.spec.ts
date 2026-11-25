@@ -279,12 +279,12 @@ test('README showcase: the Strategist\'s plan to approve on its map', async () =
   if (!(await page.getByTestId('tile-chat-tree-plan').count())) await demo('tree');
   await expect(page.getByTestId('tile-chat-tree-plan')).toBeVisible({ timeout: 15_000 });
   const at = Date.now();
-  const plan = { phase: 'proposed', at, asked: 2, map: 'alfa-shop', doneWhen: 'Order tests pass and the release notes are ready.',
+  const plan = { phase: 'proposed', at, asked: 2, doneWhen: 'Order tests pass and the release notes are ready.',
     steps: [
-      { title: 'Find where the discount is computed today', detail: 'cart, order and refund', role: 'scout', state: 'todo', on: 'ordini', preset: 'min' },
-      { title: 'Apply the % discount to the full price', detail: 'no double discount on offers', role: 'artisan', state: 'todo', on: 'ordini', preset: 'max' },
-      { title: 'Check that the order tests pass', role: 'sentinel', state: 'todo', on: 'ordini', preset: 'base' },
-      { title: 'Write the release notes', role: 'herald', state: 'todo', on: 'note-di-rilascio', par: true, preset: 'min' },
+      { id: 's1', title: 'Find where the discount is computed today', detail: 'cart, order and refund', role: 'scout', state: 'todo', preset: 'min' },
+      { id: 's2', after: ['s1'], title: 'Apply the % discount to the full price', detail: 'no double discount on offers', role: 'artisan', state: 'todo', preset: 'max' },
+      { id: 's3', after: ['s2'], title: 'Check that the order tests pass', role: 'sentinel', state: 'todo', preset: 'base' },
+      { id: 's4', after: ['s2'], title: 'Write the release notes', role: 'herald', state: 'todo', preset: 'min' },
     ],
     clarified: [{ q: 'Where', a: 'Cart, order and refund' }, { q: 'Offers', a: 'No, full price only' }] } as StrategyPlan;
   await demo('plan', 'tree-plan', plan);

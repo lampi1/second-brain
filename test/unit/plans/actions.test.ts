@@ -5,7 +5,7 @@
 import type * as React from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PlanAction, PlanInfo } from '../../src/shared/plan';
+import type { PlanAction, PlanInfo } from '../../../src/shared/plan';
 
 const hook = vi.hoisted(() => ({ values: [] as unknown[], refs: [] as { current: unknown }[], cursor: 0, refCursor: 0, toast: vi.fn() }));
 vi.mock('react', async original => ({
@@ -18,11 +18,11 @@ vi.mock('react', async original => ({
   useRef: (initial: unknown) => hook.refs[hook.refCursor++] ??= { current: initial },
   useEffect: () => {}, useLayoutEffect: () => {},
 }));
-vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(), on: () => () => {} } }));
-vi.mock('../../src/renderer/actions', () => ({ openChatRef: () => {}, openPlan: () => {} }));
-vi.mock('../../src/renderer/store/ui', () => ({ toast: hook.toast }));
-vi.mock('../../src/renderer/store/store', () => ({ useApp: () => undefined }));
-import { noteOf, PlanButtons } from '../../src/renderer/components/plans/PlanFull';
+vi.mock('../../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(), on: () => () => {} } }));
+vi.mock('../../../src/renderer/actions', () => ({ openChatRef: () => {}, openPlan: () => {} }));
+vi.mock('../../../src/renderer/store/ui', () => ({ toast: hook.toast }));
+vi.mock('../../../src/renderer/store/store', () => ({ useApp: () => undefined }));
+import { noteOf, PlanButtons } from '../../../src/renderer/components/plans/PlanFull';
 
 const invoke = vi.fn(async (..._a: unknown[]) => ({}));
 vi.stubGlobal('window', { sb: { invoke, on: () => () => {} } });

@@ -93,7 +93,7 @@ describe('agent_work_decisions', () => {
   });
   it('shows only current assignment plans and terminates cyclic ancestry', async () => {
     const f = fixture();
-    f.parent.plan = { phase: 'running', at: 20, clarified: [], steps: [{ title: 'Approved scope', state: 'todo' }] };
+    f.parent.plan = { phase: 'running', at: 20, clarified: [], steps: [{ id: 's1', title: 'Approved scope', state: 'todo' }] };
     f.parent.run!.plan = { proposals: 1, changes: 0, approvedAt: 20 };
     f.parent.parentId = 'child';
     f.parent.run!.parentRunId = 'run-child';

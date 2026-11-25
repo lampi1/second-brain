@@ -4,9 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-vi.mock('../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, errText: (e: unknown) => String(e) }));
+vi.mock('../../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, errText: (e: unknown) => String(e) }));
 import { HISTORY_MAX, PlanStore } from '../../../src/main/plans/store';
-import type { Plan } from '../../src/shared/plan';
+import type { Plan } from '../../../src/shared/plan';
 
 let dir: string, store: PlanStore;
 beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-workmaps-')); store = new PlanStore(dir); });
@@ -16,7 +16,7 @@ const map = (version: number, extra: Partial<Plan> = {}): Plan => ({ id: 'wm_abc
 describe('PlanStore', () => {
   it('a new store on the same folder reads the maps and their versions', () => {
     store.save(map(1));
-    store.save(map(2, { plan: { phase: 'approved', at: 5, clarified: [], steps: [{ title: 'Uno', state: 'todo', role: 'scout' }] }, state: 'planned', owner: { chatId: 'c', task: 't' } }));
+    store.save(map(2, { plan: { phase: 'approved', at: 5, clarified: [], steps: [{ id: 's1', title: 'Uno', state: 'todo', role: 'scout' }] }, state: 'planned', owner: { chatId: 'c', task: 't' } }));
     store.save(map(1, { id: 'wm_def456' }));
     const again = new PlanStore(dir);
     expect(again.load().map(m => [m.id, m.version, m.state]).sort()).toEqual([['wm_abc123', 2, 'planned'], ['wm_def456', 1, 'idea']]);

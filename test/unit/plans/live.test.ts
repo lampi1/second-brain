@@ -4,10 +4,10 @@
 // questions of its chats (asksOf).
 // The same through the service: test/unit/workmap-live-service.test.ts.
 import { describe, expect, it } from 'vitest';
-import type { ChatSummary, PendingRequest } from '../../src/shared/contract';
-import type { PlanStep, StrategyPlan } from '../../src/shared/strategy';
-import type { LadderQuestion } from '../../src/shared/question-ladder';
-import { liveWords, type Plan, type PlanLive, type StepLive } from '../../src/shared/plan';
+import type { ChatSummary, PendingRequest } from '../../../src/shared/contract';
+import type { PlanStep, StrategyPlan } from '../../../src/shared/strategy';
+import type { LadderQuestion } from '../../../src/shared/question-ladder';
+import { liveWords, type Plan, type PlanLive, type StepLive } from '../../../src/shared/plan';
 import { asksOf, liveOf, movesBelow, readingOf, STALE_MS, type LiveInput } from '../../../src/main/plans/live';
 import { settle } from '../../../src/main/plans/follow';
 
