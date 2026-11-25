@@ -391,6 +391,7 @@ describe('«Riprendi» never opens a second Strategist (ADR 0361)', () => {
     const gate = new Promise<void>(r => { release = r; });
     const w = maps({ startStrategist: async m => { started.push(m.id); await gate; return put(chat('fresh', { planId: m.id, plan: plan('asking', 300, []) })); } });
     const m = saw(w, stopped('c'));
+    chats = chats.filter(c => c.id !== 'c');
     w.observe('chat:removed', { chatId: 'c' });
     expect(w.get(m.id)!.stopped).toBeDefined();
     const first = w.act(m.id, 'resume'), second = w.act(m.id, 'resume');
