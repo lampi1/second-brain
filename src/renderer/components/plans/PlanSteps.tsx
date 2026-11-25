@@ -10,7 +10,7 @@ import { openChatRef } from '../../actions';
 import { t } from '../../i18n';
 import { ago } from '../../lib/format';
 import { errText } from '../../lib/ipc-error';
-import { chatsOf, minutesText, STEP_TONE, turnsOf } from '../../lib/plans';
+import { chatsOf, minutesText, startsText, stateWords, STEP_TONE, turnLabel, turnsOf, whoOf } from '../../lib/plans';
 import { toast } from '../../store/ui';
 import { useApp } from '../../store/store';
 import { IconChat } from '../Icons';
@@ -31,7 +31,7 @@ export function StepRow({ s, now, edit, last, onOp }: { s: PlanStepView; now: nu
         {edit && s.state === 'todo' && !s.drop
           ? <input className="pl-step-input" value={title} maxLength={160} aria-label={t('plans.step.title')} onChange={e => setTitle(e.target.value)} onBlur={() => { if (title.trim() && title.trim() !== s.title) onOp({ op: 'set', step: s.id, title: title.trim() }); }} data-testid={`pl-step-title-${s.n}`} />
           : <b>{s.title}</b>}
-        <span className="pl-step-state" data-s={STEP_TONE[s.state]} data-testid={`pl-step-state-${s.n}`}>{t(`plans.step.${s.state}`)}</span>
+        <span className="pl-step-state" data-s={STEP_TONE[s.state]} data-testid={`pl-step-state-${s.n}`}>{stateWords(s, now)}</span>
         {s.added && <em data-k="new">{t('plans.step.new')}</em>}
         {s.drop && <em data-k="drop">{t('plans.step.drop')}</em>}
         {s.live && <LiveChip live={s.live} testid={`pl-step-live-${s.n}`} />}
@@ -39,8 +39,8 @@ export function StepRow({ s, now, edit, last, onOp }: { s: PlanStepView; now: nu
       </div>
       {s.detail && <p className="pl-step-detail">{s.detail}</p>}
       <p className="pl-step-meta">
-        {s.role && <span>{s.role}{s.preset ? ` · ${s.preset}` : ''}</span>}
-        <span data-testid={`pl-step-waits-${s.n}`}>{s.waitsFor.length ? t('plans.step.waits', { list: list(s.waitsFor) }) : s.state === 'todo' ? t('plans.step.starts') : ''}</span>
+        {whoOf(s) && <span data-testid={`pl-step-who-${s.n}`}>{whoOf(s)}</span>}
+        <span data-testid={`pl-step-waits-${s.n}`}>{startsText(s)}</span>
         {s.opens.length > 0 && <span>{t('plans.step.opens', { list: list(s.opens) })}</span>}
         {s.touches.length > 0 && <span>{t('plans.step.touches')}: {s.touches.join(', ')}</span>}
         {s.minutes && <span>{minutesText(s.minutes)}</span>}
@@ -67,7 +67,7 @@ export function PlanSteps({ view, now, edit, ops, onOp }: { view: PlanFull; now:
   if (!view.steps.length && !edit) return <p className="pl-muted" data-testid="pl-steps-empty">{t('plans.noPlan')}</p>;
   return <div className="pl-steps" data-testid="pl-steps" aria-label={t('plans.steps.label')}>
     {turns.map(g => <section key={g.turn} className="pl-turn2" data-together={g.together ? '' : undefined} data-testid={`pl-turn-${g.turn}`}>
-      <h4>{g.together ? t('plans.turn.together', { n: g.turn, k: g.steps.length }) : t('plans.turn', { n: g.turn })}</h4>
+      <h4>{turnLabel(g)}</h4>
       <ol>{g.steps.map(s => <StepRow key={s.id} s={s} now={now} edit={edit} last={last} onOp={onOp} />)}</ol>
     </section>)}
     {dropped.length > 0 && <section className="pl-turn2" data-drop="" data-testid="pl-dropped"><h4>{t('plans.step.dropped')}</h4><ol>{dropped.map(s => <StepRow key={s.id} s={s} now={now} edit={false} last={last} onOp={onOp} />)}</ol></section>}

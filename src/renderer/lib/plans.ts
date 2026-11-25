@@ -2,6 +2,8 @@
 // sorted; which IPC call each button makes; which of a chat's plans is its own; the steps laid out in turns (what runs
 // together, what waits for what). The buttons a plan shows are only those of PlanInfo.can. Pure, pinned by
 // test/unit/plans/list.test.ts; used by components/plans/*, store/plans.ts, actions.ts, lib/where.ts and StrategyPanel.tsx.
+import { t } from '../i18n';
+import { ago } from './format';
 import { waitsForUser, waitsOnUser, type PlanAction, type PlanInfo, type PlanSay, type PlanState, type PlanStepView, type PlanWaitFor } from '@shared/plan';
 
 /** The groups of the list, in the order the user decided: what waits for them first, the finished last (closed by default). */
@@ -91,3 +93,31 @@ export const STEP_TONE: Record<PlanStepView['state'], 'todo' | 'now' | 'ok' | 'p
 
 /** «12 min» or «1 h 20»; the time one after the other and in parallel, when every step has an estimate. */
 export function minutesText(n: number): string { return n >= 60 ? `${Math.floor(n / 60)} h${n % 60 ? ` ${n % 60}` : ''}` : `${n} min`; }
+
+/** Who does a step, on one line: «Artisan · Base», the role and the preset of its card (ADR 0346: never the model, which is the
+ *  card's when the step starts). null for a step the Strategist does itself. */
+export function whoOf(s: Pick<PlanStepView, 'role' | 'preset'>): string | null {
+  if (!s.role) return null;
+  return [s.role[0]!.toUpperCase() + s.role.slice(1), ...(s.preset ? [t(`delegation.preset.${s.preset}`)] : [])].join(' · ');
+}
+
+/** When a step starts, in words: right away, or after which steps; nothing once it is under way or over. */
+export function startsText(s: Pick<PlanStepView, 'state' | 'waitsFor'>): string {
+  if (s.waitsFor.length) return t('plans.step.waits', { list: s.waitsFor.join(', ') });
+  return s.state === 'todo' ? t('plans.step.starts') : '';
+}
+
+/** How far a step is, in words: «in corso da 10 min», «fatto in 5 min», else its state. */
+export function stateWords(s: Pick<PlanStepView, 'state' | 'startedAt' | 'endedAt'>, now: number): string {
+  if (s.state === 'now') { const a = s.startedAt ? ago(s.startedAt, now) : ''; return a && a !== t('appText.format.now') ? t('plans.step.nowSince', { at: a }) : t('plans.step.now'); }
+  if (s.state === 'done' && s.startedAt && s.endedAt && s.endedAt > s.startedAt) return t('plans.step.doneIn', { time: minutesText(Math.max(1, Math.round((s.endedAt - s.startedAt) / 60_000))) });
+  return t(`plans.step.${s.state}`);
+}
+
+/** The heading of a turn: «Turno 2 · 5 insieme · 3 al lavoro, 2 fatti» for steps that run together, counted live. */
+export function turnLabel(g: Pick<PlanTurn, 'turn' | 'steps' | 'together'>): string {
+  if (!g.together) return t('plans.turn', { n: g.turn });
+  const n = (state: PlanStepView['state']) => g.steps.filter(s => s.state === state).length;
+  const parts = ([[n('now'), 'working'], [n('done') + n('partial'), 'done'], [n('blocked'), 'blocked'], [n('todo'), 'idle']] as const).filter(([k]) => k > 0).map(([k, key]) => t(`plans.turn.live.${key}`, { n: k }));
+  return `${t('plans.turn.together', { n: g.turn, k: g.steps.length })}${parts.length ? ` · ${parts.join(', ')}` : ''}`;
+}
