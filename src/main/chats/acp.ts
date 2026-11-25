@@ -692,11 +692,15 @@ export class AcpSession implements HarnessSession {
     let t = this.spawnedAt;
     const step = (k: string) => { const now = Date.now(); lap[k] = now - t; t = now; };
     try {
-      const init = await this.request('initialize', {
+      const initParams = {
         protocolVersion: 1,
         clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false, _meta: { parameterizedModelPicker: true } },
         clientInfo: { name: 'second-brain', version: this.opts.appVersion ?? '0' },
-      }, 60000);
+      };
+      // a loaded PC can keep an engine's first answer past a minute (OpenCode, 2026-11-25: fine on a second start): the
+      // same request waits up to two, with a line in the log after the first
+      const slow = setTimeout(() => log.warn('chats', 'acp initialize unanswered after 60 s: still waiting', { chat: this.opts.chatId, hint: 'a slow start on a loaded PC; the start fails at 120 s', data: { engine: this.engine } }), 60000);
+      const init = await this.request('initialize', initParams, 120000).finally(() => clearTimeout(slow));
       this.caps = o(init.agentCapabilities);
       const v = s(o(init.agentInfo).version);
       if (v && !this.cliVersion) this.cliVersion = v; // Cursor: its version folder, the name doctor checks
