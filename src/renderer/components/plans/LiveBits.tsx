@@ -1,6 +1,6 @@
-// The live status of a work map in words (ADR 0342): what it, or a step, is doing and for whom it waits, who works, what
+// The live status of a plan in words (ADR 0342): what it, or a step, is doing and for whom it waits, who works, what
 // failed or was lost, since when nobody confirms it and why it stopped. Nothing is added to what main says.
-// Used by PlansPage.tsx (rows), PlanFull.tsx, WorkDrawing.tsx (boxes), WorkSide.tsx and project-map/ProjectMapView.tsx.
+// Used by PlansPage.tsx (rows), PlanView.tsx, WorkDrawing.tsx (boxes), WorkSide.tsx and plans/PlanSteps.tsx.
 import type { PlanInfo, PlanLive, PlanSay, PlanWaitFor, PlanWorker } from '@shared/plan';
 import { t } from '../../i18n';
 import { ago } from '../../lib/format';

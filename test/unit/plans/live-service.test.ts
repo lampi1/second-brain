@@ -1,8 +1,8 @@
 // Unit tests of the live status kept by main/plans/service.ts and live-memory.ts (ADR 0342), over plain chat summaries, an
 // in-memory store and a clock the test moves: the page is told only of a real change and no version is written for it,
 // an owner chat that died by itself tells the Orchestrator once (one closed by hand does not), a restart, what goes
-// stale, and the user's stop and the approval never overwritten. The pure reading: test/unit/workmap-live.test.ts; on a
-// real ChatManager: test/unit/agents/work-map-chats.test.ts.
+// stale, and the user's stop and the approval never overwritten. The pure reading: test/unit/plans/live.test.ts; on a
+// real ChatManager: test/unit/agents/plan-chats.test.ts.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, errText: (e: unknown) => String(e) }));
 import type { ChatSummary, PendingRequest } from '../../../src/shared/contract';

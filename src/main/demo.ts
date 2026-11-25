@@ -654,7 +654,7 @@ export class DemoChats implements ChatService {
     this.patch(chatId, { plan: { ...plan, phase: decision === 'change' ? 'revising' : keep ? 'approved' : 'running', at: this.now() } });
     if (!keep) this.push(chatId, { kind: 'user', id: this.nextId(), at: this.now(), text: decision === 'approve' ? PLAN_APPROVED : planChange(text!) });
   }
-  /** the work map's actions on a job (ADR 0342), with no engine behind them */
+  /** the plan's actions on a job (ADR 0342), with no engine behind them */
   private planMove(chatId: string, patch: Partial<StrategyPlan>, text?: string): void {
     const plan = this.chats.get(chatId)?.plan;
     if (plan) this.patch(chatId, { plan: { ...plan, ...patch, at: this.now() } });

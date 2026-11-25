@@ -293,7 +293,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     // shows its progress on its strip (ADR 0108): the app's fixed flow follows the request, the plan starts asking
     const strategist = by === 'agent' && agent.owner.source === 'catalog' && agent.owner.id === 'strategist' && !delegator && !req.orchestrator;
     const asking = strategist && given ? askingPlan(now, opts.intake && this.planIntake(opts.intake)) : undefined, resume = opts.resumePlan;
-    // a work map's job goes on in a new chat (ADR 0342): the answers the user already gave are kept
+    // a plan's job goes on in a new chat (ADR 0342): the answers the user already gave are kept
     const plan = asking && resume ? { ...asking, clarified: resume.clarified, ...(resume.pcOnly ? { pcOnly: true as const } : {}), ...(resume.asked ? { asked: resume.asked } : {}), ...(resume.enough ? { enough: true as const } : {}) } : asking;
     const continued = opts.continuationOf ? this.chats.get(opts.continuationOf) : undefined;
     const told = given && folderNotes.length ? `${given}\n\nCartella di lavoro (dall’app):\n${folderNotes.map(n => `- ${n}`).join('\n')}` : given;
@@ -321,7 +321,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
         ...(req.route ? { route: req.route } : {}),
         ...(delegator ? { parentId: delegator.s.id, ...(req.delegation ? { delegation: req.delegation } : {}) } : {}),
         ...(plan ? { plan } : {}),
-        // known from the first event on: the job's work map (ADR 0342) moves to this chat instead of a second one
+        // known from the first event on: the job's plan (ADR 0342) moves to this chat instead of a second one
         ...(opts.planId ? { planId: opts.planId } : {}),
         ...(isolated ? { place: 'copy' as const } : {}), ...(folderNotes.length ? { folderNotes } : {}),
         ...(continued ? { continuedFrom: { id: continued.s.id, title: continued.s.title } } : {}),

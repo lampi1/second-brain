@@ -57,14 +57,6 @@
         "src/renderer/components/ChatItems.tsx"
       ]
     },
-    "project-map": {
-      "test": "README screenshots",
-      "sources": [
-        "src/renderer/components/project-map/",
-        "src/shared/project-map.ts",
-        "src/main/projectmap/demo.ts"
-      ]
-    },
     "brain-map": {
       "test": "README screenshots",
       "sources": [
@@ -134,7 +126,7 @@
     "plan": {
       "test": "README showcase: the Strategist's plan to approve on its map",
       "sources": [
-        "src/renderer/components/plans/PlanFull.tsx",
+        "src/renderer/components/plans/PlanView.tsx",
         "src/renderer/components/plans/WorkDrawing.tsx",
         "src/renderer/components/plans/WorkSide.tsx",
         "src/renderer/components/plans/PlanBits.tsx",
@@ -143,8 +135,8 @@
         "src/renderer/components/plans/plans.css"
       ]
     },
-    "work-maps": {
-      "test": "README screenshot: the work maps",
+    "plans": {
+      "test": "README screenshot: the plans",
       "sources": [
         "src/renderer/components/plans/PlansPage.tsx",
         "src/renderer/components/plans/PlanBits.tsx",

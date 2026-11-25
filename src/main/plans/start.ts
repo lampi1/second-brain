@@ -1,8 +1,8 @@
 // «Parti» on an idea, «Riprendi» and «Ripianifica» on a job whose chat is gone (ADR 0342): opens a Strategist chat for a
-// work map. The chat carries the map's id (ChatSummary.planId), so the map becomes its own from its first event; its plan
+// plan. The chat carries the map's id (ChatSummary.planId), so the map becomes its own from its first event; its plan
 // flow is the usual one, so whatever it proposes waits for the user's ok again. The first message holds what the map
 // saved: the idea, the answers, the steps with where they were, what to change.
-// Used by wiring-shared.ts attachPlans (PlansDeps.startStrategist); pinned by test/unit/workmap-service.test.ts.
+// Used by wiring-shared.ts attachPlans (PlansDeps.startStrategist); pinned by test/unit/plans/service.test.ts.
 import type { ChatSummary, Harness } from '@shared/contract';
 import { ORCHESTRATOR_USER_LABEL } from '@shared/agent-label';
 import { PLAN_LIMITS, type Plan } from '@shared/plan';

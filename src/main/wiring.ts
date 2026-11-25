@@ -47,6 +47,7 @@ import { tierModel } from './agents/model-tier';
 import { markLegacyDone, migratedCards, readLegacy } from './agents/legacy-cards';
 import { workDecisionTools } from './agents/work-decisions';
 import { stepPresetOf, strategyTools } from './agents/strategy-tools';
+import { strategistPlanTool } from './plans/tools';
 import { askTools } from './chats/ask-tool';
 import { portableId } from './agents/pack/flows';
 import { memoryTools } from './rules/memory-tool';
@@ -593,7 +594,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   runsRef.current = runner;
   // brain_script_add on every chat's own endpoint: a work chat saves the script it ran with success itself
   addChatTools([chatScriptAddTool(brainScripts, id => chats.list().find(c => c.id === id)?.title ?? null, roleSkillOf)]);
-  // the project maps (ADR 0271): drawn and kept current by the agents (their own endpoint), live state from the chats
+  // the plans (ADR 0271): drawn and kept current by the agents (their own endpoint), live state from the chats
   const plans = attachPlans(ctx, chats, brain);
   // brain_query_add the same way: a query that ran and someone reruns goes to its skill's assets/queries/ (ADR 0124, 0263)
   addChatTools([chatQueryAddTool(brainQueries, id => chats.list().find(c => c.id === id)?.title ?? null, roleSkillOf)]);
@@ -715,6 +716,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools(strategyTools(manager, awayOn, stepPresetOf(id => manager.list().find(c => c.id === id), (roleId, preset) => {
     try { return agents.presetChoice(roleId, preset ? { preset, presetWhy: 'plan step' } : {}); } catch { return null; }
   })));
+  // the plans, read by every Strategist and edited by its own (ADR 0361); the user's decisions stay the Orchestrator's
+  addChatTools([strategistPlanTool(plans)]);
   // the yes/no question of a chat whose engine has no question tool of its own (OpenCode over ACP)
   addChatTools(askTools(manager));
   addChatTools(workDecisionTools({ chats: manager, workflows, runs: manager.runs }));

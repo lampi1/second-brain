@@ -3,13 +3,13 @@
 // in ipc.ts keeps the set complete); each channel's shape is in src/shared/contract/*.ts.
 import type { HandlerContext, HandlersOf } from './context';
 
-/** the work maps' actions: the id and the text checked, the service says what a map allows now */
+/** the plans' actions: the id and the text checked, the service says what a map allows now */
 const jobId = (a: { id?: unknown } | undefined): string => String(a?.id ?? '').slice(0, 40);
 
 export function brainHandlers({ s, emitter, research, requireReviewRoot, search, proposals }: HandlerContext): HandlersOf<'plans' | 'brain' | 'brainmodel' | 'queries' | 'memory' | 'learning' | 'proposals' | 'maintenance' | 'morning' | 'compare' | 'learn' | 'skills'> {
   const jobs = () => { if (!s.plans) throw new Error('Qui i piani non ci sono.'); return s.plans; };
   return {
-    // the work maps (ADR 0342): one per Strategist job or idea; the app keeps them, the user decides here
+    // the plans (ADR 0342): one per Strategist job or idea; the app keeps them, the user decides here
     'plans:list': a => s.plans?.list({ ...(a?.archived === true ? { archived: true } : {}), ...(a?.trash === true ? { trash: true } : {}), ...(typeof a?.query === 'string' ? { query: a.query.slice(0, 200) } : {}) }) ?? [],
     'plans:view': a => s.plans?.view(jobId(a), typeof a?.version === 'number' ? a.version : undefined) ?? null,
     'plans:idea': a => jobs().idea(a),

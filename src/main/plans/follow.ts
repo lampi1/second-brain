@@ -1,6 +1,6 @@
-// How a work map follows its owner chat (ADR 0342), pure: which chats own a job, which job a chat is on now, the map as
+// How a plan follows its owner chat (ADR 0342), pure: which chats own a job, which job a chat is on now, the map as
 // the chat's present state makes it (plan, stopped, finished), and the one line that says what changed in a version.
-// Used by plans/service.ts; pinned by test/unit/workmap-service.test.ts.
+// Used by plans/service.ts; pinned by test/unit/plans/service.test.ts.
 import type { ChatSummary } from '@shared/contract';
 import { STRATEGY_FLOW, type StrategyPlan } from '@shared/strategy';
 import { PLAN_LIMITS, planStateOf, type Plan, type PlanState, type PlanStopBy } from '@shared/plan';

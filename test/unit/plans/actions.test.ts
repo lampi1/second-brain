@@ -1,4 +1,4 @@
-// A work map's buttons, pressed (plans/PlanView.tsx PlanButtons, PlanBits.tsx usePlanAction): they are only those of
+// A plan's buttons, pressed (plans/PlanView.tsx PlanButtons, PlanBits.tsx usePlanAction): they are only those of
 // PlanInfo.can, each makes its own IPC call with the revision on screen, «Cambia il piano» opens the box and sends its
 // words, a second press while one runs does nothing, a refusal is told and keeps the words; and the line that says what
 // the state means (noteOf). React's hooks are replaced, no DOM.

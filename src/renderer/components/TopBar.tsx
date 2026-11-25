@@ -1,4 +1,4 @@
-// The app's top bar, kept to what is used all the time (ADR 0287): history, the project maps, search, ONE usage figure
+// The app's top bar, kept to what is used all the time (ADR 0287): history, the plans, search, ONE usage figure
 // (today's spend and the plan window; the rest on click: UsageBar.tsx), «Da rispondere», «Ferma tutti», the bell and one
 // menu (the gear). Everything used now and then lives in that menu: a new browser, «Manutenzione» (ADR 0132), the
 // language (ADR 0120), the engines' sign-in state with a switch each to turn them on and off (ADR 0347), the environment credentials, the shortcuts, the settings. What is out

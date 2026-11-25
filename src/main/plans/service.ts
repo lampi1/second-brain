@@ -146,7 +146,7 @@ export class Plans {
   }
   /** A map that cannot be saved never breaks the chat's own event. */
   private safe(chatId: string, fn: () => void): void {
-    try { fn(); } catch (e) { log.warn('plans', 'a work map did not follow its chat', { chat: chatId, cause: errText(e), hint: 'the next change of the chat tries again' }); }
+    try { fn(); } catch (e) { log.warn('plans', 'a plan did not follow its chat', { chat: chatId, cause: errText(e), hint: 'the next change of the chat tries again' }); }
   }
 
   private onChat(c: ChatSummary, atLoad = false): void {
@@ -245,7 +245,7 @@ export class Plans {
       const m = this.maps.get(id);
       if (!m || m.state !== 'stopped') { this.memory.unstop(id); continue; }
       const left = m.plan?.steps.filter(s => s.state !== 'done' && !s.drop).length ?? 0;
-      const detail = `${this.live(m).map?.why === 'crash' ? 'il motore della chat è caduto e non è ripartito' : m.stopped?.by === 'gone' ? 'la chat non è più nell’app' : 'la chat è stata chiusa dall’app a lavoro aperto'}${left ? `; passi da finire: ${left}` : ''}. L’utente non l’ha fermato: riprendilo con app_project_map, action resume, job ${m.id}.`;
+      const detail = `${this.live(m).map?.why === 'crash' ? 'il motore della chat è caduto e non è ripartito' : m.stopped?.by === 'gone' ? 'la chat non è più nell’app' : 'la chat è stata chiusa dall’app a lavoro aperto'}${left ? `; passi da finire: ${left}` : ''}. L’utente non l’ha fermato: riprendilo con plans, action resume, plan ${m.id}.`;
       if (this.news?.stalledWork({ threadId: m.id, title: m.title, detail, at: m.stopped!.at })) this.memory.told(id);
     }
   }
@@ -255,7 +255,7 @@ export class Plans {
       const ids = new Set(this.d.chats.list().map(c => c.id)), owners = new Set([...this.maps.values()].flatMap(m => (m.owner ? [m.owner.chatId] : [])));
       const v = this.memory.toSave(id => ids.has(id), id => owners.has(id));
       if (v) this.d.store.saveLive(v);
-    } catch (e) { log.warn('plans', 'the live status of the work maps was not saved', { cause: errText(e), hint: 'saved again within a minute' }); }
+    } catch (e) { log.warn('plans', 'the live status of the plans was not saved', { cause: errText(e), hint: 'saved again within a minute' }); }
   }
 
   /** The map of the job this chat is on, with the chat as its owner; null = it has none yet. */
@@ -466,7 +466,7 @@ export class Plans {
     if (this.busy.has(id)) throw new Error('Un’azione su questa mappa è già in corso.');
     this.busy.add(id);
     try { await this.run(m, action, a, by); } finally { this.busy.delete(id); }
-    log.info('plans', 'action on a work map', { data: { id, action, by: by === 'user' ? 'user' : 'orchestrator' } });
+    log.info('plans', 'action on a plan', { data: { id, action, by: by === 'user' ? 'user' : 'orchestrator' } });
     return this.clone(this.maps.get(id)!);
   }
 

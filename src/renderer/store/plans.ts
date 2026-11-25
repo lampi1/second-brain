@@ -1,7 +1,7 @@
-// The work maps in the renderer (ADR 0342): the rows of the list, read once and again at each plans:changed, shared by
+// The plans in the renderer (ADR 0342): the rows of the list, read once and again at each plans:changed, shared by
 // every place that shows one (the Mappa page, the Grindhouse strips). One subscription for the whole app, started by the
 // first reader. Used by components/plans/*, StrategyPanel.tsx and actions.ts; pinned by
-// test/unit/work-maps-renderer-store.test.ts.
+// test/unit/plans/renderer-store.test.ts.
 import { useEffect, useSyncExternalStore } from 'react';
 import type { PlanInfo } from '@shared/plan';
 import { mapOfChat } from '../lib/plans';

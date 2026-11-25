@@ -1,18 +1,18 @@
-// Unit tests of the demo's work maps (src/main/demo-plans.ts, ADR 0343): added as the demo does they give more than
+// Unit tests of the demo's plans (src/main/demo-plans.ts, ADR 0343): added as the demo does they give more than
 // twenty maps in every state, with one a replan waits on; in English no text of theirs stays Italian.
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ChatSummary } from '../../src/shared/contract';
 import { PLAN_STATES, type Plan } from '../../src/shared/plan';
 import { demoPlans } from '../../src/main/demo-plans';
 import { DemoChats, seed } from '../../src/main/demo';
-import { WORK_MAPS_EN } from '../../src/main/demo-plans-text';
+import { PLANS_EN } from '../../src/main/demo-plans-text';
 import { setDemoLang } from '../../src/main/demo-text';
 import { Plans } from '../../src/main/plans/service';
 
 const E = Date.UTC(2026, 9, 11, 8, 30, 0);
 afterEach(() => setDemoLang('it'));
 
-describe('the demo\'s work maps', () => {
+describe('the demo\'s plans', () => {
   it('are many, in every state', async () => {
     const d = demoPlans(E), saved = new Map<string, Plan>(), chats = new Map<string, ChatSummary>();
     let at = E, n = 0;
@@ -75,10 +75,10 @@ describe('the demo\'s work maps', () => {
   it('have their English', () => {
     setDemoLang('en');
     const d = demoPlans(E), left = JSON.stringify(d);
-    for (const it of Object.keys(WORK_MAPS_EN)) expect(left.includes(JSON.stringify(it)), it).toBe(false);
+    for (const it of Object.keys(PLANS_EN)) expect(left.includes(JSON.stringify(it)), it).toBe(false);
     const texts = [...d.ideas.flatMap(i => [i.title, i.idea ?? '']), ...d.jobs.flatMap(j => [j.chat.title, j.chat.run!.goal, ...j.chat.plan!.steps.flatMap(s => [s.title, s.detail ?? '']), ...(j.chat.plan!.doubts ?? []).flatMap(x => [x.text, x.answer ?? '', x.source ?? '']),
       ...j.workers.flatMap(w => [w.chat.title, w.chat.lastText, ...(w.chat.questions ?? []).flatMap(x => [...x.asks.flatMap(y => [y.question, ...y.options]), x.answered?.answer ?? '', ...x.trail.map(y => y.why ?? '')])])])].filter(Boolean);
-    const english = new Set(Object.values(WORK_MAPS_EN));
+    const english = new Set(Object.values(PLANS_EN));
     expect(texts.filter(t => !english.has(t))).toEqual([]);
   });
 });

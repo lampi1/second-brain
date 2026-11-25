@@ -2,7 +2,7 @@
 // a step's chat (starts, waits and for whom, fails, is interrupted, reports done, partial or blocked, is closed without a
 // report, is gone), the chats it delegated, what nobody can vouch for (stale, with its time), why a map is stopped, and the
 // questions of its chats (asksOf).
-// The same through the service: test/unit/workmap-live-service.test.ts.
+// The same through the service: test/unit/plans/live-service.test.ts.
 import { describe, expect, it } from 'vitest';
 import type { ChatSummary, PendingRequest } from '../../../src/shared/contract';
 import type { StrategyPlan } from '../../../src/shared/strategy';

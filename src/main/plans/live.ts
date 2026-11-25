@@ -1,4 +1,4 @@
-// What the chats of a work map are doing now (ADR 0342, live status; the owner, 2026-11-23: «le mappe devono sempre essere
+// What the chats of a plan are doing now (ADR 0342, live status; the owner, 2026-11-23: «le mappe devono sempre essere
 // aggiornate sullo stato»). The app reads it from the chats it already holds (state, open requests, last turn, report,
 // who delegated whom), with no agent call: which chat works, which waits and for whom, which failed, reported, was closed
 // without a report or is not there any more. Nothing is guessed: what no chat vouches for is 'unknown', and it is stale

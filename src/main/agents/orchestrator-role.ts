@@ -72,7 +72,7 @@ export const DECISION_FLOW_RULE = 'Explain what you did and go on; ask only a ch
 
 /** Diagrams and charts in replies (owner, 2026-10-22): the chat view draws these two fences
  *  (renderer/components/VisualBlock.tsx, lib/chart-spec.ts); one short line, it rides on every frame. */
-export const VISUALS_RULE = 'If a diagram or chart helps, add one: a ```mermaid block, or a ```chart block with JSON {"type":"bar|line|pie","title":"…","labels":[…],"series":[{"name":"…","data":[numbers]}]}; the app draws them. A project\'s map: app_project_map open, never drawn.';
+export const VISUALS_RULE = 'If a diagram or chart helps, add one: a ```mermaid block, or a ```chart block with JSON {"type":"bar|line|pie","title":"…","labels":[…],"series":[{"name":"…","data":[numbers]}]}; the app draws them. A job or project: its plan on the Piani page (the `plans` tool), never drawn.';
 
 /** What the user asks to keep is a file in Memoria → Artifact (ADR 0328, the owner 2026-11-19: «l'app deve comprendere
  *  da sola che quando l'utente chiede un report o un documento o un piano deve produrre un file che finirà dentro

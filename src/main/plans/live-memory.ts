@@ -1,8 +1,8 @@
-// What the live status of the work maps remembers (ADR 0342), over a restart too (userData/plans/live.json, through
+// What the live status of the plans remembers (ADR 0342), over a restart too (userData/plans/live.json, through
 // store.ts): when each chat was last confirmed to be what it is (the time a stale state shows), the owner chats whose
 // engine died and did not come back, who closed an owner chat by hand, and the stops by themselves already told to
 // the Orchestrator (once per stop). liveKey = what a chat's live status is made of, so a streaming event costs a
-// comparison. Used by plans/service.ts; pinned by test/unit/workmap-live-service.test.ts.
+// comparison. Used by plans/service.ts; pinned by test/unit/plans/live-service.test.ts.
 import type { ChatSummary } from '@shared/contract';
 import type { PlanWorker } from '@shared/plan';
 

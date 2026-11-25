@@ -759,7 +759,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         // a change of course (ADR 0276): its current step stops, what it understood stays, this message is its next turn
         if (a.now === true && busy && authed()) await d.chats.stop(String(a.chatId), true).catch(e => log.info('appctl', 'interrupt before a change of course failed', { chat: String(a.chatId), data: String(e) }));
         await d.chats.send(String(a.chatId), `${voice()}\n\n${text}`, undefined, false, orchestrator?.title ?? 'Orchestrator', false, orchestrator ? { kind: 'chat', chatId: orchestrator.id } : { kind: 'app' });
-        // on the project map the agent shows the change until it takes it (zero tokens)
+        // on the plan the agent shows the change until it takes it (zero tokens)
         log.info('appctl', 'agent message sent to chat', { chat: String(a.chatId), data: { chars: text.length } });
         const after = d.chats.list().find(c => c.id === String(a.chatId)), q = after?.queued;
         // the Orchestrator wrote to a chat that waits on the user: the row stays open (ADR 0329), so it is told how to close it

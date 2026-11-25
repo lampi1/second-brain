@@ -1,6 +1,6 @@
-// The English of the demo's work maps (demo-plans.ts), one entry per Italian text. Apart from demo-text.ts's own table
+// The English of the demo's plans (demo-plans.ts), one entry per Italian text. Apart from demo-text.ts's own table
 // because these maps are one piece of data; demo-text.ts reads it with the rest. Pinned by test/unit/demo-plans.test.ts.
-export const WORK_MAPS_EN: Readonly<Record<string, string>> = {
+export const PLANS_EN: Readonly<Record<string, string>> = {
   'Trovo dove entra il codice alla cassa': 'Find where the code enters checkout',
   'Guardo come fanno gli altri negozi': 'Look at how other shops do it',
   'Un codice per ordine, mai sotto zero': 'One code per order, never below zero',

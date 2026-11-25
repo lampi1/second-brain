@@ -82,7 +82,7 @@ export interface Wired {
   recordings: RecordingStore;
   /** Impara (ADR 0185, learn/service.ts): the user's lessons; absent = the impara:* channels say it is not available */
   learn?: LearnService;
-  /** the work maps (ADR 0342, plans/service.ts): one per Strategist job or idea; absent = the plans:* channels say so */
+  /** the plans (ADR 0342, plans/service.ts): one per Strategist job or idea; absent = the plans:* channels say so */
   plans?: Plans;
   /** Impara «News» (ADR 0265, news/service.ts): the AI newspaper; absent = the news:* channels say it is not available */
   news?: NewsService;

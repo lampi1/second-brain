@@ -1,5 +1,5 @@
 // What a chat of a plan says now (src/main/plans/chat-say.ts): at work, waits for the user or for an agent that holds its
-// question, failed, reported done, partial or blocked, says nothing. Moved from the project maps' tests (issue #456, ADR 0330).
+// question, failed, reported done, partial or blocked, says nothing. Moved from the plans' tests (issue #456, ADR 0330).
 import { describe, expect, it } from 'vitest';
 import type { ChatSummary, PendingRequest } from '../../../src/shared/contract';
 import { sayOf } from '../../../src/main/plans/chat-say';

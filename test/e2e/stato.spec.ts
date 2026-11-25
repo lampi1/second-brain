@@ -1,5 +1,5 @@
 // E2E of the "Stato" dialog (components/StatoDialog.tsx) on the demo data, opened from the palette (its buttons and
-// Ctrl+Shift+S open the project maps since ADR 0275); the headline, every open chat with its state, folder and
+// Ctrl+Shift+S open the plans since ADR 0275); the headline, every open chat with its state, folder and
 // git branch, last line and the requests waiting for the user; the PRs of the last DevOps read named after their bug,
 // QA-blocked first; a chat row brings that chat on screen. Zero tokens: only data the app holds. Screenshot.
 import { expect, test } from '@playwright/test';

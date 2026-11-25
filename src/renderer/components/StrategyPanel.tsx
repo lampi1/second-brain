@@ -1,6 +1,6 @@
 // A Strategist's plan on its strip (ADR 0108, 0343): while it asks, the answers already clear, «Basta domande» and a
 // pointer to its open question (QuestionsWindow.tsx); with a plan, one line: a round dot per step (ADR 0311), the count
-// and «apri mappa». The plan itself is seen, approved and followed only on its map (work-map/PlanFull.tsx). Used by
+// and «apri mappa». The plan itself is seen, approved and followed only on its map (plans/PlanView.tsx). Used by
 // ChatTile.tsx and OrchestratorTile.tsx; the plan is ChatSummary.plan (shared/strategy.ts).
 import type { ChatSummary, PendingRequest } from '@shared/contract';
 import { ENOUGH_QUESTIONS, planCount, type StrategyPlan } from '@shared/strategy';

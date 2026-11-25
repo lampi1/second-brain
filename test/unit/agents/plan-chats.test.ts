@@ -1,4 +1,4 @@
-// Work maps on a real ChatManager with fake engines and the real store (ADR 0342): a Strategist has a map with no map call,
+// Plans on a real ChatManager with fake engines and the real store (ADR 0342): a Strategist has a map with no map call,
 // plan_propose without a map cannot leave it without one, a plan approved and kept starts later, a replan of a running
 // job keeps what started and starts nothing new before the approval, the removed step stops at that approval, stop and
 // resume, a closed chat leaves its map stopped, a restart keeps maps and plans, an old plan gets its map once. The live
@@ -84,7 +84,7 @@ type F = ReturnType<typeof fixture>;
 const planAt = (f: F, id: string) => f.mapOf(id).plan!.at;
 const act = (f: F, id: string, action: Parameters<Plans['act']>[1], text?: string) => f.maps().act(f.mapOf(id).id, action, { at: f.mapOf(id).plan?.at, text });
 
-describe('a Strategist always has a work map', () => {
+describe('a Strategist always has a plan', () => {
   it('started by the Orchestrator or by the user, with no map call', async () => {
     const f = fixture(), a = await f.root('agent'), u = await f.root('user');
     expect(f.mapOf(a.id)).toMatchObject({ title: 'Sconti in percentuale', idea: 'Porta gli sconti in percentuale', state: 'idea', plan: { phase: 'asking' } });

@@ -91,7 +91,7 @@
 @media (max-width: 480px) { .pl-step { flex-direction: column; gap: 6px; } .pl-bigbar .pl-bar-track { width: 100%; max-width: 100%; } }
 
    the dashed frame of parallel steps, arrows) and the side panel. Used by components/plans/*; .pl-dots and .pl-chip
-   also by project-map/ProjectMapView.tsx. */
+   also by plans/PlanSteps.tsx. */
 .pl { display: flex; flex-direction: column; gap: 12px; min-height: 0; min-width: 0; container-type: inline-size; --pl-par: #e58ad6; --pl-par-bg: rgba(229, 138, 214, .06); }
 :root[data-theme=light] .pl { --pl-par: #b03d98; --pl-par-bg: rgba(176, 61, 152, .06); }
 @media (prefers-color-scheme: light) { :root:not([data-theme=dark]) .pl { --pl-par: #b03d98; --pl-par-bg: rgba(176, 61, 152, .06); } }

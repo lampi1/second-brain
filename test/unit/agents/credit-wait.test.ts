@@ -197,14 +197,14 @@ describe('creditWaitWatch: moves, retries, staggering, no loops (ADR 0354)', () 
 
 describe('what the app shows for a chat that waits on its credits', () => {
   const waiting = chat({ lastResult: { at: 5, isError: true } });
-  it('the work map says it waits for the user (a card to change), not that it failed', () => {
+  it('the plan says it waits for the user (a card to change), not that it failed', () => {
     expect(readingOf(waiting, [])).toEqual({ say: 'waiting', waits: 'credits' });
     expect(waitsOnUser('credits')).toBe(true);
     expect(readingOf({ ...waiting, creditWait: undefined }, [])).toEqual({ say: 'failed' });
     // a new turn ends the wait
     expect(readingOf({ ...waiting, state: 'running' }, []).say).toBe('working');
   });
-  it('the project map holds its piece on the user, and the recap counts it among what waits for him', () => {
+  it('the plan holds its piece on the user, and the recap counts it among what waits for him', () => {
     expect(sayOf(waiting, [waiting], [])).toBe('wait');
     expect(sayOf({ ...waiting, creditWait: undefined }, [], [])).toBe('fail');
     expect(markOf(waiting, [])).toBe('wait');

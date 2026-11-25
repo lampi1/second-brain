@@ -9,7 +9,7 @@ import { HISTORY_MAX, PlanStore } from '../../../src/main/plans/store';
 import type { Plan } from '../../../src/shared/plan';
 
 let dir: string, store: PlanStore;
-beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-workmaps-')); store = new PlanStore(dir); });
+beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-plans-')); store = new PlanStore(dir); });
 afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
 const map = (version: number, extra: Partial<Plan> = {}): Plan => ({ id: 'pl_abc123', version, title: `Sconti ${version}`, constraints: [], links: [], state: 'idea', createdAt: 10, updatedAt: 10 + version, by: 'user', summary: `v${version}`, ...extra });
 

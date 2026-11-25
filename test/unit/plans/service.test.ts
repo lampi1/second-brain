@@ -1,7 +1,7 @@
 // Unit tests of main/plans/{service,follow,start,tools}.ts (ADR 0342) over plain chat summaries and an in-memory store:
 // which map a chat gets, how the map follows it, what each action asks of the chat, the migration at load, the list and
 // the search, the first message of a new Strategist and the Orchestrator's actions. The same on a real ChatManager:
-// test/unit/agents/work-map-chats.test.ts.
+// test/unit/agents/plan-chats.test.ts.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, errText: (e: unknown) => String(e) }));
 import type { ChatSummary } from '../../../src/shared/contract';

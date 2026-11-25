@@ -1,7 +1,7 @@
 // The folders a relative path in a message may live in (ADR 0316, the owner 2026-11-15: «al momento non posso vedere i
 // file esterni all'app»: `air_mcp\tools.py`, written by the Orchestrator about an agent's project, read as a file of the
 // brain and was «non disponibile»). Best first: the chat's own folder (the brain when none), the folders of the chats it
-// delegated, the project maps' folders, every other chat's folder (latest first), the brain, then one level above each
+// delegated, the project folders, every other chat's folder (latest first), the brain, then one level above each
 // (a chat that works in a subfolder of the project). The viewer opens the first of them where the path is a file
 // (file-view.ts rootFor); it already reads any local file by its absolute path, so nothing new becomes readable. Used by
 // ipc-handlers/app.ts (app:readFile, app:readFileDiff); pinned by test/unit/file-roots.test.ts.

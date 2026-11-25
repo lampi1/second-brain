@@ -1,4 +1,4 @@
-// Server-rendered doubts and questions of a work map (components/plans/PlanDoubts.tsx, ADR 0343 and 0344): every doubt
+// Server-rendered doubts and questions of a plan (components/plans/PlanDoubts.tsx, ADR 0343 and 0344): every doubt
 // with its state, what closed it and the source; every question with its way up and who answered and why; a question an
 // agent holds never says that it waits for the user. And the live words of a row (LiveBits.tsx).
 import { createElement } from 'react';

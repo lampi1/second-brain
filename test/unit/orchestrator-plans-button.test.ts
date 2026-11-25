@@ -1,4 +1,4 @@
-// The project maps button on the Orchestrator's head (ADR 0301): ADR 0287 removed it while cleaning the head and the
+// The plans button on the Orchestrator's head (ADR 0301): ADR 0287 removed it while cleaning the head and the
 // user lost the way to the maps from where they talk to the Orchestrator. This renders the real head and fails if the
 // button leaves it; a click opens the plans (openPlans, the same action as the top bar's button and Ctrl+Shift+S).
 import { createElement } from 'react';
@@ -37,7 +37,7 @@ function render() {
   return renderToStaticMarkup(createElement(OrchestratorTile, { chatId: 'o1' }));
 }
 
-describe('the project maps button on the Orchestrator', () => {
+describe('the plans button on the Orchestrator', () => {
   it('is on the Orchestrator\'s head, with the maps shortcut', () => {
     const html = render();
     expect(html).toContain('orchestrator-name');

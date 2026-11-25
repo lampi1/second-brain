@@ -1,4 +1,4 @@
-// Unit tests of the work maps in the renderer (store/plans.ts): the open and the archived rows are read together, once
+// Unit tests of the plans in the renderer (store/plans.ts): the open and the archived rows are read together, once
 // for the whole app and again at each plans:changed; a change that comes while it reads makes it read once more; a
 // failed reading keeps the rows it had; a chat's map is read fresh.
 import { beforeEach, describe, expect, it, vi } from 'vitest';

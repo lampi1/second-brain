@@ -8,7 +8,7 @@
 // by demo.ts, demo-plans.ts, demo-pages.ts, demo-wiring.ts, proposals/demo.ts, brainmodel/demo.ts and
 // brainmodel/demo-learning.ts; pinned by test/unit/demo-text.test.ts.
 import type { Lang } from '../shared/contract';
-import { WORK_MAPS_EN } from './demo-plans-text';
+import { PLANS_EN } from './demo-plans-text';
 
 let current: Lang = 'it';
 /** demo-wiring.ts, once, before the demo's data is built */
@@ -17,7 +17,7 @@ export const demoLang = (): Lang => current;
 
 /** Italian demo text → English. */
 const EN: Readonly<Record<string, string>> = {
-  ...WORK_MAPS_EN,
+  ...PLANS_EN,
   // ── the Strategist's delegation tree (demoTree) ──
   'Sconti in percentuale': 'Percentage discounts',
   'Porta gli sconti in percentuale su carrello, ordine e reso, con test e note di rilascio.': 'Bring percentage discounts to cart, order and refund, with tests and release notes.',

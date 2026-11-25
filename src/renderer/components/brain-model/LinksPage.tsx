@@ -1,7 +1,7 @@
 // «Collegamenti» (G L, ADR 0077): who uses what. «Agenti e skill» draws every agent with its skills, the rules it receives and its
 // memory (lib/brain-model-view.ts linkGraph) with an inspector: an agent shows its skills and opens its page, a skill shows who uses
 // it and opens the Skill page, a rule or a memory opens its file. «Note del brain» is the brain's notes map, moved as is from the old
-// Dashboard (dashboard/BrainNotesMap.tsx), with «Esplora in 3D». Both use dashboard/Graph.tsx. The projects and the work maps are not
+// Dashboard (dashboard/BrainNotesMap.tsx), with «Esplora in 3D». Both use dashboard/Graph.tsx. The projects and the plans are not
 // here any more: the plans' page has them (ADR 0359). Rendered by App.tsx PageFrame for 'collegamenti'.
 import { useMemo, useState } from 'react';
 import { go, goTarget } from '../../actions';

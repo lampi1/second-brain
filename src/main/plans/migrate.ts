@@ -35,7 +35,7 @@ export interface MigrationDeps {
 export interface MigrationReport {
   at: number;
   /** before: the records found; after: the plans made */
-  before: { workMaps: number; projectMaps: number; folders: number };
+  before: { jobs: number; projects: number; folders: number };
   after: { plans: number; merged: number; steps: number; check: number; doubts: number; versions: number };
   /** what each plan came from, by name */
   plans: { id: string; title: string; from: string[]; steps: number; check: number }[];
@@ -199,7 +199,7 @@ export function migratePlans(d: MigrationDeps): MigrationResult {
     fs.rmSync(tmp, { recursive: true, force: true });
     const steps = made.plans.reduce((n, m) => n + (m.rec.plan?.steps.length ?? 0), 0), check = made.plans.reduce((n, m) => n + (m.rec.plan?.steps.filter(s => s.state === 'check').length ?? 0), 0);
     const report: MigrationReport = {
-      at: now, before: { workMaps: fresh.filter(s => s.kind === 'wm').length, projectMaps: fresh.filter(s => s.kind === 'pm').length, folders: fresh.filter(s => s.kind === 'fo').length },
+      at: now, before: { jobs: fresh.filter(s => s.kind === 'wm').length, projects: fresh.filter(s => s.kind === 'pm').length, folders: fresh.filter(s => s.kind === 'fo').length },
       after: { plans: made.plans.length, merged: fresh.length - made.plans.length, steps, check, doubts: made.plans.reduce((n, m) => n + (m.rec.plan?.doubts?.length ?? 0), 0), versions: made.plans.reduce((n, m) => n + m.versions.length + 1, 0) },
       plans: made.plans.map(m => ({ id: m.rec.id, title: m.rec.title, from: m.rec.from ?? [], steps: m.rec.plan?.steps.length ?? 0, check: m.rec.plan?.steps.filter(s => s.state === 'check').length ?? 0 })),
     };

@@ -104,7 +104,7 @@ export interface ModelRefreshOutcome { engine: Harness; ok: boolean; count: numb
 
 /** renderer → main, brain: each entry [argument, result]. Part of InvokeMap (src/shared/contract.ts). */
 export interface BrainInvokeMap {
-  /** the work maps (ADR 0342, main/plans/): one per Strategist job or idea. The list (archived ones only when asked),
+  /** the plans (ADR 0342, main/plans/): one per Strategist job or idea. The list (archived ones only when asked),
    *  one map with its drawing and versions, and what the user does with one; an action the map does not allow now
    *  (PlanInfo.can) rejects with the reason. `at` = the plan's revision on screen (PlanInfo.planAt). */
   'plans:list': [{ archived?: boolean; trash?: boolean; query?: string } | void, PlanInfo[]];

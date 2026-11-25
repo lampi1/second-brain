@@ -16,8 +16,8 @@ import { ALL_REQUIRED_TOOLS, requiredTools, type ToolNeedView } from '../../shar
 const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['agent_work_decisions', 'plan_propose', 'plan_update', 'agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_report', 'agent_ask_parent', 'agent_answer_child', 'agent_close_child', 'agent_children', 'agent_catalog', 'agent_learn_propose',
   // it saves scripts with brain_script_save on its own endpoint
   'brain_script_add',
-  // it reads, opens and corrects the project maps with app_project_map, and has a Scout draw them (ADR 0271)
-  'project_map_read', 'project_map_save', 'project_map_update',
+  // it has the plans on its own endpoint (ADR 0361); the chat endpoint's copy is the Strategists'
+  'plans',
 ]);
 /** the tools only a chat that may delegate can use (chatToolShown): only the Strategist among the work roles (the
  *  Orchestrator has its own endpoint); Scout, Artisan, Sentinel and Herald never see them (2026-11-23), nor a role that
@@ -26,7 +26,7 @@ const DELEGATING_ONLY: ReadonlySet<string> = new Set(['agent_delegate', 'agent_a
 /** the Strategist's plan tools (agents/strategy-tools.ts): shown only where a plan with the user exists */
 const PLAN_TOOLS: ReadonlySet<string> = new Set(['plan_propose', 'plan_update']);
 /** the chat-endpoint tools the maintenance research never sees (chatToolShown), beside every agent_* tool */
-const RESEARCH_HIDDEN: ReadonlySet<string> = new Set([...APP_CHAT_TOOLS, 'brain_script_add', 'brain_query_add', 'project_map_save', 'project_map_update', 'artifact_save']);
+const RESEARCH_HIDDEN: ReadonlySet<string> = new Set([...APP_CHAT_TOOLS, 'brain_script_add', 'brain_query_add', 'plans', 'artifact_save']);
 /** the maintenance research's tools (ADR 0132, 0195, brainmodel/research-tools.ts) */
 const RESEARCH_TOOLS: ReadonlySet<string> = new Set(['maintenance_pack', 'maintenance_propose', 'maintenance_role_trial']);
 
@@ -42,7 +42,7 @@ export const toolShownToUnknown = (tool: string): boolean => !RESEARCH_TOOLS.has
 /** A waiting engine launched for a role: what that role's root chat would see (it lists tools once, at start); a
  *  Strategist's root may get a plan with the user, so its plan tools are listed (ADR 0356). */
 export function toolShownToWarm(warm: NonNullable<WarmLaunch['view']>, tool: string): boolean {
-  return !ORCHESTRATOR_ONLY.has(tool) && !(DELEGATING_ONLY.has(tool) && (warm.launches?.length === 0 || (warm.role !== undefined && !isDelegatorRole(warm.role)))) && (tool !== 'agent_ask_parent' || !!warm.child) && (!PLAN_TOOLS.has(tool) || (warm.role === 'strategist' && !warm.child)) && !RESEARCH_TOOLS.has(tool) && tool !== ASK_TOOL;
+  return !ORCHESTRATOR_ONLY.has(tool) && !(DELEGATING_ONLY.has(tool) && (warm.launches?.length === 0 || (warm.role !== undefined && !isDelegatorRole(warm.role)))) && (tool !== 'agent_ask_parent' || !!warm.child) && (!PLAN_TOOLS.has(tool) || (warm.role === 'strategist' && !warm.child)) && (tool !== 'plans' || (warm.role === 'strategist' && !warm.child)) && !RESEARCH_TOOLS.has(tool) && tool !== ASK_TOOL;
 }
 
 /** A chat of the app: `launches` = the roles it may launch (undefined = unknown); `appAsks` = its engine has no
@@ -57,6 +57,8 @@ export function toolShownToChat(s: Pick<ChatSummary, 'research' | 'isOrchestrato
   if (s.isOrchestrator) return !ORCHESTRATOR_HIDDEN.has(tool);
   if (ORCHESTRATOR_ONLY.has(tool)) return false;
   if (tool === 'agent_ask_parent' && !s.parentId) return false;
+  // the plans: only a Strategist root chat (ADR 0361)
+  if (tool === 'plans') return s.agent?.id === 'strategist' && !s.parentId;
   // the plan with the user: only a Strategist root chat has one (ADR 0108)
   if (PLAN_TOOLS.has(tool)) return !!s.plan;
   // a role that launches nobody; launches unknown (a chat saved before they were kept) = shown, as before
@@ -82,9 +84,9 @@ const CORE_TOOLS: ReadonlySet<string> = ALL_REQUIRED_TOOLS;
 const CORE_PROP_DESC = 40;
 const CORE_TOOL_DESC = 140;
 /** what a compact engine's list never carries (ADR 0356): the largest optional tools of the chat endpoint (#476's cause:
- *  agy dropped project_map_save, then agent_report, the two largest, in the brain folder). They stay reachable through
+ *  agy dropped a large optional tool, then agent_report, the two largest, in the brain folder). They stay reachable through
  *  the fallback command (chats/tool-cli.ts) and Code Mode's run_code */
-export const COMPACT_LEFT_OUT: ReadonlySet<string> = new Set(['project_map_save', 'project_map_update', 'brain_script_add', 'brain_query_add']);
+export const COMPACT_LEFT_OUT: ReadonlySet<string> = new Set(['plans', 'brain_script_add', 'brain_query_add']);
 /** the whole compact list, well under agy's eager budget (it dropped tools from a 33.6 KB list plus the brain's skills) */
 export const COMPACT_BUDGET = 24_000;
 

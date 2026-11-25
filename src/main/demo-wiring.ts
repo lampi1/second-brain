@@ -227,7 +227,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     devops: () => { const t = tasks.get(); return { prs: t.prs, repoDirs: t.repoDirs }; },
     changed: (state, lesson) => ctx.emitter.emit('impara:changed', { state, ...(lesson ? { lesson } : {}) }),
     tutorText: (lesson, turn, text) => ctx.emitter.emit('impara:tutor', { lesson, turn, text }) });
-  // the work maps follow the demo chats (ADR 0342); their clock moves while __sbDemo.plans() adds the older ones
+  // the plans follow the demo chats (ADR 0342); their clock moves while __sbDemo.plans() adds the older ones
   let mapsClock: number | null = null;
   const plans = attachPlans(ctx, chats, brain, () => mapsClock ?? now());
   plans.tellTo(wake);
@@ -280,7 +280,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
       const t = demoTree(now());
       chats.add(t.chats, t.items);
     },
-    /** many work maps in every state (demo-plans.ts), each made at its own moment; what the list shows afterwards */
+    /** many plans in every state (demo-plans.ts), each made at its own moment; what the list shows afterwards */
     plans: async () => {
       const d = demoPlans(now()), known = new Set([...plans.list(), ...plans.list({ archived: true })].map(m => m.title));
       try {

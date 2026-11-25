@@ -39,7 +39,7 @@ describe('the move to plans', () => {
     seed();
     const r = migratePlans({ userData, brainRoot: brain, now: () => 5000 });
     expect(r.ran).toBe(true);
-    expect(r.report!.before).toEqual({ workMaps: 3, projectMaps: 1, folders: 1 });
+    expect(r.report!.before).toEqual({ jobs: 3, projects: 1, folders: 1 });
     // the same job twice is one plan; the project map and the folder are plans of their own
     expect(r.report!.after.plans).toBe(4);
     expect(r.report!.after.merged).toBe(1);

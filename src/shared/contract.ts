@@ -123,7 +123,7 @@ export interface EventMap {
   'voice:speech': VoiceSpeech;
   /** push to talk: everything said before the release is heard */
   'voice:committed': { session: string };
-  /** a work map was made or changed (ADR 0342): read plans:list or plans:view again */
+  /** a plan was made or changed (ADR 0342): read plans:list or plans:view again */
   'plans:changed': { id: string };
   /** call recordings (ADR 0154): the list, the one running, a transcription's progress */
   'rec:changed': RecState;

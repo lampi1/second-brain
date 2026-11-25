@@ -1,4 +1,4 @@
-// The agents' chats of some of the demo's work maps (demo-plans.ts, ADR 0342 and 0344): one at work, one that reported,
+// The agents' chats of some of the demo's plans (demo-plans.ts, ADR 0342 and 0344): one at work, one that reported,
 // one whose last turn failed, one nobody vouches for since a restart, and the questions: one answered by the Strategist, one
 // held by the Orchestrator, one that went up to the user, each with the lines its own chat shows. Fictional data, in Italian
 // (English: demo-plans-text.ts); pinned by test/unit/demo-plans.test.ts.

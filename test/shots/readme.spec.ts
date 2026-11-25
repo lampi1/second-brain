@@ -1,7 +1,7 @@
 // The README screenshots, generated from the frozen demo (SB_DEMO=1 SB_DEMO_FREEZE=1, the synthetic brain of
 // scripts/demo-brain.mjs) so they always show the current UI with fictional data only: English UI (SB_LANG=en), dark
 // theme, 1600x1000, saved as WebP (< 300 KB each) in docs/screenshots/: the whole window, one part of it, or two parts
-// side by side. The showcase (memory, agent-levels, brain-map, orchestrator-column, reactions, plan, work-maps), the app's own pages
+// side by side. The showcase (memory, agent-levels, brain-map, orchestrator-column, reactions, plan, plans), the app's own pages
 // (voice, log, recordings, quality, learn, news, costs, maintenance, chess) and the rest. Not part
 // of `npm run check`: run by `npm run shots` (its own Playwright config, playwright.shots.config.ts). The app runs hidden
 // (SB_HIDDEN, set by launch()). The 3D map needs WebGL: on a machine without a GPU set
@@ -154,14 +154,6 @@ test('README screenshots', async () => {
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('brain-map')).toHaveCount(0);
 
-  // 5. A project drawn in place of its code (Map → Projects, ADR 0271): systems, links, statuses, the agents at work
-  await goPage(page, 'collegamenti');
-  await page.getByTestId('bm-map-page').getByRole('button', { name: 'Projects', exact: true }).click();
-  await expect(page.getByTestId('pm-node-negozio')).toBeVisible();
-  await setSize(app, 2000, 1250); // room for the agents column beside the map
-  await expect(page.getByTestId('pm-node-negozio')).toBeVisible();
-  await save('project-map', page.getByTestId('pm-view'));
-  await setSize(app, W, H);
 
 });
 
@@ -424,12 +416,12 @@ test('README screenshot: Artifacts', async () => {
 });
 
 // Last: its jobs are chats of the demo, which no other picture should show.
-test('README screenshot: the work maps', async () => {
+test('README screenshot: the plans', async () => {
   // Map › Jobs (ADR 0343): one map per Strategist job or idea, by status, what waits for the user on top
   await keepQuestionsAside(page);
   await demo('plans');
   await goPage(page, 'collegamenti');
   await page.getByTestId('bm-map-page').getByRole('button', { name: 'Jobs', exact: true }).click();
   await expect(page.getByTestId('pl-group-planned')).toBeVisible({ timeout: 30_000 });
-  await save('work-maps', await frameOf(page.getByTestId('bm-map-page')));
+  await save('plans', await frameOf(page.getByTestId('bm-map-page')));
 });

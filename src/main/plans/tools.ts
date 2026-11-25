@@ -1,12 +1,14 @@
 // The one tool for plans (ADR 0359): `plans`, on the Orchestrator's own endpoint (all of it) and on a Strategist's chat endpoint
 // (it reads every plan, edits its own, and only proposes on the others: it says it to the Orchestrator, which edits). It replaces
-// app_project_map, project_map_read, project_map_save and project_map_update. Actions: list · search · read · create · edit ·
+// the tools of the retired maps. Actions: list · search · read · create · edit ·
 // replan · merge · split · project · approve · keep · start · stop · resume · archive · delete · restore · compare. Deleting
 // sends a plan to the trash and it comes back with restore; only the user deletes for good, never this tool. The user's own
 // decisions (approve, keep, start, stop) stay the Orchestrator's, with the same authority as app_resolve_question on a plan.
 // Used by appctl/tools.ts and wiring.ts; pinned by test/unit/plans/tools.test.ts.
 import { planText, type PlanAction, type PlanFull } from '@shared/plan';
 import type { StepOp } from '@shared/plan-edit';
+import type { McpTool } from '../mcp/server';
+import { callerOf } from '../mcp/caller';
 import type { Plans, PlanChange } from './service';
 
 export const PLAN_TOOL_ACTIONS = ['list', 'search', 'read', 'create', 'edit', 'replan', 'merge', 'split', 'project', 'approve', 'keep', 'start', 'stop', 'resume', 'archive', 'delete', 'restore', 'compare'] as const;
@@ -106,3 +108,10 @@ export async function planAction(plans: Plans, who: PlanCaller, a: Record<string
   const m = await plans.act(id, action as PlanAction, { ...(at !== undefined ? { at } : {}), ...(text(a.text) ? { text: text(a.text) } : {}), ...(text(a.cwd) ? { cwd: text(a.cwd) } : {}) }, by);
   return { ok: true, plan: m.id, state: m.state, ...(m.owner ? { chatId: m.owner.chatId } : {}) };
 }
+
+/** The same tool on a Strategist's own chat endpoint: the caller is the token's chat, never an argument. */
+export const strategistPlanTool = (plans: Plans): McpTool => ({
+  name: 'plans', description: PLAN_TOOL_TEXT, inputSchema: { type: 'object', properties: PLAN_TOOL_PROPS, required: ['action'] },
+  annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  run: async (a, ctx) => { const r = await planAction(plans, { kind: 'strategist', chatId: callerOf(ctx.params) }, a); return typeof r === 'string' ? r : JSON.stringify(r); },
+});

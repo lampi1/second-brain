@@ -1,6 +1,6 @@
 // A plan (ADR 0359): ONE job of the user, whole: its goal and why, its project (editable), its steps with their true state, proofs,
 // dependencies and the percentage done, its decisions and doubts, constraints, files and links, the chats that work on it and
-// its versions. It replaces the project maps and the work maps. The app creates and keeps it in code (main/plans/service.ts)
+// its versions. It replaces the plans and the plans. The app creates and keeps it in code (main/plans/service.ts)
 // and it holds the job's plan itself, so it outlives the chat. Lifecycle: idea → toApprove → planned → running → stopped |
 // finished → archived, and the trash (`deletedAt`, restorable; only the user deletes for good). This file is the contract the
 // page, the live status and the tool build on: the record, its row and view, how the state is derived, which actions it allows

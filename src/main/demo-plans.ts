@@ -1,4 +1,4 @@
-// Work maps of the demo (SB_DEMO=1, ADR 0343): more than twenty Strategist jobs and ideas, in every state and over three
+// Plans of the demo (SB_DEMO=1, ADR 0343): more than twenty Strategist jobs and ideas, in every state and over three
 // made-up projects, for the list's screenshots, its e2e and a look at how it reads when there are many. Added through
 // __sbDemo.plans() (demo-wiring.ts), so the seed every other test reads stays as it is: the jobs are chats, and the real
 // service (plans/service.ts) makes each map from its chat, at the moment the chat says (the hook moves the demo's clock).
@@ -164,7 +164,7 @@ const IDEAS: { title: string; idea?: string; project: string; ago: number }[] = 
   { title: 'Risposte vocali nell’app', idea: 'Chi guida non può leggere: provare con le risposte più comuni.', project: 'app-mobile', ago: 3000 },
 ];
 
-export interface DemoWorkMap { at: number; chat: ChatSummary; items: ChatItem[]; workers: { chat: ChatSummary; items: ChatItem[] }[]; then?: 'seen' | 'archive' }
+export interface DemoPlan { at: number; chat: ChatSummary; items: ChatItem[]; workers: { chat: ChatSummary; items: ChatItem[] }[]; then?: 'seen' | 'archive' }
 export interface DemoIdea { at: number; title: string; idea?: string; project: string }
 
 function chatOf(j: DemoJob, E: number): ChatSummary {
@@ -179,8 +179,8 @@ function chatOf(j: DemoJob, E: number): ChatSummary {
   };
 }
 
-/** The demo's work maps at the moment E, oldest first: the jobs as their chats, and the ideas. */
-export function demoPlans(E: number): { jobs: DemoWorkMap[]; ideas: DemoIdea[] } {
+/** The demo's plans at the moment E, oldest first: the jobs as their chats, and the ideas. */
+export function demoPlans(E: number): { jobs: DemoPlan[]; ideas: DemoIdea[] } {
   const workers = demoWorkers(E);
   return localize({
     jobs: jobs(E).map(j => { const chat = chatOf(j, E); return { at: chat.updatedAt, chat, items: [{ kind: 'user', id: `${chat.id}-u1`, at: chat.run!.startedAt, text: chat.run!.goal } as ChatItem], workers: workers.filter(w => w.chat.parentId === chat.id), ...(j.then ? { then: j.then } : {}) }; }).sort((a, b) => a.at - b.at),

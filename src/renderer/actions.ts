@@ -743,7 +743,7 @@ export function uiCommand(cmd: EventMap['ui:command']): void {
     case 'back': back(); break;
     case 'forward': forward(); break;
     case 'palette': openModal('palette'); break;
-    case 'plan': void openPlanOf(v); break; // a Strategist just proposed its plan (projectmap/service.ts): the map of its job (ADR 0343)
+    case 'plan': void openPlanOf(v); break; // a Strategist just proposed its plan (plans/service.ts): its plan, on the Piani page (ADR 0361)
     case 'next': nextThing(); break;
     case 'clock': freezeClock(Number(v)); break;
     case 'layout': setReporting(v !== 'off'); break;

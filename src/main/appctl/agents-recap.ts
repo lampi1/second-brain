@@ -71,7 +71,7 @@ export function stepsOf(items: ChatItem[]): Steps {
   return { done: said.slice(-STEPS_MAX) };
 }
 
-/** The latest todo or plan list as counts (the project map's agent cards, projectmap/service.ts): steps done, in all,
+/** The latest todo or plan list as counts (the agent cards of the plans, plans/service.ts): steps done, in all,
  *  and the current one; null without a list. */
 export function progressOf(items: ChatItem[]): { done: number; total: number; now?: string } | null {
   for (let i = items.length - 1; i >= 0; i--) {

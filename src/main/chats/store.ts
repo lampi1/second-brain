@@ -117,7 +117,7 @@ export interface StoredChat {
   pastSessions?: PastSession[];
   /** "Riprendi" links: this chat continues another one / is continued by another one */
   continuedFrom?: ChatLink;
-  /** the work map it was started for (ADR 0342) */
+  /** the plan it was started for (ADR 0342) */
   planId?: string;
   continuedBy?: ChatLink;
   /** created with "Worktree separato" (the CLI made the worktree; "Riprendi" tells the new chat to work there) */
