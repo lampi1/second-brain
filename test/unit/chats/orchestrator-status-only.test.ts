@@ -65,7 +65,7 @@ describe('mail from a delegated chat', () => {
   it('may not go to the Orchestrator: the child reports to its parent', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-status-mail-'));
     try {
-      const send = mailTools({ root: () => root, chats: () => [orchestrator, parent, child], crossRefusal: () => null, deliver: () => {}, chainOf: () => null }).find(t => t.name === 'send_to_chat')!;
+      const send = mailTools({ root: () => root, chats: () => [orchestrator, parent, child], deliver: () => {}, chainOf: () => null }).find(t => t.name === 'send_to_chat')!;
       const ctx = { params: { chatId: 'k' } } as never;
       expect(() => send.run({ to: 'Orchestrator', text: 'SECRET' }, ctx)).toThrow(/agent_report/);
     } finally { fs.rmSync(root, { recursive: true, force: true }); }

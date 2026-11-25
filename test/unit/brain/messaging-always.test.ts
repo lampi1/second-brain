@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ConfigStore, fromSaved } from '../../../src/main/brain/config';
 import { defOf, schema } from '../../../src/main/brain/settings-schema';
-import { crossRefusal, openRefusal } from '../../../src/main/engines/policy';
+import { openRefusal } from '../../../src/main/engines/policy';
 import { tmpDir } from './helpers';
 
 describe('cross-engine messaging is always available', () => {
@@ -14,8 +14,7 @@ describe('cross-engine messaging is always available', () => {
     expect(settings.messaging.crossHarness).toBe(true);
     expect(settings.engineOn.cursor).toBe(false);
     expect(settings.engines.cursor).toBe(false);
-    expect(crossRefusal(settings, 'claude', 'cursor')).toBeNull();
-    expect(openRefusal(settings, 'claude', 'cursor')).toMatch(/Cursor è spento/);
+    expect(openRefusal(settings, 'cursor')).toMatch(/Cursor è spento/);
   });
 
   it('does not offer the retired switch to the UI or to agents', () => {
@@ -38,12 +37,5 @@ describe('cross-engine messaging is always available', () => {
     expect(JSON.parse(saved)).toMatchObject({ messaging: { crossHarness: true }, engineOn: { cursor: false }, engines: { cursor: false }, domains: [domain] });
     expect(new ConfigStore(dir, {}).get().messaging.crossHarness).toBe(true);
     expect(fs.readFileSync(file, 'utf8')).toBe(saved);
-  });
-
-  it('accepts both directions even when an old caller still supplies false', () => {
-    const settings = fromSaved(null);
-    settings.messaging.crossHarness = false;
-    expect(crossRefusal(settings, 'claude', 'cursor')).toBeNull();
-    expect(crossRefusal(settings, 'cursor', 'claude')).toBeNull();
   });
 });

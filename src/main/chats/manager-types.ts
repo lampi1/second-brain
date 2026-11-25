@@ -289,8 +289,11 @@ export interface Rec {
   launches?: string[];
   /** the skills its launch gave it (role defaults, linked and the launch's own): the role gate allows only these */
   skills?: string[];
-  /** the agent's tool policy and permission ceiling, frozen at start like its instructions (A2) */
+  /** the agent's tool policy and permission ceiling, set at start like its instructions (A2); a new assignment takes
+   *  its card as it is now, never wider than its parent's (ADR 0352, ChatManager.adoptCard) */
   policy?: AgentPolicy | null;
+  /** opened from the unauthenticated /mcp/app mount: the Orchestrator's policy bounds it for good (ADR 0352) */
+  bound?: true;
   /** the in-process PreToolUse hook its engine got at start (Claude: the Orchestrator's budget, a role's sub-agent
    *  gate): run_code's internal calls pass it too (decideFor, ADR 0331) */
   preToolUse?: PreToolHook | null;

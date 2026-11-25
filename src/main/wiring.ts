@@ -35,7 +35,7 @@ import { createAgentLoop } from './agents/loop';
 import { delegationTools } from './agents/delegation';
 import { CreditBook, limitSignal, opencodeLogTail, poolOf } from './agents/credits';
 import { creditWaitWatch } from './agents/credit-wait';
-import { levelEngines, roomOf } from '../shared/model-levels';
+import { roomOf } from '../shared/model-levels';
 import { tierModel } from './agents/model-tier';
 import { markLegacyDone, migratedCards, readLegacy } from './agents/legacy-cards';
 import { workDecisionTools } from './agents/work-decisions';
@@ -47,7 +47,7 @@ import { launchExamples } from './agents/run-examples';
 import { MemoryService } from './rules/memory-service';
 import type { AgentRun } from '../shared/agents';
 import { mountTextTool, TEXT_ENV } from './engines/text-mcp';
-import { agentsMayOpen, crossRefusal, engineOn, openRefusal } from './engines/policy';
+import { agentsMayOpen, engineOn, openRefusal } from './engines/policy';
 import { checkedDelegation } from '../shared/roles';
 import { createEngines } from './engines/service';
 import { safeStorageCipher } from './engines/secrets';
@@ -240,7 +240,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       const hit = st?.status === 'exhausted' ? { until: st.resetsAt ?? (st.coolMs ? st.at + st.coolMs : null) } : null;
       return roomOf(brain.usage().harnesses?.find(h => h.harness === engine), hit, Date.now());
     },
-    engineBlock: engine => agentsMayOpen(brain.settings(), engine) ? null : openRefusal(brain.settings(), engine, engine),
+    engineBlock: engine => openRefusal(brain.settings(), engine),
   });
   // the retired model Settings (tiers, Code Mode, the Orchestrator's models) onto the role cards, once (legacy-cards.ts)
   const legacy = readLegacy(ctx.userData);
@@ -526,7 +526,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const classify = brainClassifier(() => { const root = brain.info().brainRoot; return root ? readOrchestratorMail(root) : undefined; });
   const mail = new ChatMail({ root: () => brain.info().brainRoot, chats: manager, instance: path.basename(ctx.userData), classify, holdActivity: id => manager.holdActivity(id) });
   addChatTools(mailTools({ classify,
-    root: () => brain.info().brainRoot, chats: () => chats.list(), crossRefusal: (from, to) => crossRefusal(brain.settings(), from, to),
+    root: () => brain.info().brainRoot, chats: () => chats.list(),
     agentsMayOpen: h => agentsMayOpen(brain.settings(), h),
     deliver: () => { void mail.tick(); }, chainOf: box => mail.chainOf(box),
     sent: (fromId, toId, text) => manager.noteMail(fromId, toId, text), // a worker's report completes its assignment (ADR 0084)
@@ -664,7 +664,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools(delegationTools({
     integrate: async (parent, child) => stageDelegatedChanges(delegateWorktrees.allocation(parent, child), parent, child, brain.info().brainRoot),
     integrateMany: async (parent, children) => stageDelegatedChangesMany(children.map(child => ({ owned: delegateWorktrees.allocation(parent, child), child })), parent, brain.info().brainRoot), chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
-    engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), roleEngines: p => levelEngines(agents.levelsFor(p)), presetChoice: (roleId, ask, delegator) => agents.presetChoice(roleId, ask, delegator), label: AGENT_LABEL, runs: () => manager.runs.list(), skillTools,
+    engineRefusal: to => openRefusal(brain.settings(), to), presetChoice: (roleId, ask, delegator) => agents.presetChoice(roleId, ask, delegator), label: AGENT_LABEL, runs: () => manager.runs.list(), skillTools,
     remember: (roleId, line, chat) => { skillLessons.propose({ role: portableId(roleId), text: line, chatId: chat.id, ...(chat.run?.runId ? { runId: chat.run.runId } : {}) }); } }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
   // every step's preset, never a model (ADR 0346): a started step's chat, else the one the plan asks of the role's card
@@ -856,7 +856,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // its cached state (ADR 0186) is read again after whatever the Brain pages refresh on
   ctx.emitter.tap(ch => { if (ch === 'brainmodel:changed' || ch === 'agents:changed') brainModel.invalidate(); });
   // a role chat out of credits follows its role's card (ADR 0346): when the card changes, and when the wait begins
-  const creditWait = creditWaitWatch({ chats: manager, card: (roleId, ask, delegator) => agents.cardNow(roleId, ask, delegator), engineRefusal: (from, to) => openRefusal(brain.settings(), from, to) });
+  const creditWait = creditWaitWatch({ chats: manager, card: (roleId, ask, delegator) => agents.cardNow(roleId, ask, delegator), engineRefusal: to => openRefusal(brain.settings(), to) });
   creditWaitRef.current = creditWait;
   ctx.emitter.tap((ch, payload) => { if (ch === 'agents:changed' || (ch === 'chat:updated' && (payload as ChatSummary | undefined)?.creditWait)) creditWait(); });
   brainModelRef.current = brainModel;

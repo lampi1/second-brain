@@ -27,7 +27,7 @@ function setup(list: ChatSummary[]) {
   const root = tmp('mail-delegates');
   const dir = inboxDir(root);
   fs.mkdirSync(dir, { recursive: true });
-  const tools = mailTools({ root: () => root, chats: () => list, crossRefusal: () => null, deliver: () => {}, chainOf: () => null });
+  const tools = mailTools({ root: () => root, chats: () => list, deliver: () => {}, chainOf: () => null });
   const call = (from: string, args: Record<string, unknown>) => tools.find(t => t.name === 'send_to_chat')!.run(args, { params: { chatId: from } });
   return { dir, call };
 }

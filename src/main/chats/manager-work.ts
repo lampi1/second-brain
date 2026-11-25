@@ -370,6 +370,8 @@ export abstract class ManagerWork extends ManagerLifecycle {
     }
     if (this.midTurn(r) || r.pending.size || r.s.queued || r.opening || r.releasing || r.switching || r.archiving || this.deliveries.has(chatId)) throw new ToolRefusal('The chat is busy or has queued work: nothing was assigned. Assign again once its current work has ended; a retry now gets the same answer.');
     if (options.reviewOf !== undefined) this.runs.checkLinks({ reviewOf: options.reviewOf }); // before the previous run ends
+    // its role's card as it is now (ADR 0352): a card changed since it started never stops the work
+    await this.adoptCard(r);
     const freshBoundary = this.freshReady(r, Date.now());
     // the task's preset (ADR 0336, agent_assign_task): the switch comes after every guard above, so a refused
     // assignment never leaves the chat on another model; put back when the assignment itself still fails
@@ -383,6 +385,9 @@ export abstract class ManagerWork extends ManagerLifecycle {
     try { await this.send(chatId, prompt, undefined, false, from, false, source); }
     finally { r.freshAssignmentRun = undefined; }
   }
+
+  /** A role chat given new work takes its card as it is now (ChatManager.adoptCard, ADR 0352). */
+  protected abstract adoptCard(r: Rec): Promise<void>;
 
   /** The chat's settings (ChatManager.set): effort null = back to the engine's default. */
   abstract set(chatId: string, patch: { model?: string; effort?: Effort | null }): Promise<ChatSummary>;

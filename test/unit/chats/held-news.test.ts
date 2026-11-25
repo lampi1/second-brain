@@ -137,7 +137,7 @@ describe('ChatMail.heldMail', () => {
     const sent: string[] = [];
     const mail = new ChatMail({ root: () => root, chats: { list: () => list, send: async id => { sent.push(id); } }, instance: 'second-brain-dev', now: () => clock.t });
     mails.push(mail);
-    const post = (text: string, kind?: 'info' | 'request' | 'urgent') => sendMail(dir, { from: 'App · Lavoro', fromHarness: 'claude', to: 'Orchestrator', toHarness: null, text, ...(kind ? { kind } : {}), refusal: () => null, now: new Date(clock.t) })!;
+    const post = (text: string, kind?: 'info' | 'request' | 'urgent') => sendMail(dir, { from: 'App · Lavoro', fromHarness: 'claude', to: 'Orchestrator', text, ...(kind ? { kind } : {}), now: new Date(clock.t) })!;
     return { mail, list, sent, post };
   }
 
