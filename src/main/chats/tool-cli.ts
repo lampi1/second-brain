@@ -89,5 +89,5 @@ export function toolCliEnv(base: Record<string, string | undefined>, dir: string
 /** The line that tells a chat how to reach a tool its engine did not give it (the tool check, the report reminder). */
 export function toolCliHint(tools: readonly string[]): string {
   const one = tools[0] ?? 'agent_report';
-  return `Se uno strumento dell'app (${tools.join(', ') || one}) non è tra i tuoi, usa il comando locale dell'app nella tua shell: \`${TOOL_CLI} ${one} '<argomenti JSON>'\` (oppure \`${TOOL_CLI} ${one} --file args.json\`; \`${TOOL_CLI} list\` elenca i tuoi strumenti). Chiama lo stesso strumento con gli stessi controlli.`;
+  return `Se uno strumento dell'app (${tools.join(', ') || one}) non è tra i tuoi, usa il comando locale dell'app nella tua shell: \`${TOOL_CLI} ${one} '<argomenti JSON>'\` (oppure \`${TOOL_CLI} ${one} --file args.json\`; \`${TOOL_CLI} list\` elenca i tuoi strumenti). Su Windows passa gli argomenti con --file o da stdin (\`-\`): cmd.exe altera le virgolette. Chiama lo stesso strumento con gli stessi controlli.`;
 }

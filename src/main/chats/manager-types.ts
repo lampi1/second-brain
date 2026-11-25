@@ -465,4 +465,6 @@ export interface UserWroteNote { eventId: string; seq: number; chatId: string; t
 export interface Inherited { launchContext?: AgentContextSnapshot; tier?: ModelTier; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number; launches?: string[] }
 /** ChatManager.create's options. runStartedBy and work: a continued chat's run keeps who started the work and its state
  *  (ADR 0356: a Strategist the Orchestrator started stays the Orchestrator's work after an engine change). */
-export interface CreateOpts { boundByOrchestrator?: boolean; intake?: IntakeSource; resumePlan?: StrategyPlan; workMap?: string; continuation?: boolean; continuationOf?: string; sameWorktree?: boolean; runStartedBy?: 'user' | 'orchestrator' | 'parent' | 'app'; work?: NonNullable<ChatSummary['work']> }
+export interface CreateOpts {
+  /** a continuation of an app job that owes its report (ADR 0356) */
+  reportExpected?: boolean; boundByOrchestrator?: boolean; intake?: IntakeSource; resumePlan?: StrategyPlan; workMap?: string; continuation?: boolean; continuationOf?: string; sameWorktree?: boolean; runStartedBy?: 'user' | 'orchestrator' | 'parent' | 'app'; work?: NonNullable<ChatSummary['work']> }

@@ -14,12 +14,12 @@ import type { Harness } from '../../../src/shared/contract';
 const roots: string[] = [], managers: ChatManager[] = [];
 afterEach(async () => { vi.restoreAllMocks(); for (const m of managers.splice(0)) await m.shutdown(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
-function fixture() {
+function fixture(o: { env?: NodeJS.ProcessEnv } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-toolgap-')); roots.push(dir);
   const sinks: SessionSink[] = [], sent: string[] = [], envs: NodeJS.ProcessEnv[] = [];
   let closes = 0;
   const m = new ChatManager({ userData: dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0, engineOn: () => true, mcpUrlFor: id => `http://127.0.0.1:4000/mcp/chat/${id}/t`,
-    toolCliDir: path.join(dir, 'bin'), env: { CLAUDE_CONFIG_DIR: path.join(dir, 'home'), PATH: '/usr/bin' }, sessionFactory: (harness, o, s) => {
+    toolCliDir: path.join(dir, 'bin'), env: o.env ?? { CLAUDE_CONFIG_DIR: path.join(dir, 'home'), PATH: '/usr/bin' }, sessionFactory: (harness, o, s) => {
       sinks.push(s); envs.push(o.env ?? {});
       return { harness, sessionId: null, pid: null, root: null, alive: true, busy: false, start() { s.changed({ state: 'idle' }); }, send(text: string) { sent.push(text); },
         close: async () => { closes++; s.changed({ state: 'closed' }); s.exit({ code: 0, error: null }); }, killNow() {}, interrupt: async () => {}, answer: () => true,
@@ -66,4 +66,39 @@ describe('the required tools of a chat, checked at every start (ADR 0356)', () =
     f.sinks.at(-1)!.toolsLoaded?.(['mcp__second-brain__show_ui']);
     await vi.waitFor(() => expect(f.sent.some(t => t.includes('sb-tool agent_report'))).toBe(true));
   });
+
+  it('the engine\'s PATH is the app\'s own with the command first, also when the options name none (review of ADR 0356)', async () => {
+    const f = fixture({ env: {} }), c = await f.child();
+    const env = { ...process.env, ...f.envs.at(-1)! };
+    const key = Object.keys(env).find(k => k.toUpperCase() === 'PATH')!;
+    const parts = String(env[key]).split(path.delimiter);
+    expect(parts[0]).toBe(path.join(f.dir, 'bin'));
+    for (const p of String(process.env.PATH ?? process.env.Path ?? '').split(path.delimiter).filter(Boolean)) expect(parts).toContain(p);
+    expect(c.id).toBeTruthy();
+  });
+
+  it('an ACP engine not known to take the endpoint is never reloaded for a list it never read', async () => {
+    const f = fixture(), c = await f.child('cursor');
+    f.sinks.at(-1)!.item({ kind: 'result', id: 'r1', at: Date.now(), isError: false, costUsd: 0, durationMs: 1, turns: 1 }, false);
+    await new Promise(r => setImmediate(r));
+    expect(f.closes()).toBe(0);
+    expect(f.m.items(c.id).some(i => i.kind === 'system' && (i as { code?: string }).code === 'toolsReloaded')).toBe(false);
+  });
+
+  it('Claude that ended a turn without ever reading the endpoint is reloaded once', async () => {
+    const f = fixture(), c = await f.child('claude');
+    f.sinks.at(-1)!.item({ kind: 'result', id: 'r1', at: Date.now(), isError: false, costUsd: 0, durationMs: 1, turns: 1 }, false);
+    await vi.waitFor(() => expect(f.m.items(c.id).some(i => i.kind === 'system' && (i as { code?: string }).code === 'toolsReloaded')).toBe(true));
+  });
+
+  it('an app job that owes its report keeps agent_report after «Riprendi» (review of ADR 0356)', async () => {
+    const f = fixture();
+    const job = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'Rivedi', doneWhen: ['Fatto'] }, 'app',
+      { owner: { ...plainOwner('claude', null), id: 'sentinel', source: 'catalog', version: 1 }, instructions: 'Rivedi.', policy: null });
+    expect(f.m.requiredToolsOf(job.id)).toContain('agent_report');
+    const next = await f.m.continueChat(job.id, { ask: false, on: { harness: 'cursor', model: null, effort: null } });
+    expect(next.run?.taskContract).toMatchObject({ reportExpected: true, doneWhen: ['Fatto'] });
+    expect(f.m.requiredToolsOf(next.id)).toContain('agent_report');
+  });
 });
+

@@ -120,10 +120,13 @@ export abstract class ManagerContinuity extends ManagerRequests {
       ...(r.s.route ? { route: { ...r.s.route, ledgerId: r.s.route.ledgerId ?? `app:${r.s.id}`, handoffs: (r.s.route.handoffs ?? 0) + 1 } } : {}),
       // the root task's own contract goes on (a delegated one travels in its delegation)
       ...(!parentRec && r.s.run?.goal ? { goal: r.s.run.goal.slice(0, 2000) } : {}), ...(!parentRec && r.s.run?.taskContract?.doneWhen?.length ? { doneWhen: [...r.s.run.taskContract.doneWhen] } : {}),
+      ...(r.s.run?.taskContract?.deliveryPolicy ? { deliveryPolicy: r.s.run.taskContract.deliveryPolicy } : {}), ...(r.s.run?.taskContract?.fields?.length ? { contractFields: [...r.s.run.taskContract.fields] } : {}),
       prompt: `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}`,
       ...(parentRec ? { parentId: parentRec.s.id, ...(r.s.delegation ? { delegation: nextDelegation(r.s.delegation, opts.assignment) } : {}) } : {}),
     }, 'user', { ...(r.s.launchContext ? { launchContext: r.s.launchContext } : {}), ...(r.s.run?.tier ? { tier: r.s.run.tier } : {}), owner: on ? { ...owner, engine: on.harness, model: on.model } : owner, instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.skills ? { skills: [...r.skills] } : {}), ...(r.maxContext ? { maxContext: r.maxContext } : {}), ...(r.launches ? { launches: [...r.launches] } : {}) },
-    {}, { continuation: !!parentRec, continuationOf: r.s.id, ...(opts.sameWorktree ? { sameWorktree: true } : {}),
+    // the same contract (ADR 0356): a review it writes, how its result is delivered, and an app job's owed report
+    r.s.run?.reviewOf ? { reviewOf: r.s.run.reviewOf } : {}, { continuation: !!parentRec, continuationOf: r.s.id, ...(opts.sameWorktree ? { sameWorktree: true } : {}),
+      ...(r.s.run?.taskContract?.reportExpected ? { reportExpected: true } : {}),
       // the same work (ADR 0356): who started it, its state and its job's work map go on with it
       ...(r.s.run?.startedBy ? { runStartedBy: r.s.run.startedBy } : {}), ...(r.s.work ? { work: structuredClone(r.s.work) } : {}), ...(r.s.workMap ? { workMap: r.s.workMap } : {}) });
     const nr = this.chats.get(c.id);

@@ -51,6 +51,10 @@ export abstract class ManagerWork extends ManagerLifecycle {
   protected override movePlan(from: Rec, to: Rec): void {
     const plan = from.s.plan;
     if (!plan || to.s.plan) return;
+    // children still working report to the old chat (their parent), whose plan their reports move: the plan stays there
+    // until they end (review of ADR 0356; re-parenting them is not done)
+    const open = [...this.chats.values()].filter(c => c.s.parentId === from.s.id && !c.s.closedAt).length;
+    if (open > 0) { log.info('chats', 'plan kept on the chat its children report to', { chat: from.s.id, data: { next: to.s.id, phase: plan.phase, children: open } }); return; }
     to.s.plan = structuredClone(plan);
     if (plan.phase === 'proposed') {
       const store = this.coordination, old = this.planRequestKey(from, plan);

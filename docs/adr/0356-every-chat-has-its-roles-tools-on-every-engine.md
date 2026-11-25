@@ -46,11 +46,13 @@ ripresa». Four failures were seen on 2026-11-25 (release fc55c02d), each traced
   engine was really given is either the list the endpoint served in this session, or what the engine says it loaded
   (Claude's init `tools`). If the served list lacks a required tool, that is an app fault no reload fixes: the
   fallback. If the engine loaded fewer, one reload of the session (same session, new process), then the fallback. If a
-  turn ended and the engine never read the endpoint, the same. Each step is a warn log line and a line in the chat. The
-  problem is never left to the agent.
+  turn ended and the engine never read the endpoint, the same. That last case counts only on an engine known to be
+  handed the endpoint (Claude, Codex, an ACP engine with `mcpHttp`); an API engine has no tools and no shell. Each step
+  is a warn log line and a line in the chat. The problem is never left to the agent.
 - **One fallback channel for every engine** (`chats/tool-cli.ts`): `sb-tool <tool> '<json>'` (`--file`, `-` for stdin,
   `list`). The app writes it at start into `<userData>/bin`, run by the app's executable as Node. Every chat's engine
-  starts with that folder first on PATH and the chat's own endpoint URL in `SB_CHAT_TOOLS`. It calls the same tool on
+  starts with that folder first on its own PATH (the app's, kept whole) and the chat's own endpoint URL in
+  `SB_CHAT_TOOLS`. On Windows the hint says to pass the arguments with `--file` or stdin (cmd.exe changes quotes). It calls the same tool on
   the same per-chat endpoint, so the same filter and guards run. The fallback message and the report reminder name it.
 - **A report pasted as JSON** (`chats/text-report.ts`): when a child owes its report, the app reads its last answer. It
   takes a ```json block, the whole text or the last balanced object, with an `outcome` of done, partial or blocked and a
@@ -60,7 +62,9 @@ ripresa». Four failures were seen on 2026-11-25 (release fc55c02d), each traced
   - the role, its tools and the roles it may launch;
   - the root task's goal and criteria, who started the run, its work state and its work map;
   - the plan with its phase. A proposed plan's request is cancelled on the old chat and registered on the new one in
-    the same job (`movePlan`), so «Approva» answers the chat that works;
+    the same job (`movePlan`), so «Approva» answers the chat that works. A plan whose children still work stays on the
+    old chat, which they report to and whose plan their reports move (they are not re-parented);
+  - an app job's contract: its owed report, how its result is delivered, its fields and the review it writes;
   - the user's recorded instructions, the app's open questions to the user, and work threads (`followChat`).
   What an agent, the app or a command result still sends to the old chat reaches the new one (`send`). A reuse by the
   old chatId lands on the chat that works now (`successorIn`). The stall driver does not count a thread whose linked
@@ -72,6 +76,8 @@ ripresa». Four failures were seen on 2026-11-25 (release fc55c02d), each traced
 - **The same permissions on every engine.** The three writes of ADR 0355 (database writes, production releases, cloud
   writes, Azure included) wait for the user in every chat, delegated or not, on every engine; only the maintenance
   research, which runs no commands, is left out. Everything else passes as before (the brain's rules decide first).
+  As in ADR 0355, the hold applies where an engine asks the app's gate: a chat the user put in bypassPermissions, or an
+  engine's own allow rule, is not held.
 
 ## Consequences
 
@@ -79,6 +85,7 @@ ripresa». Four failures were seen on 2026-11-25 (release fc55c02d), each traced
 - An ACP chat on a slow machine may be reloaded once when its first turn ends before its engine read the endpoint.
 - A user's own chat now also gets a panel for a database write, a production release or a cloud write, which before
   only the brain's rules could hold.
-- Known gaps: agy drops tools inside its own process, so the app cannot see that drop; it relies on the budget, the
+- Known gaps: Claude's init `tools` is trusted as what it loaded; if it ever lists only part of the app's tools (deferred
+  ones), every Claude chat would be reloaded once: to confirm on a real PC. agy drops tools inside its own process, so the app cannot see that drop; it relies on the budget, the
   fallback command and the JSON report. Real-PC checks on every installed engine are still to do: after start, after
   resume, after an engine change, and in a session over 250k tokens.

@@ -338,7 +338,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     if (req.userModel && !delegator) r.s.userModel = { ...req.userModel };
     const pc = agent.presetChoice;
     if (pc && (pc.skipped?.length || pc.allOut)) r.s.pick = { at: now, chosen: `${req.model ?? 'predefinito'} (${req.harness})`, skipped: pc.skipped ?? [], ...(pc.allOut ? { allOut: true as const } : {}) };
-    if (r.s.run) { r.s.run.taskContract = { ...(by === 'app' && req.doneWhen !== undefined ? { reportExpected: true } : {}), goal: r.s.run.goal, doneWhen: req.doneWhen ?? req.delegation?.doneWhen ?? [], deliveryPolicy: this.deliveryPolicy(req.deliveryPolicy, !!delegator), ...(req.contractFields?.length ? { fields: req.contractFields } : {}) }; this.runSave(); }
+    if (r.s.run) { r.s.run.taskContract = { ...((by === 'app' && req.doneWhen !== undefined) || opts.reportExpected ? { reportExpected: true } : {}), goal: r.s.run.goal, doneWhen: req.doneWhen ?? req.delegation?.doneWhen ?? [], deliveryPolicy: this.deliveryPolicy(req.deliveryPolicy, !!delegator), ...(req.contractFields?.length ? { fields: req.contractFields } : {}) }; this.runSave(); }
     if (r.s.run?.startedBy === 'app' && r.s.run.reviewOf && r.s.run.taskContract?.reportExpected && !r.s.work) r.s.work = { status: 'assigned', updatedAt: now };
     // the Orchestrator opened it while answering the user's own message: the user waits for what it finds (#123)
     if (by === 'agent' && !delegator && r.s.run?.startedBy === 'orchestrator') r.userWaits = this.orchestratorAnswering();

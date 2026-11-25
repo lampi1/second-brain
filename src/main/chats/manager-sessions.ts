@@ -38,6 +38,11 @@ const catalogRole = (s: Rec['s']): string | undefined => s.agent?.source === 'ca
 export const DELIVERED_RELEASE_MS = 5 * 60_000;
 
 /** Engine sessions: start, launch options, warm engines, the kill on quit, the per-chat MCP and tool visibility. */
+/** The engine is handed the app's MCP endpoint for sure (ADR 0356): Claude and Codex always; an ACP engine only when
+ *  the app knows it takes an http server (mcpHttp). An API engine has no tools and no shell, so nothing is checked; an
+ *  ACP engine that may not take it is checked only from the lists it really read (no reload for a list never read). */
+const endpointGiven = (e: ReturnType<typeof engineOf>): boolean => !!e && (e.kind === 'claude' || e.kind === 'codex' || (e.kind === 'acp' && !!e.mcpHttp));
+
 export abstract class ManagerSessions extends ManagerPersistence {
 
   /** The engines running now and their chats, the waiting warm engine included (its chat id is the next chat's), plus
@@ -307,7 +312,7 @@ export abstract class ManagerSessions extends ManagerPersistence {
   private toolCheck(r: Rec): void {
     const s = r.toolSession;
     if (!s) return;
-    const a = toolAction(this.requiredToolsOf(r.s.id), s, r.toolReloads ?? 0, !!this.opts.mcpUrlFor?.(r.s.id));
+    const a = toolAction(this.requiredToolsOf(r.s.id), s, r.toolReloads ?? 0, !!this.opts.mcpUrlFor?.(r.s.id) && (endpointGiven(engineOf(r.s.harness)) || !!s.served));
     if (a.kind === 'ok' || a.kind === 'wait') return;
     s.acted = a.kind;
     if (a.kind === 'reload') r.toolReloads = (r.toolReloads ?? 0) + 1;
@@ -426,7 +431,8 @@ export abstract class ManagerSessions extends ManagerPersistence {
   /** A chat engine's environment: the app's, and the fallback tool command bound to this chat (chats/tool-cli.ts). */
   private chatEnv(chatId: string): NodeJS.ProcessEnv {
     const base = { ...engineEnv(), ...this.opts.env, SB_EVENT_CONTEXT: '' };
-    return { ...base, ...toolCliEnv(base, this.opts.toolCliDir ?? null, this.opts.mcpUrlFor?.(chatId) ?? null) };
+    // every session spreads this over the app's own environment: PATH is the app's, with the command's folder first
+    return { ...base, ...toolCliEnv({ ...process.env, ...base }, this.opts.toolCliDir ?? null, this.opts.mcpUrlFor?.(chatId) ?? null) };
   }
 
   /** pre-allowed on Claude: the Orchestrator's app-control tools (/mcp/app), and every chat's mail to other chats and

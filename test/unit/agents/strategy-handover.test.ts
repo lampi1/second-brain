@@ -32,6 +32,19 @@ describe('a Strategist that goes on in another chat keeps its plan with the user
     expect(planOf(f, next.id).phase).toBe('running');
     expect(f.sent.get(next.id)?.at(-1)).toBe(PLAN_APPROVED);
   });
+
+  it('a running plan whose children still work stays on the chat they report to, and their report moves it', async () => {
+    const f = fixture(), s = await f.root('strategist');
+    await answerPanel(f, s.id, 'Vuoi aggiungere vincoli?', ENOUGH_QUESTIONS);
+    await f.call('plan_propose', s.id, PLAN);
+    await decide(f, s.id, 'approve');
+    await f.call('agent_delegate', s.id, { tasks: [{ ...f.task('scout', 'Ordini · Dove'), step: 1 }] });
+    const kid = f.m.list().find(c => c.parentId === s.id)!;
+    const next = await f.m.continueChat(s.id, { ask: false, on: { harness: 'cursor', model: null, effort: null } });
+    expect(f.m.list().find(c => c.id === next.id)!.plan).toBeUndefined();
+    await f.call('agent_report', kid.id, { outcome: 'done', summary: 'ok', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }] });
+    expect(planOf(f, s.id).steps[0]!.state).toBe('done');
+  });
 });
 
 // to-do 4 of 2026-11-25 (ADR 0356): an Antigravity child without agent_report pasted its report as JSON and was closed
