@@ -48,6 +48,7 @@ export abstract class ManagerPersistence extends ManagerCore {
     delete r.userClosing;
     delete r.s.closedAt;
     delete r.s.closedBy;
+    delete r.s.closedWith;
     this.persist();
     log.info('chats', 'chat reopened', { chat: r.s.id });
     this.updated(r);

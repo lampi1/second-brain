@@ -14,7 +14,7 @@ import { staleDue } from '../agents/runs';
 import { autoCloseNow, type AutoCloseCandidate } from './auto-close';
 import type { AutoCloseWaiting } from '../../shared/auto-close';
 import type { Rec } from './manager-types';
-import { clearInterval, clearTimeout, RESUME_TEXT, supersededResult, sysItem, uniqueChildResults, workBehind, WAITING_REASON } from './manager-helpers';
+import { clearInterval, clearTimeout, RESUME_TEXT, supersededResult, sysItem, uniqueChildResults, workBehind, closedWithOf, WAITING_REASON } from './manager-helpers';
 import { ManagerDelegation } from './manager-delegation';
 import { stopOrKill } from './stop-kill';
 import { toolCliHint } from './tool-cli';
@@ -366,6 +366,9 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     if (opts.auto) throw new Error('La chiusura automatica richiede il timer verificato dal processo principale.');
     // closed by hand while an agent's message waited in the CPU queue: that message is dropped with the chat's work
     if (this.admission?.drop(chatId)) log.info('chats', 'queued work dropped: the chat was archived', { chat: chatId });
+    // what the user's ✕ cuts short, read before the interrupt changes the state (a delegated chat stopped with its parent
+    // is not told: the parent's notice says it)
+    const cutShort = !opts.auto && opts.cause !== 'parent' ? closedWithOf(r.s, !!r.session?.busy, this.descendantsOf(chatId).filter(k => !k.s.closedAt && ['running', 'waiting', 'starting'].includes(k.s.state)).length) : undefined;
     const sess = r.session;
     const note = opts.auto && r.lastTurnAt > 0;
     // a long Claude chat that still waits for its cold note keeps its engine until it wrote it (never a turn at close:
@@ -397,6 +400,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     this.flushItems(chatId);
     r.s.closedAt = Date.now();
     r.s.closedBy = opts.auto ? 'auto' : 'user';
+    if (cutShort) r.s.closedWith = cutShort; else delete r.s.closedWith;
     if (opts.undoable && !opts.auto) {
       const at = r.s.closedAt;
       const t = setTimeout(() => { if (this.chats.get(chatId) === r && r.s.closedAt === at) this.endRunOf(r, 'closed', at, 'user'); }, 15_000);
@@ -412,6 +416,20 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     this.updated(r);
     this.stepOfEnded(r);
     return { ...r.s };
+  }
+
+  /** The ✕'s final close, after its «Annulla» (ADR 0357): the engines it outlived end and its run ends, but the chat stays
+   *  among the closed ones (closedBy 'user') with its history, reopened by one click or by app_reopen_chat; only close()
+   *  removes it for good. Nothing to do when the chat was reopened meanwhile or is already gone. */
+  async finishClose(chatId: string): Promise<void> {
+    const r = this.chats.get(chatId);
+    if (!r || !r.s.closedAt || r.s.closedBy !== 'user') return;
+    if (r.archiving) await r.archiving.catch(() => {});
+    if (!r.s.closedAt) return;
+    this.reapKept(r);
+    this.endRunOf(r, 'closed', r.s.closedAt, 'user');
+    this.persist();
+    log.info('chats', 'chat closed for good by ✕: kept among the closed', { chat: chatId });
   }
 
   /** Back on the grid; the session resumes on the next message (Claude --resume, Cursor session/load). */

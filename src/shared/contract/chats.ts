@@ -165,6 +165,8 @@ export interface ChatSummary {
   closedAt?: number;
   /** why it was closed: auto = finished and left alone (auto-close), user = closed by hand */
   closedBy?: 'auto' | 'user';
+  /** the user's ✕ cut open work short (ADR 0357): an assignment, a turn, requests, a queued start; app_chats and app_digest say it */
+  closedWith?: string;
   /** its turn was cut by an app restart and the app resumed it by itself at this time ("ripresa dopo il riavvio";
    *  cleared by the user's next message) */
   resumedAt?: number;
@@ -505,7 +507,7 @@ export interface ChatsInvokeMap {
   /** keepQueued: "Invia subito" stops only the turn; messages the engine already holds still run after it */
   'chat:stop': [{ chatId: string; keepQueued?: boolean }, void];
   'chat:stopAll': [void, number];
-  'chat:close': [{ chatId: string }, void];
+  'chat:close': [{ chatId: string; /** the ✕'s final close (ADR 0357): the chat stays among the closed; absent = removed for good */ keep?: boolean }, void];
   /** archive a finished chat (its process ends, its browser tabs close, the env sign-in stays); reopen brings it back */
   /** undoable: the user's ✕ with «Annulla» (#168): the run ends when the close is final */
   'chat:archive': [{ chatId: string; auto?: boolean; undoable?: boolean }, ChatSummary];

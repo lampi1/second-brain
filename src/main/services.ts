@@ -66,6 +66,8 @@ export interface ChatService {
   stop(chatId: string, keepQueued?: boolean): Promise<void>;
   stopAll(): Promise<number>;
   close(chatId: string, by?: 'user' | 'agent'): Promise<void>;
+  /** the ✕'s final close: the chat stays among the closed (ADR 0357) */
+  finishClose(chatId: string): Promise<void>;
   /** archive a finished chat (closedAt; out of the grid, reopenable); auto = the auto-close, refused if it went back to work */
   archive(chatId: string, opts?: { auto?: boolean; undoable?: boolean }): Promise<ChatSummary>;
   /** an archived chat back on the grid; its session resumes on the next message */

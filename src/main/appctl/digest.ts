@@ -122,7 +122,7 @@ export function digest(inp: DigestInput): string {
 
   const from = since ?? now - 24 * 3600_000;
   const closed = inp.chats.filter(c => c.closedAt && c.closedAt >= from && c.id !== inp.selfId)
-    .map(c => `- «${c.title}» chiusa ${ago(now - c.closedAt!)} fa (${c.closedBy === 'user' ? 'a mano' : 'automaticamente'}; chiusura ≠ lavoro completato)${c.lastText ? ` · ultima riga «${one(c.lastText, 160)}»` : ''}`);
+    .map(c => `- «${c.title}» chiusa ${ago(now - c.closedAt!)} fa (${c.closedBy === 'user' ? 'a mano con ✕' : 'automaticamente'}; chiusura ≠ lavoro completato)${c.closedWith ? ` · lavoro aperto tagliato: ${one(c.closedWith, 300)}` : ''}${c.lastText ? ` · ultima riga «${one(c.lastText, 160)}»` : ''}`);
   const titleOf = (id: string) => inp.chats.find(c => c.id === id)?.title ?? id;
   const runs = inp.runs.filter(r => (r.endedAt ?? r.startedAt) >= (since ?? now - 2 * 3600_000))
     .map(r => `- «${titleOf(r.chatId)}»: \`${one(redact(r.code.split('\n')[0] ?? ''), 120)}\` ${r.state === 'running' ? 'in corso' : `${r.state}, uscita ${r.exitCode ?? '-'}`}`);

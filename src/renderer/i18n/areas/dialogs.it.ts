@@ -145,6 +145,7 @@ export const dialogsIt = {
   'dialogs.orchestrator.heldKind.started': 'Avviata',
   'dialogs.orchestrator.heldKind.userMessage': 'Hai scritto',
   'dialogs.orchestrator.heldKind.stalled': 'Lavoro approvato fermo',
+  'dialogs.orchestrator.heldKind.userClosed': 'Hai chiuso con ✕',
   'dialogs.orchestrator.heldWhy.user': 'aspetta la tua risposta all’Orchestrator',
   'dialogs.orchestrator.heldWhy.busy': 'l’Orchestrator è occupato: arriva appena si libera',
   'dialogs.orchestrator.heldWhy.group': 'arriva tra pochi secondi, insieme alle altre',

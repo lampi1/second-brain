@@ -69,6 +69,22 @@ export function turnErrors(items: readonly ChatItem[]): string {
  *  for them (the engine's count missed a resumed agent on 2026-10-16). Such a chat is never closed nor released. */
 export const workBehind = (s: Pick<ChatSummary, 'background' | 'waitsOnWork' | 'work'>): boolean => (s.background ?? 0) > 0 || !!s.waitsOnWork || !!s.work && s.work.status !== 'completed';
 
+/** What the user's ✕ cut short, in one line for the Orchestrator and the closed list (ADR 0357): an open assignment, a turn
+ *  at work, requests waiting for him, a start in the CPU queue. undefined = nothing open, so nobody needs telling. */
+export function closedWithOf(s: Pick<ChatSummary, 'background' | 'waitsOnWork' | 'work' | 'pending' | 'queued' | 'run' | 'lastText'>, busy: boolean, kids = 0): string | undefined {
+  const parts = [
+    s.work && s.work.status !== 'completed' ? `incarico ${s.work.status === 'waiting-mail' ? 'in attesa di posta' : 'assegnato'}` : '',
+    busy ? 'turno in corso' : '',
+    s.pending > 0 ? `${s.pending} richieste aperte per l'utente` : '',
+    kids > 0 ? `${kids} chat delegate al lavoro` : '',
+    s.queued ? 'partenza in coda' : '',
+    (s.background ?? 0) > 0 || s.waitsOnWork ? 'lavoro ancora in giro dietro la chat' : '',
+  ].filter(Boolean);
+  if (!parts.length) return undefined;
+  const last = (s.lastText ?? '').replace(/\s+/g, ' ').trim();
+  return `${parts.join(', ')}${s.run?.runId ? ` · run ${s.run.runId}` : ''}${last ? ` · ultima riga «${last.length > 160 ? `${last.slice(0, 159)}…` : last}»` : ''}`;
+}
+
 /** The scheduler's reason for each waiting kind (Italian, as its other reasons; the tile shows its own label). */
 export const storedResult = (x: { at: number; isError: boolean; interrupted?: boolean } | undefined): Pick<StoredChat, 'lastResult'> =>
   x ? { lastResult: { at: x.at, isError: x.isError, ...(x.interrupted ? { interrupted: true as const } : {}) } } : {};

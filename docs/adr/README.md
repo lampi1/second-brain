@@ -134,6 +134,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0136](0136-persistent-developer-work-cockpit.md) Persistent developer work cockpit — accepted, partly superseded by 0141
 - [0137](0137-lesson-evidence-and-selective-memory.md) Evidence before lesson approval; selective launch memory — accepted, partly superseded by 0153
 - [0138](0138-budget-fresh-sessions.md) Fresh engine sessions at an observed idle boundary — accepted
+- [0139](0139-delegated-writer-worktrees.md) Isolate delegated writers and stage integration — accepted
 - [0140](0140-deterministic-pr-qa-recap.md) Routine PR and QA recaps use observed data first — accepted, partly superseded by 0141
 - [0141](0141-decision-modal-workflow.md) Agent-only Home and a decision-driven workflow — accepted
 - [0142](0142-orchestrator-owned-reusable-flows.md) Orchestrator-owned reusable flows — accepted
@@ -219,7 +220,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0224](0224-report-corrections-batching-caps.md) Report corrections, a short child-result debounce, caps instead of refusals — accepted
 - [0225](0225-delegates-talk-up-close-children-assign-without-handshake.md) 0225. Delegates write up their tree, parents close their children, assignments without a handshake — accepted
 - [0226](0226-orchestrator-reads-child-reports.md) The Orchestrator reads any report in its tree (app_child_output) — accepted
-- [0227](0227-worktree-pool.md) 0227. Reused worktree pool per repository, and warm engines in the most used folders — accepted; amended by 0345, 0361
+- [0227](0227-worktree-pool.md) 0227. Reused worktree pool per repository, and warm engines in the most used folders — accepted; amended by 0345
 - [0228](0228-parallel-checkpoint.md) The checkpoint runs while the message goes; the first write waits for it; a restart resumes only recent turns — accepted
 - [0229](0229-orchestrator-remote-control.md) 0229. «Controllo remoto»: Claude Code Remote Control of the Orchestrator — accepted
 - [0230](0230-impara-explain-mode.md) 0230. Impara: «Spiegazione», a lesson with pictures and no quiz — accepted
@@ -348,8 +349,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0357](0357-claude-and-gpt-on-antigravity-have-their-own-quota-pool.md) Claude and GPT models on Antigravity have their own quota pool — accepted
 - [0358](0358-a-stopped-root-strategist-wakes-the-orchestrator.md) A root Strategist stopped without a result wakes the Orchestrator — accepted
 - [0359](0359-the-users-engine-choice-holds-for-the-whole-tree.md) The user's engine choice holds for the whole work tree, and a limit stops one model — accepted
-- [0360](0360-one-order-of-the-engines.md) One order of the engines, a threshold each, the reason on every chat, and changes that are never lost — accepted
-- [0361](0361-whoever-opens-a-chat-chooses-its-folder.md) Whoever opens a chat chooses its folder, in place by default — accepted
+- [0360](0360-the-users-x-keeps-the-chat-among-the-closed.md) The user's ✕ keeps the chat among the closed, and the Orchestrator hears of it — accepted
 
 ## Replaced
 
@@ -369,7 +369,6 @@ Kept for the history only: the record named on each line holds the current decis
 - [0107](0107-flash-agent-with-its-own-model.md) «Flash»: the quick lane is an agent with its own model; both columns show theirs — superseded by 0296
 - [0115](0115-fatto-lists-macro-tasks.md) Fatto lists the work the user asked for, with what it cost in all — superseded by 0181
 - [0133](0133-personal-browser.md) A personal browser for the user, apart from the agents' browsers — superseded by 0212
-- [0139](0139-delegated-writer-worktrees.md) Isolate delegated writers and stage integration — superseded by 0361
 - [0196](0196-guide-knows-when-stale.md) The Guida knows when it is stale, answers questions, draws from the code and picks cards for the user — superseded by 0340
 - [0218](0218-balanced-mode.md) 0218. «Balanced mode»: the engine, model and effort of a delegation follow the credits left — superseded by 0337
 - [0281](0281-scheduled-routines.md) Scheduled routines: a request the Orchestrator receives at its time — superseded by 0325
