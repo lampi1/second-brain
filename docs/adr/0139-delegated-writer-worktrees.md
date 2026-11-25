@@ -1,6 +1,6 @@
 # 0139 — Isolate delegated writers and stage integration
 
-Status: accepted
+Status: superseded by ADR 0353 (2026-11-25: a chat works in place, a copy only when asked)
 
 Writing child chats must not race with their parent or siblings in a shared checkout. The host creates a unique Git
 worktree after ChatManager computes the child's effective policy. `edit`, unrestricted `shell`, `brain-write`, external
