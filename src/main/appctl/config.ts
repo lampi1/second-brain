@@ -29,7 +29,7 @@ import { parseMcpSnippet, publicDraft } from '../../shared/mcp-paste';
 import { cardPresets, checkedPresets, type FullPresets, type ModelPreset, type RolePresets } from '../../shared/model-presets';
 import { checkedLevels, type FullLevels, type LevelModel, type RoleLevels } from '../../shared/model-levels';
 import { defOf, getAt, validate } from '../brain/settings-schema';
-import { namesInOrder, wordsOf } from '../../shared/engine-order';
+import { namesInOrder, sentencesOf, wordsOf } from '../../shared/engine-order';
 import { ToolRefusal } from '../mcp/refusal';
 import type { HeldChange, PendingChange } from './pending-config';
 import { addRedaction, log } from '../log';
@@ -139,7 +139,7 @@ export interface ChangeWords { text: string; full?: string; order?: { engines: r
  *  names those engines in that order and no other. Nothing looser: a yes to a similar card is no yes to this change. */
 export function names(card: string, w: ChangeWords): boolean {
   if (w.full !== undefined) return false; // a long text is never named by a short card
-  return wordsOf(card).includes(wordsOf(w.text)) || !!w.order && namesInOrder(card, w.order.engines, w.order);
+  return sentencesOf(card).some(x => x.trim() === wordsOf(w.text).trim()) || !!w.order && namesInOrder(card, w.order.engines, w.order);
 }
 /** An engine's names as a person says them: its label, its id, and OpenAI for the engine whose models are OpenAI's. */
 const engineNames = (c: AgentCatalog | undefined) => (id: string): string[] => {
@@ -386,7 +386,8 @@ export function configTool(d: ConfigDeps): ToolDef {
           if (defOf(key)?.type === 'repo-paths') asked('le impostazioni');
           else proven(held, 'le impostazioni', settingWords(key, ok.value, d.agents?.list()));
           const r = d.brain.requestSetting(key, a.value, { by: 'agent', chatId: d.callerId, ...(reason ? { reason } : {}), direct: true });
-          if ('error' in r) throw new Error(r.error);
+          // refused by its own check after the proof: it stays «da applicare» with the reason (ADR 0358 point 8)
+          if ('error' in r) return refused(held, settingWords(key, ok.value, d.agents?.list()), new Error(r.error));
           if ('applied' in r) d.held?.applied(held);
           if ('proposal' in r) return { proposal: r.proposal.id, note: 'in attesa del clic dell’utente in Memoria → Proposte' };
           log.info('appctl', 'Orchestrator changed a setting', { chat: d.callerId, data: { key: r.applied.key } });

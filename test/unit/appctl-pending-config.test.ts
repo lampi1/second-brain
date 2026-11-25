@@ -122,3 +122,13 @@ describe('the app\'s own panel', () => {
     store.stop();
   });
 });
+
+describe('review of the branch (second round)', () => {
+  const cat = { profiles: [], models: [] } as unknown as AgentCatalog;
+  it('a canonical sentence must fill a sentence of the card: a yes to a longer value is no yes to a shorter one', () => {
+    const w = settingWords('theme', 'Italiano', cat);
+    expect(names('Lingua: Italiano e inglese.', { text: 'Lingua: Italiano.' })).toBe(false);
+    expect(names('Cambio. Lingua: Italiano. Applico?', { text: 'Lingua: Italiano.' })).toBe(true);
+    void w;
+  });
+});

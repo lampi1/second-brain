@@ -41,6 +41,10 @@ export const roleOrder = (own: readonly Harness[] | undefined, all: readonly Har
 /** A text as whole words: accents, case, punctuation and spaces do not count. */
 export const wordsOf = (text: string): string => ` ${text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9%.+/:_-]+/g, ' ').replace(/[.:-]+(?= |$)/g, '').trim()} `;
 
+/** A text as its sentences (a line, ?, !, ; or a full stop end one), each as whole words: a canonical sentence must fill one, so
+ *  «Lingua: Italiano e inglese.» is no yes to «Lingua: Italiano.». */
+export const sentencesOf = (text: string): string[] => text.split(/[\n?!;]|\.\s|\.$/).map(wordsOf);
+
 /** Whether one sentence of a text names these engines, all of them, in this order and no other known one (their labels or
  *  ids as whole words, the first mention of each): a card that says «OpenAI, poi Cursor, Claude per ultimo» names that
  *  order. One sentence, with no «non» or «mai» in it, so a mention elsewhere neither makes nor breaks it. `and` = words

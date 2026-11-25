@@ -470,7 +470,12 @@ export abstract class ManagerWork extends ManagerLifecycle {
     const { expectedVersion: _v, expectedEventSeq: _e, ...rest } = options; void _v; void _e;
     const preset = options.preset ? (({ switchTo: _s, ...p }) => p)(options.preset) : to.on && was ? { choice: { ...was, ...(route ? { route } : {}) }, model: to.on.model } : undefined;
     const notes = next.folderNotes?.length ? `\n\nCartella di lavoro (dall’app):\n${next.folderNotes.map(n => `- ${n}`).join('\n')}` : '';
-    await this.assignTask(next.id, `${context}${notes}\n\nNuovo compito:\n${prompt}`, { ...rest, ...(preset ? { preset } : {}) });
+    try { await this.assignTask(next.id, `${context}${notes}\n\nNuovo compito:\n${prompt}`, { ...rest, ...(preset ? { preset } : {}) }); }
+    catch (e) {
+      // the linked chat exists and carries the work, but not this task: it never shares the old chat's run; say where to assign again
+      if (nr.s.run?.chatId !== nr.s.id) { delete nr.s.run; this.persist(); this.updated(nr); }
+      throw new ToolRefusal(`${errText(e)} The work already goes on in «${nr.s.title}» (chatId ${next.id}) without this task: assign it there.`);
+    }
     return { ...nr.s };
   }
   /** Chats still open under this one: they report to it. */

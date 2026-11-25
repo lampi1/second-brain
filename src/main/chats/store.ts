@@ -137,6 +137,8 @@ export interface StoredChat {
   /** stopped on its provider's credit limit: it waits for another model on its role's card (ADR 0346) */
   creditWait?: CreditWait;
   creditMoved?: ChatSummary['creditMoved'];
+  place?: ChatSummary['place'];
+  folderNotes?: ChatSummary['folderNotes'];
   userModel?: ChatSummary['userModel'];
   pick?: ChatSummary['pick'];
   /** its engine ended with an error or in the middle of a turn: not finished, it never closes by itself */
@@ -321,6 +323,9 @@ function valid(x: unknown): StoredChat | null {
     ...(c.waitsOnWork === true ? { waitsOnWork: true as const } : {}),
     ...(readCreditWait(c.creditWait) ? { creditWait: readCreditWait(c.creditWait)! } : {}),
     ...(readCreditMoved(c.creditMoved) ? { creditMoved: readCreditMoved(c.creditMoved)! } : {}),
+    // the copy it works in, and what it was told of its folder: kept over a restart (ADR 0359)
+    ...(c.place === 'copy' ? { place: 'copy' as const } : {}),
+    ...(Array.isArray(c.folderNotes) ? (() => { const n = c.folderNotes.filter((x: unknown): x is string => typeof x === 'string' && x.length <= 2000).slice(0, 6); return n.length ? { folderNotes: n } : {}; })() : {}),
     ...(readUserModel(c.userModel) ? { userModel: readUserModel(c.userModel)! } : {}),
     ...(readPick(c.pick) ? { pick: readPick(c.pick)! } : {}),
     ...(c.unfinished === true ? { unfinished: true as const } : {}),
