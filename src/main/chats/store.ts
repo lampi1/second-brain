@@ -21,7 +21,7 @@ import { readPolicy, type AgentPolicy } from '../agents/tool-policy';
 import { sanitizeAgentChildren } from './agent-children';
 import { readDelegation, type ChatDelegation } from '../../shared/delegation';
 import { readPlan, type StrategyPlan } from '../../shared/strategy';
-import { WORK_MAP_ID } from '../../shared/work-map';
+import { PLAN_ID } from '../../shared/plan';
 import { readLadder, type LadderQuestion } from '../../shared/question-ladder';
 import { slowStep } from '../perf';
 import { cleanOrphanTmps, writeLocalTextAsync, renameWithRetry } from '../agents/local-store';
@@ -118,7 +118,7 @@ export interface StoredChat {
   /** "Riprendi" links: this chat continues another one / is continued by another one */
   continuedFrom?: ChatLink;
   /** the work map it was started for (ADR 0342) */
-  workMap?: string;
+  planId?: string;
   continuedBy?: ChatLink;
   /** created with "Worktree separato" (the CLI made the worktree; "Riprendi" tells the new chat to work there) */
   inWorktree?: boolean;
@@ -242,7 +242,7 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
     ...(isLang(c.replyLang) ? { replyLang: c.replyLang } : {}),
     ...(Array.isArray(c.pastSessions) ? { pastSessions: c.pastSessions.flatMap(p => { const x = p as Record<string, unknown>; return isUuid(x?.sessionId) && num(x.at) && typeof x.notePath === 'string' ? [{ sessionId: x.sessionId, at: x.at, notePath: x.notePath }] : []; }).slice(-20) } : {}),
     ...(num(c.handoffAt) ? { handoffAt: c.handoffAt, handoffSource: c.handoffSource === 'auto' ? 'auto' as const : 'chat' as const } : {}),
-    ...(typeof c.workMap === 'string' && WORK_MAP_ID.test(c.workMap) ? { workMap: c.workMap } : {}),
+    ...(typeof c.planId === 'string' && PLAN_ID.test(c.planId) ? { planId: c.planId } : {}),
     ...(from ? { continuedFrom: from } : {}), ...(by ? { continuedBy: by } : {}),
     ...(c.inWorktree === true ? { inWorktree: true } : {}),
     ...(readStoredRemote(c.remoteControl) ? { remoteControl: readStoredRemote(c.remoteControl)! } : {}),

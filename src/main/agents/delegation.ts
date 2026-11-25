@@ -22,7 +22,7 @@ import type { AgentCatalog, AgentRun, UserTaskEvents } from '../../shared/agents
 import { canLaunch, isDelegatorRole, isWorkRole, launchGap, ROLE_DEFAULTS, WORK_ROLE_IDS, type DelegationSettings } from '../../shared/roles';
 import { CRITERION_MAX, EVIDENCE_MAX, MAX_CORRECTIONS, RESULT_OUTPUT_MAX, SUMMARY_MAX, USER_ACTION_COMMAND_MAX, USER_ACTION_KINDS, USER_ACTION_TEXT_MAX, USER_ONLY_BLOCKER, capText, checkContract, checkResult, contractFields, contractWarnings, delegationPrompt, depthOf, type DelegationResult, type DelegationIntegration, type TaskAssignmentOptions } from '../../shared/delegation';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
-import { delegationGate, parallelSplit, stepIndex, type StrategyPlan } from '../../shared/strategy';
+import { delegationGate, stepGate, stepIndex, type StrategyPlan } from '../../shared/strategy';
 import type { McpTool } from '../mcp/server';
 import { callerOf } from '../mcp/caller';
 import { ToolRefusal } from '../mcp/refusal';
@@ -239,8 +239,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       const presetFields = { ...(ask.preset ? { preset: ask.preset } : {}), ...(ask.presetWhy ? { presetWhy: ask.presetWhy } : {}), ...(ask.taskKind ? { taskKind: ask.taskKind } : {}), delegator };
       return { role, title, contract, cwd, place, profile, step, cap, presetFields, reviewOf, engine };
     });
-    // a parallel group of the approved plan starts in this one call (2026-11-23, «o parallelo o non parallelo»)
-    const split = plan && (plan.phase === 'running' || plan.phase === 'done') ? parallelSplit(plan, plans.flatMap(p => p.step === null ? [] : [p.step])) : null;
+    // a step starts only when what it waits for ended, and every step that can start now starts in this one call (ADR 0359)
+    const split = plan && (plan.phase === 'running' || plan.phase === 'done') ? stepGate(plan, plans.flatMap(p => p.step === null ? [] : [p.step])) : null;
     if (split) throw new Error(split);
     {
       const at = Date.now();

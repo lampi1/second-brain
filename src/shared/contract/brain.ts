@@ -1,8 +1,8 @@
 // Brain: the brain's data server, quality, comparisons, the learning loop, scripts, queries, the change log, memory and maintenance.
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
-import type { ProjectMapInfo, ProjectMapView } from '../project-map';
-import type { WorkMap, WorkMapInfo, WorkMapView } from '../work-map';
+import type { Plan, PlanInfo, PlanFull, PlanLink } from '../plan';
+import type { StepOp } from '../plan-edit';
 import type { PackFinding } from '../agent-pack';
 import type { BrainModelState, MaintenanceJobId, MemoryDocs } from '../brain-model';
 import type { LearningEvidence, LearningReviewState, MemoryReviewRecord, ReplayComparison, ReplayRecord, SkillCandidateView } from '../learning-review';
@@ -104,34 +104,37 @@ export interface ModelRefreshOutcome { engine: Harness; ok: boolean; count: numb
 
 /** renderer → main, brain: each entry [argument, result]. Part of InvokeMap (src/shared/contract.ts). */
 export interface BrainInvokeMap {
-  /** the project maps (ADR 0271, main/projectmap/): the list, and one map with its history, agents and edit times
-   *  (version = one of the history's, the slider) */
-  'projectmap:list': [void, ProjectMapInfo[]];
-  'projectmap:view': [{ project: string; version?: number }, ProjectMapView | null];
-  /** «Quanto è grande» beside a picked box (ADR 0316): the files and lines under its evidence, counted by main without
-   *  tokens (bounded; capped = it stopped counting); null = no folder on this PC or nothing to count */
-  'projectmap:size': [{ project: string; element: string }, { files: number; lines: number; capped: boolean } | null];
-  /** the work maps (ADR 0342, main/workmap/): one per Strategist job or idea. The list (archived ones only when asked),
+  /** the work maps (ADR 0342, main/plans/): one per Strategist job or idea. The list (archived ones only when asked),
    *  one map with its drawing and versions, and what the user does with one; an action the map does not allow now
-   *  (WorkMapInfo.can) rejects with the reason. `at` = the plan's revision on screen (WorkMapInfo.planAt). */
-  'workmap:list': [{ archived?: boolean; query?: string } | void, WorkMapInfo[]];
-  'workmap:view': [{ id: string; version?: number }, WorkMapView | null];
+   *  (PlanInfo.can) rejects with the reason. `at` = the plan's revision on screen (PlanInfo.planAt). */
+  'plans:list': [{ archived?: boolean; trash?: boolean; query?: string } | void, PlanInfo[]];
+  'plans:view': [{ id: string; version?: number }, PlanFull | null];
   /** a map from an idea alone: no chat is started */
-  'workmap:idea': [{ title: string; idea?: string; project?: string }, WorkMap];
+  'plans:idea': [{ title: string; idea?: string; goal?: string; why?: string; project?: string; constraints?: string[]; links?: PlanLink[] }, Plan];
   /** approve and start now */
-  'workmap:approve': [{ id: string; at: number }, WorkMap];
-  /** approve and keep it planned: nothing starts until workmap:start */
-  'workmap:keep': [{ id: string; at: number }, WorkMap];
+  'plans:approve': [{ id: string; at: number }, Plan];
+  /** approve and keep it planned: nothing starts until plans:start */
+  'plans:keep': [{ id: string; at: number }, Plan];
   /** start a planned job, or open a Strategist on an idea */
-  'workmap:start': [{ id: string }, WorkMap];
-  'workmap:stop': [{ id: string }, WorkMap];
-  'workmap:resume': [{ id: string }, WorkMap];
+  'plans:start': [{ id: string }, Plan];
+  'plans:stop': [{ id: string }, Plan];
+  /** cwd: another existing folder for its Strategist; default: the last one it used */
+  'plans:resume': [{ id: string; cwd?: string }, Plan];
   /** ask for another plan, in words; a job under way keeps its started steps */
-  'workmap:replan': [{ id: string; text: string }, WorkMap];
-  'workmap:archive': [{ id: string }, WorkMap];
-  'workmap:reopen': [{ id: string }, WorkMap];
+  'plans:replan': [{ id: string; text: string }, Plan];
+  'plans:archive': [{ id: string }, Plan];
+  'plans:reopen': [{ id: string }, Plan];
   /** the user looked at a finished map: it moves to the archive by itself */
-  'workmap:seen': [{ id: string }, WorkMap];
+  'plans:seen': [{ id: string }, Plan];
+  /** to the trash, and back from it (ADR 0359); nothing of the plan changes */
+  'plans:delete': [{ id: string }, Plan];
+  'plans:restore': [{ id: string }, Plan];
+  /** one save by explicit operations: nothing that is not named changes, every save is a version */
+  'plans:change': [{ id: string; change: { set?: Record<string, unknown>; add?: Record<string, unknown>; remove?: Record<string, unknown>; steps?: StepOp[] } }, Plan];
+  'plans:merge': [{ id: string; other: string }, Plan];
+  'plans:split': [{ id: string; numbers: number[]; title: string }, Plan];
+  /** the user's own «Elimina per sempre», only for a plan in the trash */
+  'plans:forget': [{ id: string }, void];
   /** the shareable brain zip for colleagues (ADR 0088): rules, skills, roles, scripts, never memory; null = save dialog cancelled */
   'brain:share': [void, BrainShareResult | null];
   /** the Brain pages (ADR 0077, src/main/brainmodel): agents, skills and their links, rules, memory, the change log */

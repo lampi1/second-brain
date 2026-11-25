@@ -132,14 +132,14 @@ export function demoTree(E: number): { chats: ChatSummary[]; items: Record<strin
   const probe = node('tree-probe', 'scout', 'Scout', 'Perché il test 42 fallisce', 'Trova perché il test 42 fallisce.', 2,
     { costUsd: 0.03, lastText: 'Leggo il log del test 42.' }, sentinel.id, ['Causa con la riga']);
   // its plan, approved by the user: what it asked, the steps and how far they got (ADR 0108)
-  // drawn on the shop's map (ADR 0276): three steps on «Ordini e sconti», the notes on a piece that is not there yet
-  lead.plan = { phase: 'running', at: E - 15 * MIN, map: 'alfa-shop', doneWhen: 'I test ordini passano e le note sono pronte.',
+  // three steps on «Ordini e sconti», the release notes beside them, in parallel (ADR 0359)
+  lead.plan = { phase: 'running', at: E - 15 * MIN, doneWhen: 'I test ordini passano e le note sono pronte.',
     clarified: [{ q: 'Dove', a: 'Carrello, ordine e reso' }, { q: 'Offerte', a: 'No, solo a prezzo pieno' }],
     steps: [
-      { title: 'Trovo dove si calcola lo sconto oggi', role: 'scout', state: 'done', on: 'ordini', chatIds: [scout.id], startedAt: E - 16 * MIN, endedAt: E - 11 * MIN },
-      { title: 'Applico lo sconto % sul prezzo pieno, un solo arrotondamento', role: 'artisan', state: 'now', on: 'ordini', chatIds: [artisan.id], startedAt: E - 10 * MIN },
-      { title: 'Verifico con la suite ordini', role: 'sentinel', state: 'todo', on: 'ordini' },
-      { title: 'Scrivo le note di rilascio', role: 'herald', state: 'now', on: 'note-di-rilascio', chatIds: [herald.id], startedAt: E - 1 * MIN, par: true },
+      { id: 's1', title: 'Trovo dove si calcola lo sconto oggi', role: 'scout', state: 'done', proof: { at: E - 11 * MIN, by: 'report', text: 'Lo sconto si calcola in due punti: carrello e reso.', chatId: scout.id }, chatIds: [scout.id], startedAt: E - 16 * MIN, endedAt: E - 11 * MIN, minutes: 5 },
+      { id: 's2', title: 'Applico lo sconto % sul prezzo pieno, un solo arrotondamento', role: 'artisan', state: 'now', after: ['s1'], touches: ['src/ordini'], chatIds: [artisan.id], startedAt: E - 10 * MIN, minutes: 20 },
+      { id: 's3', title: 'Verifico con la suite ordini', role: 'sentinel', state: 'todo', after: ['s2'], minutes: 8 },
+      { id: 's4', title: 'Scrivo le note di rilascio', role: 'herald', state: 'now', touches: ['docs/note'], chatIds: [herald.id], startedAt: E - 1 * MIN, minutes: 6 },
     ] };
   const chats = [lead, scout, artisan, sentinel, probe, herald];
   // what each did, as tool rows: the cards' steps (lib/run-steps.ts)

@@ -26,7 +26,7 @@ const userTexts = async (page: Page) => (await items(page)).flatMap(i => (i.kind
 /** The plan's map, from the strip's «apri mappa». */
 async function openPlan(page: Page) {
   await page.getByTestId(`plan-map-${LEAD}`).click();
-  await expect(page.getByTestId('wm-map')).toBeVisible();
+  await expect(page.getByTestId('pl-map')).toBeVisible();
 }
 /** Back to the Grindhouse from the map. */
 async function leaveMap(page: Page) {
@@ -52,12 +52,12 @@ test('a Strategist asks, proposes a plan approved on its map and shows one line 
     await top(page);
     await shot(page, 'strategist-plan-strip-dark');
     await openPlan(page);
-    await expect(page.getByTestId('wm-map')).toHaveAttribute('data-state', 'running');
-    await expect(page.getByTestId('wm-box-1')).toHaveAttribute('data-s', 'done');
-    await expect(page.getByTestId('wm-box-2')).toHaveAttribute('data-s', 'now');
-    await expect(page.getByTestId('wm-box-3')).toHaveAttribute('data-s', 'todo');
-    await expect(page.getByTestId('wm-box-who-1')).toContainText('Scout');
-    await expect(page.getByTestId('wm-box-who-2')).toContainText('Artisan');
+    await expect(page.getByTestId('pl-map')).toHaveAttribute('data-state', 'running');
+    await expect(page.getByTestId('pl-box-1')).toHaveAttribute('data-s', 'done');
+    await expect(page.getByTestId('pl-box-2')).toHaveAttribute('data-s', 'now');
+    await expect(page.getByTestId('pl-box-3')).toHaveAttribute('data-s', 'todo');
+    await expect(page.getByTestId('pl-box-who-1')).toContainText('Scout');
+    await expect(page.getByTestId('pl-box-who-2')).toContainText('Artisan');
     await shot(page, 'strategist-plan-progress-dark');
     await leaveMap(page);
 
@@ -104,21 +104,21 @@ test('a Strategist asks, proposes a plan approved on its map and shows one line 
     await expect(page.getByTestId('orchestrator-input')).toBeVisible(); // a typed ok still counts (ADR 0274)
     // on the map: the steps, when it is done, the buttons; a change in his own words reaches the Strategist
     await page.getByTestId('qwin-plan-map').click();
-    const map = page.getByTestId('wm-map');
+    const map = page.getByTestId('pl-map');
     await expect(map).toHaveAttribute('data-state', 'toApprove');
-    await expect(map.locator('.wm-box')).toHaveCount(3);
+    await expect(map.locator('.pl-box')).toHaveCount(3);
     await expect(map).toContainText('I test ordini passano');
-    await map.getByTestId('wm-do-replan').click();
-    await map.getByTestId('wm-replan-text').fill('Prima i test, poi lo sconto');
+    await map.getByTestId('pl-do-replan').click();
+    await map.getByTestId('pl-replan-text').fill('Prima i test, poi lo sconto');
     await shot(page, 'strategist-plan-change-dark');
-    await map.getByTestId('wm-replan-send').click();
+    await map.getByTestId('pl-replan-send').click();
     await expect.poll(() => phase(page)).toBe('revising');
     await expect.poll(() => userTexts(page).then(t => t.at(-1))).toBe('Cambia il piano: Prima i test, poi lo sconto');
     await demo(app, 'plan', LEAD, plan({ phase: 'proposed', steps: [...STEPS] }));
     // the new plan is a row of its own, and the open map shows it
     await expect(page.locator(`[data-testid="orchestrator-ask"][data-ask-row^="${LEAD}/plan@"]`)).toBeVisible();
     await expect(map).toHaveAttribute('data-state', 'toApprove');
-    await map.getByTestId('wm-do-approve').click();
+    await map.getByTestId('pl-do-approve').click();
     await expect.poll(() => phase(page)).toBe('running');
     await expect.poll(() => userTexts(page).then(t => t.at(-1))).toBe('Piano approvato: parti.');
     await leaveMap(page);
@@ -129,7 +129,7 @@ test('a Strategist asks, proposes a plan approved on its map and shows one line 
     await demo(app, 'plan', LEAD, plan({ phase: 'proposed', steps: [...STEPS] }));
     await openAsk(page, `${LEAD}/plan@`);
     await page.getByTestId('qwin-plan-map').click();
-    await expect(page.getByTestId('wm-do-approve')).toBeVisible();
+    await expect(page.getByTestId('pl-do-approve')).toBeVisible();
     await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
     await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
     await shot(page, 'strategist-plan-proposed-light');
@@ -169,7 +169,7 @@ test('a finished partial plan is one line on its strip and its map says what is 
     await expect(card).toContainText('risultato parziale');
     await expect(card.locator('li')).toHaveCount(0);
     await openPlan(page);
-    await expect(page.getByTestId('wm-box-1')).toContainText('parziale');
+    await expect(page.getByTestId('pl-box-1')).toContainText('parziale');
     await shot(page, 'strategist-plan-partial-complete');
   } finally { await app.close(); }
 });

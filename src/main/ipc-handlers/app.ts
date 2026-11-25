@@ -49,7 +49,7 @@ export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, 
   const cwdFor = (raw: string, chatId: unknown): string | undefined => {
     const id = typeof chatId === 'string' ? chatId : undefined, chats = s.chats.list(), brainRoot = demo ? process.env.SB_BRAIN : s.brain.info().brainRoot;
     if (raw.length > 4096 || resolvePeek(fileReference(raw).path)) return chats.find(c => c.id === id)?.cwd ?? brainRoot ?? undefined;
-    return rootFor(raw, fileRoots({ chatId: id, chats, mapRoots: s.projectMaps?.roots() ?? [], brainRoot }));
+    return rootFor(raw, fileRoots({ chatId: id, chats, mapRoots: [], brainRoot }));
   };
   return {
     'update:get': () => updates.state(),

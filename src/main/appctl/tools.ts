@@ -83,10 +83,9 @@ import { newsTools, type NewsControl } from './news';
 import { imparaTools, type ImparaControl } from './impara';
 import { childOutputTool } from './child-output';
 import { agentsRecapTool } from './agents-recap';
-import { MAP_LINK_SCHEMA, appProjectMapTool, mapHint, mapLinkOf } from '../projectmap/tools';
+import { PLAN_TOOL_PROPS, PLAN_TOOL_TEXT, planAction } from '../plans/tools';
 import { userShellName } from '../platform';
-import type { ProjectMaps } from '../projectmap/service';
-import type { WorkMaps } from '../workmap/service';
+import type { Plans } from '../plans/service';
 import { skillTools } from './skills';
 import type { SkillLibrary } from '../skills/library';
 
@@ -131,10 +130,8 @@ export interface AppCtlDeps {
   skillTools?: SkillToolsSource;
   /** the brain's scripts and changelog (ADR 0076): the Orchestrator's brain_script_save / _delete / brain_changelog_add */
   brainScripts?: { scripts: BrainScripts; changelog: BrainChangelog };
-  /** the project maps (ADR 0271): app_project_map on the Orchestrator's own endpoint */
-  projectMaps?: ProjectMaps;
-  /** the work maps (ADR 0342): the job actions of app_project_map */
-  workMaps?: WorkMaps;
+  /** the plans (ADR 0359): the `plans` tool on the Orchestrator's own endpoint */
+  plans?: Plans;
   /** the call recordings (ADR 0154): app_recordings / app_recording_import on the Orchestrator's own endpoint */
   recordings?: RecordingsRead;
   /** the skill library (ADR 0241): app_skills / app_skill_write / app_skill_roles / app_skill_undo on the Orchestrator's own endpoint */
@@ -276,7 +273,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     ...(d.brainScripts && authed() ? scriptWriteTools(d.brainScripts.scripts, d.brainScripts.changelog, () => caller()?.title || 'Orchestrator') : []),
     ...(d.agents ? [toolDef(agentCatalogTool(d.agents, d.skillTools))] : []),
     ...(d.recordings && authed() ? recordingTools(d.recordings, d.emitUi) : []),
-    ...(d.projectMaps && authed() ? [appProjectMapTool(d.projectMaps, d.emitUi, d.workMaps)] : []),
+    ...(d.plans && authed() ? [{ name: 'plans', description: PLAN_TOOL_TEXT, inputSchema: obj(PLAN_TOOL_PROPS, ['action']), annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false }, run: (a: Record<string, unknown>) => planAction(d.plans!, { kind: 'orchestrator' }, a) } satisfies ToolDef] : []),
     ...(d.impara && authed() ? imparaTools(d.impara, d.emitUi, () => imparaAsked(callerId!)) : []),
     ...(d.news && authed() ? newsTools(d.news, d.emitUi) : []),
     ...(d.skillLibrary && authed() ? skillTools(d.skillLibrary, () => caller()?.title || 'Orchestrator') : []),
@@ -556,7 +553,6 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         freshReview: { type: 'boolean', description: 'with reviewOf: open a fresh review chat although one already reported on this work; only when the user asked for it or it reviews a part no review chat covers' },
         kind: str(`optional kind of task: ${TASK_KINDS.join(' | ')}; omitted: read from title and prompt`),
         cwd: str('optional absolute folder: any existing one (the brain, a repository, a worktree, a slot); default: the brain folder. It gives no permission'), place: PLACE_SCHEMA,
-        map: MAP_LINK_SCHEMA,
         userModel: { type: 'object', additionalProperties: false, required: ['model'], description: 'only when the user named the model: one of the card\'s presets (agent_catalog presets), see app_guide «model choice»',
           properties: { engine: { type: 'string' }, model: { type: 'string', maxLength: 128 }, effort: { type: 'string', enum: ['low', 'medium', 'high', 'xhigh', 'max'] } } },
       }, ['title']),
@@ -585,7 +581,6 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (!cwd) throw new Error('nessuna cartella: il brain non è collegato');
         const place = placeOf(a.place, 'place'); // the folder itself is checked at create, before anything exists
         // the map pieces this work is on (#456): checked before the chat exists, linked once it does
-        const mapLink = mapLinkOf(authed() ? d.projectMaps : undefined, a.map);
         if (a.freshReview !== undefined && typeof a.freshReview !== 'boolean') throw new Error('freshReview: true or false.');
         // one review chat per piece of work (#387, ADR 0309): a second one for work a review chat already reported on is
         // refused, naming the chat that re-reviews the fix delta
@@ -650,8 +645,6 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
           ...(model ? { model } : {}), ...(effort ? { effort } : {}), route, ...(userModel ? { userModel } : {}) }, 'agent', undefined, undefined,
           // the plain /mcp/app mount is open to any local process: its chats run no wider than the Orchestrator
           { boundByOrchestrator: !authed(), ...intake });
-        if (mapLink) d.projectMaps!.link(mapLink.project, chat.id, mapLink.on);
-        const unlinked = mapLink || !authed() ? undefined : mapHint(d.projectMaps, cwd);
         log.info('appctl', 'agent created a chat', { chat: chat.id, data: { harness, title, model: model || null, effort, route: route.source, kind: route.kind, area: route.area, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } });
         // a skill whose tools the role lacks (issue #93): said now, so the Orchestrator can pick another role or ask the user
         const known = d.skillTools ? new Map(d.skillTools().map(x => [x.name, x.tools])) : null;
@@ -662,7 +655,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const estimate = d.runFeedback ? estimateTask(new SimilarIndex(d.runFeedback.runList(), d.priceOf ?? null), { text: task.estimate, agentId: roleId, model: model || resolved.request.model || null }) : null;
         return { chatId: chat.id, title: chat.title, harness, cwd: chat.place ? chat.cwd : cwd, ...(chat.place ? { place: chat.place } : {}), ...(resolved.presetChoice?.route ? { engineWhy: resolved.presetChoice.route } : {}), model: model || null, effort, ...(resolved.presetChoice ? { preset: resolved.presetChoice.preset } : {}), ...(chat.pick ? { pick: pickLines(chat.pick, Date.now()) } : {}), ...(warnings.length ? { warnings } : {}), ...(chat.queued ? { status: queuedLine(chat.queued) } : {}),
           ...(estimate ? { estimate: { timeMs: estimate.timeMs, costUsd: estimate.costUsd, n: estimate.n, confidence: estimate.confidence, parts: estimate.parts, path: estimate.path } } : {}), route: { source: route.source, kind: route.kind, area: route.area, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) },
-          ...(mapLink ? { map: mapLink } : unlinked ? { map: unlinked } : {}) };
+        };
       },
     },
     {
@@ -675,7 +668,6 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         expectedEventSeq: { type: 'integer', minimum: 0, description: 'optional: latestSeq from app_task_events you have read' },
         deliveryPolicy: { type: 'string', enum: ['display', 'notify', 'synthesize'] },
         reviewOf: str('Only for a review chat: the run it reviews now (the implementation chat\'s current run); default: that chat\'s current run'),
-        map: { ...MAP_LINK_SCHEMA, description: `${MAP_LINK_SCHEMA.description} Omitted: the chat stays on the pieces it was linked to.` },
       }, ['chatId', 'mode', 'roleId', 'cwd']),
       run: async a => {
         const orchestrator = caller();
@@ -714,7 +706,6 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (a.expectedEventSeq !== undefined && (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0)) throw new Error('Invalid user event cursor.');
         if (a.deliveryPolicy !== undefined && !['display', 'notify', 'synthesize'].includes(String(a.deliveryPolicy))) throw new Error('Invalid delivery policy.');
         const userInstructions = d.chats.userEvents ? unreadInstructions(d.chats.userEvents(target.id)) : [];
-        const mapLink = mapLinkOf(d.projectMaps, a.map);
         // the chat's engine cannot run now (off, or not for the Orchestrators): the work goes on by itself in a new chat
         // of the same role on its card's engine, from the hand-off, linked to this one (ADR 0352). Never a manual step
         const blocked = openRefusal(d.brain.settings(), target.harness);
@@ -725,19 +716,17 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
           if (target.continuedBy) throw new ToolRefusal(`«${target.title}» already goes on in «${target.continuedBy.title}» (chatId ${target.continuedBy.id}): assign the task there.`);
           const criteria = doneWhen?.length ? `\n\nFatto quando:\n${doneWhen.map(c => `- ${c}`).join('\n')}` : '';
           const went = await moveToCard(target, String(a.roleId), `${prompt}${criteria}`, blocked, moved ? { cwd, ...(place ? { place } : {}) } : {});
-          if (mapLink) d.projectMaps!.link(mapLink.project, went.id, mapLink.on);
-          return { ...(mapLink ? { map: mapLink } : {}), chatId: went.id, continuedFrom: target.id, harness: went.harness, note: `${engineLabel(target.harness)} cannot run now (${blocked}): the work goes on in «${went.title}» on ${engineLabel(went.harness)}, from the hand-off of «${target.title}». Use this chatId from now on.`, ...(userInstructions.length ? { userInstructions } : {}), ...(task.warnings.length ? { warnings: task.warnings } : {}) };
+          return { chatId: went.id, continuedFrom: target.id, harness: went.harness, note: `${engineLabel(target.harness)} cannot run now (${blocked}): the work goes on in «${went.title}» on ${engineLabel(went.harness)}, from the hand-off of «${target.title}». Use this chatId from now on.`, ...(userInstructions.length ? { userInstructions } : {}), ...(task.warnings.length ? { warnings: task.warnings } : {}) };
         }
         const text = `${voice()}\n\n${delta ? `${DELTA_REVIEW}\n\n` : ''}${prompt}`, options: TaskAssignmentOptions = { ...(reviewOf ? { reviewOf } : {}), ...intakeOf(a, a.roleId === 'strategist' && a.mode === 'new-task' && !!target.plan), mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: a.expectedVersion === undefined ? target.run?.taskVersion ?? 1 : Number(a.expectedVersion), ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), ...(a.deliveryPolicy ? { deliveryPolicy: a.deliveryPolicy as 'display' | 'notify' | 'synthesize' } : {}), ...(doneWhen ? { doneWhen } : {}), ...(task.contractFields ? { contractFields: task.contractFields } : {}), source: { kind: 'chat', chatId: orchestrator.id } };
         if ((moved || on) && !d.chats.assignElsewhere) throw new ToolRefusal('This chat cannot change folder or engine here: create a fresh chat.');
         const linked = moved || on ? await d.chats.assignElsewhere!(target.id, text, options, { ...(moved ? { cwd, ...(place ? { place } : {}) } : {}), ...(on ? { on } : {}) }) : null;
         if (!linked) await d.chats.assignTask(target.id, text, options);
         const id = linked?.id ?? target.id;
-        if (mapLink) d.projectMaps!.link(mapLink.project, id, mapLink.on);
         const assigned = d.chats.list().find(c => c.id === id);
         // its engine's credit now (ADR 0354): a stopped engine says why and until when, so the Orchestrator tells the user
         const credit = d.creditOf?.(assigned?.harness ?? target.harness, assigned?.model ?? target.model);
-        return { ...(mapLink ? { map: mapLink } : {}), ...(credit && credit.state !== 'free' && credit.state !== 'unknown' ? { credit: `${engineLabel(assigned?.harness ?? target.harness)}: ${credit.state === 'out' ? 'credito finito' : credit.state === 'pace' ? 'ritmo alto' : 'in prova'}, ${credit.why}` } : {}), chatId: id, ...(linked ? { continuedFrom: target.id, cwd: linked.cwd, harness: linked.harness, ...(linked.folderNotes?.length ? { folderNotes: linked.folderNotes } : {}) } : {}), taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions } : {}), ...(task.warnings.length ? { warnings: task.warnings } : {}) };
+        return { ...(credit && credit.state !== 'free' && credit.state !== 'unknown' ? { credit: `${engineLabel(assigned?.harness ?? target.harness)}: ${credit.state === 'out' ? 'credito finito' : credit.state === 'pace' ? 'ritmo alto' : 'in prova'}, ${credit.why}` } : {}), chatId: id, ...(linked ? { continuedFrom: target.id, cwd: linked.cwd, harness: linked.harness, ...(linked.folderNotes?.length ? { folderNotes: linked.folderNotes } : {}) } : {}), taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions } : {}), ...(task.warnings.length ? { warnings: task.warnings } : {}) };
       },
     },
     {
@@ -771,7 +760,6 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (a.now === true && busy && authed()) await d.chats.stop(String(a.chatId), true).catch(e => log.info('appctl', 'interrupt before a change of course failed', { chat: String(a.chatId), data: String(e) }));
         await d.chats.send(String(a.chatId), `${voice()}\n\n${text}`, undefined, false, orchestrator?.title ?? 'Orchestrator', false, orchestrator ? { kind: 'chat', chatId: orchestrator.id } : { kind: 'app' });
         // on the project map the agent shows the change until it takes it (zero tokens)
-        if (authed()) d.projectMaps?.sent(String(a.chatId), text, busy && a.now !== true);
         log.info('appctl', 'agent message sent to chat', { chat: String(a.chatId), data: { chars: text.length } });
         const after = d.chats.list().find(c => c.id === String(a.chatId)), q = after?.queued;
         // the Orchestrator wrote to a chat that waits on the user: the row stays open (ADR 0329), so it is told how to close it

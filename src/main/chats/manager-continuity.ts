@@ -138,7 +138,7 @@ export abstract class ManagerContinuity extends ManagerRequests {
     r.s.run?.reviewOf ? { reviewOf: r.s.run.reviewOf } : {}, { continuation: !!parentRec, continuationOf: r.s.id, ...(opts.sameWorktree ? { sameWorktree: true } : {}), ...(on?.route ? { engineWhy: on.route } : {}), ...(task ? { noRun: true } : {}),
       ...(r.s.run?.taskContract?.reportExpected ? { reportExpected: true } : {}),
       // the same work (ADR 0356): who started it, its state and its job's work map go on with it
-      ...(r.s.run?.startedBy ? { runStartedBy: r.s.run.startedBy } : {}), ...(r.s.work && !task ? { work: structuredClone(r.s.work) } : {}), ...(r.s.workMap ? { workMap: r.s.workMap } : {}) });
+      ...(r.s.run?.startedBy ? { runStartedBy: r.s.run.startedBy } : {}), ...(r.s.work && !task ? { work: structuredClone(r.s.work) } : {}), ...(r.s.planId ? { planId: r.s.planId } : {}) });
     const nr = this.chats.get(c.id);
     // the worktree hint follows the chain (A → B → C)
     if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; this.updated(nr); }

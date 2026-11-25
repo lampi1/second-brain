@@ -290,10 +290,10 @@ test('README showcase: the Strategist\'s plan to approve on its map', async () =
   await demo('plan', 'tree-plan', plan);
   await goPage(page, 'collegamenti');
   await page.getByTestId('bm-map-page').getByRole('button', { name: 'Jobs', exact: true }).click();
-  await page.getByTestId('wm-group-wait').locator('.wm-row-main').first().click({ timeout: 15_000 });
-  const map = page.getByTestId('wm-map');
-  await expect(map.getByTestId('wm-do-approve')).toBeVisible({ timeout: 15_000 });
-  await map.getByTestId('wm-box-pick-2').click(); // a step told in the side panel
+  await page.getByTestId('pl-group-wait').locator('.pl-row-main').first().click({ timeout: 15_000 });
+  const map = page.getByTestId('pl-map');
+  await expect(map.getByTestId('pl-do-approve')).toBeVisible({ timeout: 15_000 });
+  await map.getByTestId('pl-box-pick-2').click(); // a step told in the side panel
   await save('plan', map);
 });
 
@@ -427,9 +427,9 @@ test('README screenshot: Artifacts', async () => {
 test('README screenshot: the work maps', async () => {
   // Map › Jobs (ADR 0343): one map per Strategist job or idea, by status, what waits for the user on top
   await keepQuestionsAside(page);
-  await demo('workMaps');
+  await demo('plans');
   await goPage(page, 'collegamenti');
   await page.getByTestId('bm-map-page').getByRole('button', { name: 'Jobs', exact: true }).click();
-  await expect(page.getByTestId('wm-group-planned')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('pl-group-planned')).toBeVisible({ timeout: 30_000 });
   await save('work-maps', await frameOf(page.getByTestId('bm-map-page')));
 });

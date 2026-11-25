@@ -123,10 +123,8 @@ export interface EventMap {
   'voice:speech': VoiceSpeech;
   /** push to talk: everything said before the release is heard */
   'voice:committed': { session: string };
-  /** a project map, its agents or its edit times changed (ADR 0271): read projectmap:view again */
-  'projectmap:changed': { project: string };
-  /** a work map was made or changed (ADR 0342): read workmap:list or workmap:view again */
-  'workmap:changed': { id: string };
+  /** a work map was made or changed (ADR 0342): read plans:list or plans:view again */
+  'plans:changed': { id: string };
   /** call recordings (ADR 0154): the list, the one running, a transcription's progress */
   'rec:changed': RecState;
   /** Impara (ADR 0185): the list changed, and the lesson that changed (whole) when there is one */
@@ -178,8 +176,7 @@ export const INVOKE_CHANNELS = [
   'proposals:shown', 'proposals:undoAuto',
   'agents:quips',
   'usecount:add', 'usecount:report',
-  'projectmap:list', 'projectmap:view', 'projectmap:size',
-  'workmap:list', 'workmap:view', 'workmap:idea', 'workmap:approve', 'workmap:keep', 'workmap:start', 'workmap:stop', 'workmap:resume', 'workmap:replan', 'workmap:archive', 'workmap:reopen', 'workmap:seen',
+  'plans:list', 'plans:view', 'plans:idea', 'plans:approve', 'plans:keep', 'plans:start', 'plans:stop', 'plans:resume', 'plans:replan', 'plans:archive', 'plans:reopen', 'plans:seen', 'plans:delete', 'plans:restore', 'plans:change', 'plans:merge', 'plans:split', 'plans:forget',
   'chess:move', 'chess:stop', 'chess:save', 'chess:history',
   'library:list', 'library:thumb', 'library:open', 'library:remove',
 ] as const satisfies readonly InvokeChannel[];
@@ -199,7 +196,7 @@ export const EVENT_CHANNELS = [
   'rec:changed',
   'impara:changed', 'impara:tutor',
   'news:changed',
-  'projectmap:changed', 'workmap:changed',
+  'plans:changed',
   'library:changed',
 ] as const satisfies readonly EventChannel[];
 

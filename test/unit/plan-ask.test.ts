@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ChatSummary, PendingRequest } from '../../src/shared/contract';
 import type { StrategyPlan } from '../../src/shared/strategy';
 vi.mock('../../src/renderer/sb', () => ({ sb: {} }));
-vi.mock('../../src/renderer/actions', () => ({ claimFocus: () => false, openWorkMapOf: async () => {} }));
+vi.mock('../../src/renderer/actions', () => ({ claimFocus: () => false, openPlanOf: async () => {} }));
 let chats: Record<string, Partial<ChatSummary>> = {};
 vi.mock('../../src/renderer/store/store', () => ({ useApp: <T,>(pick: (s: { chats: typeof chats }) => T) => pick({ chats }) }));
 import { renderToStaticMarkup } from 'react-dom/server';

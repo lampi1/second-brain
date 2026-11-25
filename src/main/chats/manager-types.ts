@@ -475,7 +475,7 @@ export interface Inherited { launchContext?: AgentContextSnapshot; tier?: ModelT
  *  (ADR 0356: a Strategist the Orchestrator started stays the Orchestrator's work after an engine change). */
 export interface CreateOpts {
   /** a continuation of an app job that owes its report (ADR 0356) */
-  reportExpected?: boolean; engineWhy?: string; /** the linked chat of a new task (assignElsewhere): its run is the old chat's, the assignment starts the next */ noRun?: boolean; boundByOrchestrator?: boolean; intake?: IntakeSource; resumePlan?: StrategyPlan; workMap?: string; continuation?: boolean; continuationOf?: string; sameWorktree?: boolean; runStartedBy?: 'user' | 'orchestrator' | 'parent' | 'app'; work?: NonNullable<ChatSummary['work']> }
+  reportExpected?: boolean; engineWhy?: string; /** the linked chat of a new task (assignElsewhere): its run is the old chat's, the assignment starts the next */ noRun?: boolean; boundByOrchestrator?: boolean; intake?: IntakeSource; resumePlan?: StrategyPlan; planId?: string; continuation?: boolean; continuationOf?: string; sameWorktree?: boolean; runStartedBy?: 'user' | 'orchestrator' | 'parent' | 'app'; work?: NonNullable<ChatSummary['work']> }
 
 /** «Riprendi» and the linked chats (manager-continuity.ts continueChat). allowStart false: the old engine is not started
  *  for its note; ask false: the app writes the note; sameWorktree: the successor takes the same worktree, uncommitted

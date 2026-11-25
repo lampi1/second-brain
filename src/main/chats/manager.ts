@@ -322,7 +322,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
         ...(delegator ? { parentId: delegator.s.id, ...(req.delegation ? { delegation: req.delegation } : {}) } : {}),
         ...(plan ? { plan } : {}),
         // known from the first event on: the job's work map (ADR 0342) moves to this chat instead of a second one
-        ...(opts.workMap ? { workMap: opts.workMap } : {}),
+        ...(opts.planId ? { planId: opts.planId } : {}),
         ...(isolated ? { place: 'copy' as const } : {}), ...(folderNotes.length ? { folderNotes } : {}),
         ...(continued ? { continuedFrom: { id: continued.s.id, title: continued.s.title } } : {}),
         ...(agent.assets && agent.skills?.length ? { loadedSkills: [...agent.skills] } : {}),

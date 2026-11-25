@@ -116,7 +116,7 @@ export interface ChatSummary {
   /** a Strategist root chat's plan with the user (ADR 0108): its questions' answers, the steps, their progress */
   plan?: StrategyPlan;
   /** the work map it was started for (ADR 0342): an idea started, or a job that goes on in a new chat */
-  workMap?: string;
+  planId?: string;
   /** its questions on the ladder (ADR 0344): who holds each one, its way up, who answered and why (what the map reads) */
   questions?: LadderQuestion[];
   lastText: string;           // last assistant line, for collapsed tiles and the needs-you lane

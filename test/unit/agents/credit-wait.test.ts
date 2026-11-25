@@ -15,11 +15,11 @@ import { DELEGATION_DEFAULTS, ROLE_DEFAULTS, ROLE_IDS, isWorkRole, type RoleId }
 import type { AgentCatalog } from '../../../src/shared/agents';
 import type { ChatSummary, Harness, NewChat } from '../../../src/shared/contract';
 import { closeAppDbs } from '../../../src/main/app-db';
-import { readingOf } from '../../../src/main/workmap/live';
+import { readingOf } from '../../../../src/main/plans/live';
 import { sayOf } from '../../../src/main/projectmap/follow';
 import { markOf } from '../../../src/main/appctl/agents-recap';
 import { wakeLine } from '../../../src/main/chats/orchestrator-wake';
-import { waitsOnUser } from '../../../src/shared/work-map';
+import { waitsOnUser } from '../../../src/shared/plan';
 
 const LIMIT = 'Claude AI usage limit reached|1764000000';
 

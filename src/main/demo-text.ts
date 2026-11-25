@@ -5,10 +5,10 @@
 // several lines, line by line), `localize` does it for every string of a seed object. Anything without an entry stays
 // as written (ids, paths, code, URLs). The language is chosen once, when the demo starts (demo-wiring.ts: the
 // `language` setting, else Windows' language); German uses the Italian content. Pure apart from that one switch. Used
-// by demo.ts, demo-work-maps.ts, demo-pages.ts, demo-wiring.ts, proposals/demo.ts, brainmodel/demo.ts and
+// by demo.ts, demo-plans.ts, demo-pages.ts, demo-wiring.ts, proposals/demo.ts, brainmodel/demo.ts and
 // brainmodel/demo-learning.ts; pinned by test/unit/demo-text.test.ts.
 import type { Lang } from '../shared/contract';
-import { WORK_MAPS_EN } from './demo-work-maps-text';
+import { WORK_MAPS_EN } from './demo-plans-text';
 
 let current: Lang = 'it';
 /** demo-wiring.ts, once, before the demo's data is built */

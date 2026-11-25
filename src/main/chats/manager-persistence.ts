@@ -18,7 +18,8 @@ import { initialEffort } from './effort';
 import { pausedState } from './remote-control';
 import type { Rec } from './manager-types';
 import { clearTimeout, workBehind, storedResult, coldDivider, MAX_ARCHIVED, RUN_SAVE_MS, restoredOwner } from './manager-helpers';
-import { afterChatsEnded } from '../../shared/strategy';
+import { afterReopen, type StepReport } from '../../shared/strategy';
+import { proved } from '../../shared/plan-steps';
 import type { DelegationOutcome } from '../../shared/delegation';
 import { receiptsReading } from './receipt-reads';
 import { ManagerCore } from './manager-core';
@@ -54,34 +55,35 @@ export abstract class ManagerPersistence extends ManagerCore {
     this.stepOfEnded(r);
   }
 
-  /** What a step's chat gave its plan (ADR 0342): its result; undefined while it works; a chat closed or gone without a
-   *  result counts as blocked. An open chat of an earlier run of the plan's chat answers for that run only. */
-  protected stepOutcome(parent: Rec, id: string): DelegationOutcome | undefined {
-    const c = this.chats.get(id);
-    if (!c) return 'blocked';
-    const result = c.s.delegation?.result?.outcome;
-    if (c.s.closedAt) return result ?? 'blocked';
-    return !c.s.run?.parentRunId || c.s.run.parentRunId === parent.s.run?.runId ? result : undefined;
+  /** What a step's chat gave its plan (ADR 0342, 0359): its report, with the proof it is; undefined while it has given none. A chat
+   *  closed or gone without a report moves nothing: its step stays what it was, and the live status says what happened. An open chat
+   *  of an earlier run of the plan's chat answers for that run only. */
+  protected stepReport(parent: Rec, id: string): StepReport | undefined {
+    const c = this.chats.get(id), result = c?.s.delegation?.result;
+    if (!c || !result || result.noReport) return undefined;
+    if (!c.s.closedAt && c.s.run?.parentRunId && c.s.run.parentRunId !== parent.s.run?.runId) return undefined;
+    return { outcome: result.outcome, summary: result.summary, at: result.at };
   }
 
-  /** A delegated chat was closed, removed or reopened: its parent's step follows, so it is never «now» for ever. */
+  /** A delegated chat of a blocked step is open again with its work to give: the step is under way again. Nothing else moves. */
   protected stepOfEnded(r: Rec): void {
     const parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
-    if (!parent?.s.plan) return;
-    const next = afterChatsEnded(parent.s.plan, id => this.stepOutcome(parent, id), Date.now(), r.s.id);
+    if (!parent?.s.plan || r.s.closedAt) return;
+    const next = afterReopen(parent.s.plan, r.s.id);
     if (next === parent.s.plan) return;
     parent.s.plan = next;
     this.persist();
     this.updated(parent);
   }
 
-  /** The same at load, for the plans of every chat the last quit did not cut mid-turn (that one resumes and goes on). */
+  /** The same at load, for the plans of every chat the last quit did not cut mid-turn (that one resumes and goes on): a step of a plan
+   *  saved before ADR 0359 that was «fatto» with no proof takes its chat's report as the proof, or stays «da verificare». */
   protected override settlePlans(): boolean {
     let moved = false;
     for (const r of this.chats.values()) {
-      if (!r.s.plan || r.working) continue;
-      const next = afterChatsEnded(r.s.plan, id => this.stepOutcome(r, id), Date.now());
-      if (next !== r.s.plan) { r.s.plan = next; moved = true; }
+      if (!r.s.plan || r.working || !r.s.plan.steps.some(x => x.state === 'check')) continue;
+      const steps = proved(r.s.plan.steps, id => { const p = this.stepReport(r, id); return p ? { outcome: p.outcome, summary: p.summary, at: p.at } : null; });
+      if (steps.some((x, i) => x !== r.s.plan!.steps[i])) { r.s.plan = { ...r.s.plan, steps }; moved = true; }
     }
     return moved;
   }
@@ -231,7 +233,7 @@ export abstract class ManagerPersistence extends ManagerCore {
         ...(engineOf(c.harness)?.caps.cost ? {} : { costKnown: false as const }),
         ...(c.context ? { contextTokens: c.context.tokens, ...(c.context.max ? { contextMaxTokens: c.context.max } : {}), ...(c.context.estimated ? { contextEstimated: true } : {}) } : {}),
         ...(c.handoffAt ? { handoffAt: c.handoffAt, handoffSource: c.handoffSource ?? 'chat' } : {}),
-        ...(c.workMap ? { workMap: c.workMap } : {}),
+        ...(c.planId ? { planId: c.planId } : {}),
         ...(c.continuedFrom ? { continuedFrom: c.continuedFrom } : {}), ...(c.continuedBy ? { continuedBy: c.continuedBy } : {}),
         ...(c.closedAt ? { closedAt: c.closedAt, closedBy: c.closedBy ?? 'auto' } : {}),
         ...(c.route ? { route: c.route } : {}),
@@ -316,7 +318,7 @@ export abstract class ManagerPersistence extends ManagerCore {
       ...(r.pastSessions?.length ? { pastSessions: r.pastSessions } : {}),
       ...(r.s.contextTokens ? { context: { tokens: r.s.contextTokens, ...(r.s.contextMaxTokens ? { max: r.s.contextMaxTokens } : {}), ...(r.s.contextEstimated ? { estimated: true } : {}) } } : {}),
       ...(r.s.handoffAt ? { handoffAt: r.s.handoffAt, handoffSource: r.s.handoffSource ?? 'chat' } : {}),
-      ...(r.s.workMap ? { workMap: r.s.workMap } : {}),
+      ...(r.s.planId ? { planId: r.s.planId } : {}),
       ...(r.s.continuedFrom ? { continuedFrom: r.s.continuedFrom } : {}), ...(r.s.continuedBy ? { continuedBy: r.s.continuedBy } : {}),
       ...(r.s.closedAt ? { closedAt: r.s.closedAt, closedBy: r.s.closedBy ?? 'auto' } : {}),
       ...(r.working ? { working: true as const } : {}),

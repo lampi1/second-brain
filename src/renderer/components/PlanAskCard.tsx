@@ -2,7 +2,7 @@
 // The plan is read, approved, kept for later and changed only on its map; an ok typed in the Orchestrator's field while
 // this card is open still counts (lib/field-answer.ts). Used by QuestionsWindow.tsx.
 import { useLayoutEffect, useRef } from 'react';
-import { claimFocus, openWorkMapOf } from '../actions';
+import { claimFocus, openPlanOf } from '../actions';
 import { t } from '../i18n';
 import { planAskKey, type PlanAsk } from '../lib/plan-ask';
 import { useApp } from '../store/store';
@@ -19,6 +19,6 @@ export function PlanAskCard({ ask, onEscape, testid }: { ask: PlanAsk; onEscape:
     onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); onEscape(); } }}>
     <b data-testid={`${testid}-title`}>{chatTitle}</b>
     <span data-testid={`${testid}-count`}>{t('tree.plan.steps', { n: steps })} · {t('tree.plan.ask.onMap')}</span>
-    <button type="button" className="btn btn-primary btn-s" onClick={() => void openWorkMapOf(ask.chatId)} data-testid={`${testid}-map`}><IconMap size={13} />{t('wm.open')}</button>
+    <button type="button" className="btn btn-primary btn-s" onClick={() => void openPlanOf(ask.chatId)} data-testid={`${testid}-map`}><IconMap size={13} />{t('plans.open')}</button>
   </div>;
 }
