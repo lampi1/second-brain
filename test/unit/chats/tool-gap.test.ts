@@ -100,5 +100,47 @@ describe('the required tools of a chat, checked at every start (ADR 0356)', () =
     expect(next.run?.taskContract).toMatchObject({ reportExpected: true, doneWhen: ['Fatto'] });
     expect(f.m.requiredToolsOf(next.id)).toContain('agent_report');
   });
+
+  it('Antigravity: the fallback goes with the first message, and a model that says a tool is missing gets it again', async () => {
+    const f = fixture(), c = await f.child('antigravity');
+    expect(f.sent.some(t => t.includes("sb-tool agent_report '<argomenti JSON>'"))).toBe(true);
+    const n = f.sent.length;
+    f.m.toolsServed(c.id, ['show_ui', 'agent_report', 'agent_ask_parent', 'ask_user']);
+    const sink = f.sinks.at(-1)!;
+    sink.item({ kind: 'assistant', id: 'a1', at: Date.now(), text: 'Lo strumento agent_report non è disponibile nella mia sessione: mi fermo.' }, false);
+    sink.item({ kind: 'result', id: 'r1', at: Date.now(), isError: false, costUsd: 0, durationMs: 1, turns: 1 }, false);
+    await vi.waitFor(() => expect(f.sent.length).toBeGreaterThan(n));
+    expect(f.sent.at(-1)).toContain('Al tuo motore mancano strumenti');
+    expect(f.closes()).toBe(0);
+  });
+
+  it('Claude gets no fallback line in its first message', async () => {
+    const f = fixture();
+    await f.child('claude');
+    expect(f.sent.some(t => t.includes('sb-tool'))).toBe(false);
+  });
+
+  it('the fallback for a model\'s words goes once per session, and never on Claude (its loaded list is seen)', async () => {
+    const f = fixture(), c = await f.child('antigravity');
+    const sink = f.sinks.at(-1)!;
+    const turn = (n: number) => {
+      sink.item({ kind: 'assistant', id: `a${n}`, at: Date.now(), text: 'Lo strumento agent_report non è disponibile nella mia sessione.' }, false);
+      sink.item({ kind: 'result', id: `r${n}`, at: Date.now(), isError: false, costUsd: 0, durationMs: 1, turns: 1 }, false);
+    };
+    turn(1);
+    await vi.waitFor(() => expect(f.sent.filter(t => t.includes('Al tuo motore mancano')).length).toBe(1));
+    await f.m.send(c.id, 'continua');
+    turn(2);
+    await f.m.send(c.id, 'ancora');
+    await vi.waitFor(() => expect(f.sent.at(-1)).toContain('ancora'));
+    expect(f.sent.filter(t => t.includes('Al tuo motore mancano')).length).toBe(1);
+    const g = fixture(), k = await g.child('claude');
+    g.m.toolsServed(k.id, ['show_ui', 'agent_report', 'agent_ask_parent']);
+    g.sinks.at(-1)!.toolsLoaded?.(['mcp__second-brain__show_ui', 'mcp__second-brain__agent_report', 'mcp__second-brain__agent_ask_parent']);
+    g.sinks.at(-1)!.item({ kind: 'assistant', id: 'a1', at: Date.now(), text: 'Lo strumento agent_report non è disponibile nella mia sessione.' }, false);
+    g.sinks.at(-1)!.item({ kind: 'result', id: 'r1', at: Date.now(), isError: false, costUsd: 0, durationMs: 1, turns: 1 }, false);
+    await new Promise(r => setImmediate(r));
+    expect(g.sent.some(t => t.includes('Al tuo motore mancano'))).toBe(false);
+  });
 });
 

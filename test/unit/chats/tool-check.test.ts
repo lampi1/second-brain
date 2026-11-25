@@ -1,7 +1,7 @@
 // The check of a chat's required tools at every start, resume and engine change (chats/tool-check.ts, ADR 0356): the
 // served list lacking one = the fallback; the engine not loading one = a reload, then the fallback; never left waiting.
 import { describe, expect, it } from 'vitest';
-import { toolAction } from '../../../src/main/chats/tool-check';
+import { saysToolMissing, toolAction } from '../../../src/main/chats/tool-check';
 
 const need = ['show_ui', 'agent_report'];
 describe('toolAction', () => {
@@ -27,5 +27,38 @@ describe('toolAction', () => {
     expect(toolAction(need, { startedAt: 1 }, 0, true)).toEqual({ kind: 'wait' });
     expect(toolAction(need, { startedAt: 1, turnEnded: true }, 0, true)).toMatchObject({ kind: 'reload', missing: need });
     expect(toolAction(need, { startedAt: 1, turnEnded: true }, 1, true)).toMatchObject({ kind: 'fallback', missing: need });
+  });
+});
+
+// 2026-11-25, after the merge: an Antigravity Strategist whose MCP preload timed out had its list served in full, yet
+// said plan_propose and agent_delegate were missing and stopped; the app saw nothing wrong
+describe('saysToolMissing', () => {
+  const need = ['show_ui', 'plan_propose', 'agent_delegate', 'agent_report'];
+  it('a required tool named in a sentence that says it is not there', () => {
+    expect(saysToolMissing('Gli strumenti plan_propose e agent_delegate non sono disponibili nella mia sessione, quindi mi fermo.', need)).toEqual(['plan_propose', 'agent_delegate']);
+    expect(saysToolMissing('I do not have mcp_second-brain_plan_propose among my tools.', need)).toEqual(['plan_propose']);
+    expect(saysToolMissing('Tra i miei strumenti manca show_ui.', need)).toEqual(['show_ui']);
+    expect(saysToolMissing('I cannot find `plan_propose` or `agent_delegate` in my tool list, so I stop here.', need)).toEqual(['plan_propose', 'agent_delegate']);
+    expect(saysToolMissing('agent_report is not available among my tools.', need)).toEqual(['agent_report']);
+  });
+  it('not a tool merely named, nor a missing thing that is not a tool', () => {
+    expect(saysToolMissing('Ho chiamato agent_report con outcome done.', need)).toEqual([]);
+    expect(saysToolMissing('Non ho ancora chiamato agent_report: prima finisco i test.', need)).toEqual([]);
+    expect(saysToolMissing('Manca un test per il modulo ordini.', need)).toEqual([]);
+    expect(saysToolMissing('plan_proposed is missing from my tools', need)).toEqual([]);
+    // the review's cases: the absence is about something else
+    expect(saysToolMissing('Manca solo il report finale: chiamo agent_report.', need)).toEqual([]);
+    expect(saysToolMissing('Non trovo il file config.ts, quindi chiedo con agent_ask_parent.', [...need, 'agent_ask_parent'])).toEqual([]);
+    expect(saysToolMissing('Tests are missing for the parser; reporting with agent_report outcome partial.', need)).toEqual([]);
+    expect(saysToolMissing('Non vedo motivo di usare show_ui qui.', need)).toEqual([]);
+    expect(saysToolMissing('I have finished the parser, but tests are missing; calling agent_report with outcome partial.', need)).toEqual([]);
+    expect(saysToolMissing('Ho controllato i miei file: manca il test, quindi chiamo agent_report.', need)).toEqual([]);
+    expect(saysToolMissing('Non ho altro da aggiungere: uso agent_report con gli strumenti del repo.', need)).toEqual([]);
+    expect(saysToolMissing('The missing tool check in tool-check.ts now ignores agent_report when the tools list is served.', need)).toEqual([]);
+  });
+  it('said missing: the fallback at once, also after a reload, never twice', () => {
+    expect(toolAction(need, { startedAt: 1, served: need, saidMissing: ['plan_propose'] }, 0, true)).toMatchObject({ kind: 'fallback', missing: ['plan_propose'] });
+    expect(toolAction(need, { startedAt: 1, served: need, saidMissing: ['plan_propose'], acted: 'reload' }, 1, true)).toMatchObject({ kind: 'fallback' });
+    expect(toolAction(need, { startedAt: 1, served: need, saidMissing: ['plan_propose'], acted: 'fallback' }, 1, true)).toEqual({ kind: 'ok' });
   });
 });

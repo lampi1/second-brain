@@ -34,6 +34,12 @@
 // the user reads the result in the chat; the Orchestrator gets the summary with its next turn instead of a turn of its own.
 // It comes after the chat's turn ended (ChatManager holds it, #123); for a result the user waits for, the Orchestrator's
 // chat also shows the app's «ha la risposta che aspettavi» notice, still with no turn of the Orchestrator's own.
+// A root Strategist stopped without a result (2026-11-25): a Strategist the Orchestrator opened whose turn ends with no
+// agent_report while its task is open, nothing of its own waits for the user, no chat under it works or queues, no
+// agent_wake_later is set and it waits neither on credits nor on a «Ferma»: its plain turn end is grouped news (within
+// ORCHESTRATOR_GROUP_MS), told as "fermo senza risultato" with its last line. Seen 25/11: it waited on the Orchestrator,
+// which heard of it only 2 minutes later with the user's message. Read again at delivery (stuckStrategist): a new turn, a
+// report or a request in the window makes it quiet again. Every other chat's turn end stays quiet.
 // Held news on the tile (#88): what waits in the buffer is listed for the user (heldNews(), held-news.ts sends it to the
 // page as "N novità in attesa"); reading it never sends anything to the Orchestrator and changes no rule above.
 import path from 'node:path';
@@ -57,10 +63,37 @@ export const QUIET: ReadonlySet<WakeKind> = new Set(['done', 'question', 'permis
 const slotOf = (e: Pick<WakeEvent, 'chatId' | 'kind' | 'report' | 'eventId' | 'at' | 'requestId'>): string => e.requestId ? `${e.chatId}#request:${e.requestId}` : e.kind === 'user-message' ? `${e.chatId}#user:${e.eventId ?? e.at}` : e.report ? `${e.chatId}#report` : e.chatId;
 /** the rule's gate for this Orchestrator: Cursor (ACP) takes no message mid-turn */
 const gateOf = (r: Pick<ChatSummary, 'state' | 'pending' | 'handoffBusy' | 'harness'>): OrchestratorGate => orchestratorGate(r, engineOf(r.harness)?.kind !== 'acp');
-const classOf = (e: WakeEvent): DeliveryClass => e.kind === 'user-message' || e.silent ? 'quiet' : newsClass(e.kind, e.endsTurn, !!e.report);
-const isLoud = (e: WakeEvent): boolean => classOf(e) !== 'quiet';
+const classOf = (e: WakeEvent, stuck = false): DeliveryClass => e.kind === 'user-message' || e.silent ? 'quiet' : stuck ? 'group' : newsClass(e.kind, e.endsTurn, !!e.report);
+const BUSY_CHILD: ReadonlySet<ChatState> = new Set(['running', 'waiting', 'starting']);
+
+/** A root Strategist the Orchestrator opened that stopped with nothing to show and nothing to wait for (see the header):
+ *  open = its requests still open (questions, permissions, commands); scheduled = its agent_wake_later is set. */
+export function stuckStrategist(c: ChatSummary, all: readonly ChatSummary[], open: number, scheduled: boolean): boolean {
+  const run = c.run;
+  if (c.isOrchestrator || c.parentId || c.closedAt || c.state !== 'idle' || c.queued || c.handoffBusy) return false;
+  if (c.agent?.source !== 'catalog' || c.agent.id !== 'strategist') return false;
+  if (!run || run.startedBy !== 'orchestrator' || run.endedAt) return false;
+  if (run.report?.via === 'agent_report' && (!run.report.canonical || run.report.canonical.runId === run.runId)) return false;
+  // waiting on the user: a request, a ladder question, a plan in its interview, to approve, being revised or put aside
+  // (the same phases manager-delegation.ts never nudges); waitsOn stays out: «a decision from above» is this case
+  const plan = c.plan?.phase;
+  if (c.pending > 0 || open > 0 || c.questions?.some(q => !q.answered) || plan === 'asking' || plan === 'proposed' || plan === 'revising' || plan === 'approved') return false;
+  if (c.plan?.stopped || scheduled || c.creditWait) return false;
+  // waiting on work: background tasks, a build it said it waits for, provider agents it started
+  if ((c.background ?? 0) > 0 || c.waitsOnWork || (c.agentChildren?.active ?? 0) > 0) return false;
+  // a chat under it (at any depth) still works or waits for a slot
+  const under = new Set([c.id]);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const x of all) if (x.parentId && under.has(x.parentId) && !under.has(x.id)) {
+      under.add(x.id); grew = true;
+      if (!x.closedAt && (BUSY_CHILD.has(x.state) || x.queued)) return false;
+    }
+  }
+  return true;
+}
 /** requestId: the open request it tells about (question, permission, command): answered before it goes, it is dropped */
-export interface WakeEvent { eventId?: string; seq?: number; chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a root chat's clean agent_report (cleanReport): its role and summary, quiet */ report?: { role: string }; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; /** kind error: no failure, its model ran out of credits and it waits for its role's card (ADR 0346) */ credits?: { role: string; model: string | null }; requestId?: string; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean; /** a delegated chat's "finished" with nothing of the user's beside it: no text (ADR 0083) and its result goes to its parent, so it rides along and never wakes */ silent?: boolean }
+export interface WakeEvent { eventId?: string; seq?: number; chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a root chat's clean agent_report (cleanReport): its role and summary, quiet */ report?: { role: string }; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; /** kind error: no failure, its model ran out of credits and it waits for its role's card (ADR 0346) */ credits?: { role: string; model: string | null }; requestId?: string; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean; /** a delegated chat's "finished" with nothing of the user's beside it: no text (ADR 0083) and its result goes to its parent, so it rides along and never wakes */ silent?: boolean; /** set only on the message sent: a root Strategist stopped without a result (stuckStrategist) */ stuck?: true }
 
 export interface WakeSubmissionReceipt { submitted(): void; failed(error: unknown): void }
 export interface OrchestratorWakeDeps {
@@ -91,7 +124,9 @@ export function wakeLine(e: WakeEvent): string {
   const who = e.child ? `«${e.title}» (${e.child.role}, delegata da «${e.child.parent}»)` : `«${e.title}» (${engineLabel(e.harness)})`;
   const d = e.requestId ? e.detail : e.child || e.kind === 'user-message' ? '' : cut(e.detail, 200);
   switch (e.kind) {
-    case 'done': return e.report ? `- «${e.title}» (${e.report.role}): ha consegnato: «${cut(e.detail, 200)}»` : `- ${who}: ha finito il turno.${d ? ` Ultima riga: «${d}»` : ''}`;
+    case 'done': return e.report ? `- «${e.title}» (${e.report.role}): ha consegnato: «${cut(e.detail, 200)}»`
+      : e.stuck ? `- ${who}: Stratega fermo senza risultato: ha chiuso il turno senza agent_report e il suo incarico è ancora aperto. Non è lavoro completato e non vale come report, consenso o permesso.${d ? ` Ultima riga: «${d}»` : ''}`
+      : `- ${who}: ha finito il turno.${d ? ` Ultima riga: «${d}»` : ''}`;
     case 'error': return e.credits
       ? `- ${who}: è in attesa, non è un errore da correggere: il limite ${e.credits.model ? `di ${e.credits.model}` : 'del suo modello'} è finito. L'app la fa ripartire da sola, da dove era, sul primo modello con spazio dello stesso livello di ${e.credits.role}; se sono tutti finiti aspetta e riparte appena se ne libera uno. Dillo all'utente con queste parole; non avviare un'altra chat per lo stesso lavoro e non scegliere tu un altro modello o preset.`
       : `- ${who}: si è fermata su un errore${d ? `: ${d}` : '.'}`;
@@ -138,6 +173,10 @@ export class OrchestratorWake {
   private toldEmpty = true;
   /** chats seen closing by the app's auto-close in this run (kept()) */
   private autoClosed = new Set<string>();
+  /** the requests (questions, permissions, commands) each chat has open now, from pending:added / pending:resolved */
+  private openAsks = new Map<string, Set<string>>();
+  /** agent_wake_later (wiring.ts): the chat has its own wake-up set */
+  private wakeScheduled: (chatId: string) => boolean = () => false;
 
   constructor(private readonly d: OrchestratorWakeDeps) {
     if (!d.userData) return;
@@ -166,10 +205,25 @@ export class OrchestratorWake {
     if (channel === 'chat:updated') this.updated(payload as ChatSummary);
     else if (channel === 'pending:added') this.pending(payload as PendingRequest);
     else if (channel === 'pending:resolved') this.resolved(payload as EventMap['pending:resolved']);
-    else if (channel === 'chat:removed') { const { chatId } = payload as EventMap['chat:removed']; this.chats.delete(chatId); this.autoClosed.delete(chatId); this.buffer.delete(chatId); for (const [key, event] of this.buffer) if (event.chatId === chatId) this.buffer.delete(key); this.buffer.delete(`${chatId}#report`); }
+    else if (channel === 'chat:removed') { const { chatId } = payload as EventMap['chat:removed']; this.chats.delete(chatId); this.openAsks.delete(chatId); this.autoClosed.delete(chatId); this.buffer.delete(chatId); for (const [key, event] of this.buffer) if (event.chatId === chatId) this.buffer.delete(key); this.buffer.delete(`${chatId}#report`); }
     else return;
     this.changed();
   }
+
+  /** wiring.ts, once WakeLater exists: a chat with its own wake-up set is never a stopped Strategist */
+  useWakeLater(scheduled: (chatId: string) => boolean): void { this.wakeScheduled = scheduled; }
+
+  /** A plain turn end of a root Strategist stopped without a result (stuckStrategist), read now. */
+  private stuck(e: WakeEvent): boolean {
+    if (e.kind !== 'done' || e.report || e.child || e.silent || e.requestId) return false;
+    const seen = this.chats.get(e.chatId);
+    if (!seen || seen.parentId || seen.agent?.id !== 'strategist') return false; // no list read for any other chat
+    const all = this.d.list?.();
+    const c = all?.find(x => x.id === e.chatId);
+    return !!all && !!c && stuckStrategist(c, all, this.openAsks.get(c.id)?.size ?? 0, this.wakeScheduled(c.id));
+  }
+  private cls(e: WakeEvent): DeliveryClass { return classOf(e, this.stuck(e)); }
+  private isLoud(e: WakeEvent): boolean { return this.cls(e) !== 'quiet'; }
 
   /** held-news.ts listens: called when the buffer or the Orchestrator's state may have changed (never twice for "nothing") */
   onHeldChange(fn: () => void): void { this.listener = fn; }
@@ -182,7 +236,7 @@ export class OrchestratorWake {
     if (!id || !r || !this.buffer.size || !this.d.enabled()) return [];
     const gate = gateOf(r);
     return this.queued().filter(e => this.kept(e))
-      .map(e => ({ orchestratorId: id, chatId: e.kind === 'stalled' ? null : e.chatId, title: e.title, kind: e.kind, at: e.at, why: heldWhy(gate, classOf(e), r) }));
+      .map(e => ({ orchestratorId: id, chatId: e.kind === 'stalled' ? null : e.chatId, title: e.title, kind: e.kind, at: e.at, why: heldWhy(gate, this.cls(e), r) }));
   }
 
   private changed(): void {
@@ -197,7 +251,7 @@ export class OrchestratorWake {
   /** What waits to be told (tests, diagnostics). */
   queued(): WakeEvent[] { return [...this.buffer.values()]; }
   /** How much queued news the Orchestrator's gate holds now (it works or waits for the user; tests, diagnostics). */
-  held(): number { const r = this.orchestrator(); return r ? this.queued().filter(e => !passes(gateOf(r), classOf(e))).length : 0; }
+  held(): number { const r = this.orchestrator(); return r ? this.queued().filter(e => !passes(gateOf(r), this.cls(e))).length : 0; }
 
   stop(): void { if (this.timer) clearTimeout(this.timer); this.timer = null; }
 
@@ -237,6 +291,8 @@ export class OrchestratorWake {
   }
 
   private pending(p: PendingRequest): void {
+    const asks = this.openAsks.get(p.chatId) ?? new Set<string>();
+    asks.add(p.id); this.openAsks.set(p.chatId, asks);
     // a chat with no update since the app started is not seen yet (its request comes before its 'waiting'): read it from
     // the list, so its quiet news is not lost (#88: a quiet permission is counted, and rides along as the rule says)
     const known = this.chats.get(p.chatId);
@@ -313,6 +369,8 @@ export class OrchestratorWake {
 
   /** answered before the news went: "waits for the user" would be false; what the chat did next is told instead */
   private resolved(r: EventMap['pending:resolved']): void {
+    const asks = this.openAsks.get(r.chatId);
+    if (asks?.delete(r.requestId) && !asks.size) this.openAsks.delete(r.chatId);
     const key = `${r.chatId}#request:${r.requestId}`;
     const e = this.buffer.get(key);
     if (!e || e.requestId !== r.requestId) return;
@@ -333,7 +391,7 @@ export class OrchestratorWake {
     if (kind === 'done' && quietReport && quietReport.at > (this.chats.get(c.id)?.turnResultAt ?? 0)) return;
     if (old && kind === 'done' && old.kind !== 'done' && old.kind !== 'error' && old.kind !== 'started') return;
     // a request left right after the chat failed (asks.ts settles after it) keeps the failure's wake
-    const endsTurn = QUIET.has(kind) && kind !== 'done' && !!old && (isLoud(old) || !!old.endsTurn);
+    const endsTurn = QUIET.has(kind) && kind !== 'done' && !!old && (this.isLoud(old) || !!old.endsTurn);
     const parent = c.parentId ? this.chats.get(c.parentId)?.title ?? this.d.list?.().find(x => x.id === c.parentId)?.title ?? '?' : null;
     const child = parent !== null ? { role: c.agent?.name ?? 'ruolo', parent } : undefined;
     const silent = !!child && kind === 'done' && !this.queued().some(event => event.chatId === c.id && event.kind === 'user-message');
@@ -346,10 +404,11 @@ export class OrchestratorWake {
    *  loud news; quiet news never wakes an idle Orchestrator by itself (the owner, 13/10), it rides along. */
   private nextDue(gate: OrchestratorGate): number {
     const all = [...this.buffer.values()];
-    const firstLoud = Math.min(...all.filter(isLoud).map(e => e.at));
+    const classes = new Map(all.map(e => [e, this.cls(e)]));
+    const firstLoud = Math.min(...all.filter(e => classes.get(e) !== 'quiet').map(e => e.at));
     let due = Infinity;
     for (const e of all) {
-      const cls = classOf(e);
+      const cls = classes.get(e)!;
       if (!passes(gate, cls)) continue;
       const base = gate === 'inject' || cls === 'now' ? e.at : cls === 'group' ? firstLoud + this.groupMs : Infinity;
       due = Math.min(due, Math.max(base, this.readyAt(slotOf(e))));
@@ -423,12 +482,13 @@ export class OrchestratorWake {
     // due: something that may go through the gate now; then everything ready that the gate lets through goes with it
     // (quiet news rides along), chats told too recently wait for their turn
     if (this.nextDue(gate) > now) { this.reschedule(); return; }
-    const ready = [...this.buffer.values()].filter(e => passes(gate, classOf(e)) && this.readyAt(slotOf(e)) <= now);
+    const ready = [...this.buffer.values()].filter(e => passes(gate, this.cls(e)) && this.readyAt(slotOf(e)) <= now);
     ready.sort((a, b) => a.at - b.at);
+    const told = ready.map(e => (this.stuck(e) ? { ...e, stuck: true as const } : e));
     for (const e of ready) this.lastSent.set(slotOf(e), now);
     this.changed();
     this.sending = true;
-    log.info('chats', 'news sent to the Orchestrator', { chat: id, data: { chats: ready.length, kinds: ready.map(e => e.kind), gate } });
+    log.info('chats', 'news sent to the Orchestrator', { chat: id, data: { chats: ready.length, kinds: ready.map(e => e.kind), gate, ...(told.some(e => e.stuck) ? { stuck: told.filter(e => e.stuck).map(e => e.chatId) } : {}) } });
     let settled = false;
     const receipt: WakeSubmissionReceipt = {
       submitted: () => {
@@ -442,7 +502,7 @@ export class OrchestratorWake {
         this.sending = false; this.reschedule();
       },
     };
-    void this.d.send(id, wakeMessage(ready), receipt)
+    void this.d.send(id, wakeMessage(told), receipt)
       .then(() => { if (!this.d.receiptAcknowledgement) receipt.submitted(); })
       .catch(receipt.failed);
 

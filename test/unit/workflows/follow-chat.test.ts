@@ -5,13 +5,16 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Workflows } from '../../../src/main/workflows/service';
+import { CoordinationStore } from '../../../src/main/coordination/store';
 
-const roots: string[] = [];
-afterEach(() => { for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
+const roots: string[] = [], stores: CoordinationStore[] = [];
+// the database is closed before its folder goes (Windows keeps an open file)
+afterEach(() => { for (const s of stores.splice(0)) s.close(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
 it('adds the chat that goes on to the open threads of the old one', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-follow-')); roots.push(dir);
-  const w = new Workflows(path.join(dir, 'work.json'));
+  const store = new CoordinationStore(path.join(dir, 'app.db')); stores.push(store);
+  const w = new Workflows(path.join(dir, 'work.json'), undefined, undefined, undefined, { store, chats: () => [], pending: () => [] });
   const open = w.create({ title: 'Aperto', profile: 'investigation', priority: 'normal', chatIds: ['a'] });
   const other = w.create({ title: 'Altro', profile: 'investigation', priority: 'normal', chatIds: ['x'] });
   w.followChat('a', 'b');
