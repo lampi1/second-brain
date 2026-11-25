@@ -37,14 +37,20 @@ describe('saysToolMissing', () => {
   it('a required tool named in a sentence that says it is not there', () => {
     expect(saysToolMissing('Gli strumenti plan_propose e agent_delegate non sono disponibili nella mia sessione, quindi mi fermo.', need)).toEqual(['plan_propose', 'agent_delegate']);
     expect(saysToolMissing('I do not have mcp_second-brain_plan_propose among my tools.', need)).toEqual(['plan_propose']);
-    expect(saysToolMissing('Manca show_ui.', need)).toEqual(['show_ui']);
-    expect(saysToolMissing('agent_report is not available here.', need)).toEqual(['agent_report']);
+    expect(saysToolMissing('Tra i miei strumenti manca show_ui.', need)).toEqual(['show_ui']);
+    expect(saysToolMissing('I cannot find `plan_propose` or `agent_delegate` in my tool list, so I stop here.', need)).toEqual(['plan_propose', 'agent_delegate']);
+    expect(saysToolMissing('agent_report is not available among my tools.', need)).toEqual(['agent_report']);
   });
   it('not a tool merely named, nor a missing thing that is not a tool', () => {
     expect(saysToolMissing('Ho chiamato agent_report con outcome done.', need)).toEqual([]);
     expect(saysToolMissing('Non ho ancora chiamato agent_report: prima finisco i test.', need)).toEqual([]);
     expect(saysToolMissing('Manca un test per il modulo ordini.', need)).toEqual([]);
-    expect(saysToolMissing('plan_proposed is missing', need)).toEqual([]);
+    expect(saysToolMissing('plan_proposed is missing from my tools', need)).toEqual([]);
+    // the review's cases: the absence is about something else
+    expect(saysToolMissing('Manca solo il report finale: chiamo agent_report.', need)).toEqual([]);
+    expect(saysToolMissing('Non trovo il file config.ts, quindi chiedo con agent_ask_parent.', [...need, 'agent_ask_parent'])).toEqual([]);
+    expect(saysToolMissing('Tests are missing for the parser; reporting with agent_report outcome partial.', need)).toEqual([]);
+    expect(saysToolMissing('Non vedo motivo di usare show_ui qui.', need)).toEqual([]);
   });
   it('said missing: the fallback at once, also after a reload, never twice', () => {
     expect(toolAction(need, { startedAt: 1, served: need, saidMissing: ['plan_propose'] }, 0, true)).toMatchObject({ kind: 'fallback', missing: ['plan_propose'] });

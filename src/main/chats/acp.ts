@@ -697,13 +697,10 @@ export class AcpSession implements HarnessSession {
         clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false, _meta: { parameterizedModelPicker: true } },
         clientInfo: { name: 'second-brain', version: this.opts.appVersion ?? '0' },
       };
-      // a loaded PC can keep an engine's first answer past a minute (OpenCode, 2026-11-25: fine on the retry): asked once
-      // more on the same process before the start fails
-      const init = await this.request('initialize', initParams, 60000).catch(e => {
-        if (this.exited || e instanceof RpcError) throw e;
-        log.warn('chats', 'acp initialize unanswered: asking once more', { chat: this.opts.chatId, cause: errText(e), hint: 'a slow start on a loaded PC; a second silence ends the start', data: { engine: this.engine } });
-        return this.request('initialize', initParams, 60000);
-      });
+      // a loaded PC can keep an engine's first answer past a minute (OpenCode, 2026-11-25: fine on a second start): the
+      // same request waits up to two, with a line in the log after the first
+      const slow = setTimeout(() => log.warn('chats', 'acp initialize unanswered after 60 s: still waiting', { chat: this.opts.chatId, hint: 'a slow start on a loaded PC; the start fails at 120 s', data: { engine: this.engine } }), 60000);
+      const init = await this.request('initialize', initParams, 120000).finally(() => clearTimeout(slow));
       this.caps = o(init.agentCapabilities);
       const v = s(o(init.agentInfo).version);
       if (v && !this.cliVersion) this.cliVersion = v; // Cursor: its version folder, the name doctor checks

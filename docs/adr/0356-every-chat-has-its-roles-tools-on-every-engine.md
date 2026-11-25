@@ -86,13 +86,15 @@ said «Failed to preload the session's MCP servers: context deadline exceeded» 
 marked agent_assign_task, agent_delegate, plan_propose, plan_update and show_ui as dropped. The model said they were
 missing and stopped. The app saw its full list served and a turn that reached the endpoint, so nothing fired.
 
-- **The model's own words count** (`saysToolMissing`). At every turn end, a required tool named in a sentence that says
-  it is not there leads to the fallback at once: the fallback message also wakes the chat that stopped, which a reload
-  would not. It is a guess from words, so it only ever sends the fallback command, at most once per session.
-- **The fallback command goes with the role's text** on an engine with a tight schema budget (`mcpCompact`), before any
-  tool is missed: a drop inside agy is not always seen by the app.
-- **An ACP engine's initialize is asked once more** on the same process after a minute of silence, before the start
-  fails (OpenCode on a loaded PC answered on the retry).
+- **The model's own words count** (`saysToolMissing`), on an ACP engine only (Claude's loaded list is seen). At every
+  turn end, a required tool named in a sentence of that turn that says it is not there and is about the speaker's own
+  tools («strumenti», «my tools», «nella mia sessione») leads to the fallback at once: the fallback message also wakes
+  the chat that stopped, which a reload would not. It is a guess from words, so it only ever sends the fallback
+  command, at most once per session.
+- **The fallback command goes with the first message of each session** on an engine with a tight schema budget
+  (`mcpCompact`), any chat with required tools, before any tool is missed: a drop inside agy is not always seen.
+- **An ACP engine's initialize waits up to two minutes**, with a log line after the first (OpenCode on a loaded PC
+  answered on a second start). The same request waits: a late answer is never dropped.
 - agy's own preload deadline is not the app's to change; the app does not read agy's database or log.
 
 ## Consequences
