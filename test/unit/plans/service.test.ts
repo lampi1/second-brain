@@ -5,17 +5,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, errText: (e: unknown) => String(e) }));
 import type { ChatSummary } from '../../../src/shared/contract';
-import { STRATEGY_FLOW, type PlanPhase, type PlanStep, type StrategyPlan } from '../../../src/shared/strategy';
+import { STRATEGY_FLOW, type PlanPhase, type StrategyPlan } from '../../../src/shared/strategy';
+import type { PlanStep } from '../../../src/shared/plan-steps';
 import type { Plan } from '../../../src/shared/plan';
 import { requestOf } from '../../../src/main/plans/follow';
 import { Plans, type PlansDeps } from '../../../src/main/plans/service';
 import { startPrompt, strategistStarter } from '../../../src/main/plans/start';
-import { isJobAction, jobAction } from '../../../src/main/plans/tools';
+import { planAction, PLAN_TOOL_ACTIONS } from '../../../src/main/plans/tools';
 
 let now: number, saved: Plan[], chats: ChatSummary[], emitted: string[], calls: unknown[][], n: number;
 beforeEach(() => { now = 1000; saved = []; chats = []; emitted = []; calls = []; n = 0; });
 
-const steps = (...states: PlanStep['state'][]): PlanStep[] => states.map((state, i) => ({ title: `Passo ${i + 1}`, state }));
+const steps = (...states: PlanStep['state'][]): PlanStep[] => states.map((state, i) => ({ id: `s${i + 1}`, title: `Passo ${i + 1}`, state, ...(state === 'done' ? { proof: { at: 1, by: 'report' as const, text: 'ok' } } : {}) }));
 const plan = (phase: PlanPhase, at = 100, s: PlanStep[] = steps('todo', 'todo')): StrategyPlan => ({ phase, at, clarified: [], steps: s });
 function chat(id: string, extra: Partial<ChatSummary> = {}): ChatSummary {
   return { id, harness: 'claude', origin: 'app', title: `Lavoro ${id}`, cwd: 'C:/repo', sessionId: null, model: null, effort: null, permissionMode: null, state: 'running', costUsd: 0, pending: 0, isOrchestrator: false,
@@ -92,27 +93,16 @@ describe('which map a chat has', () => {
     saw(w, { ...chats.find(c => c.id === 'a')!, title: 'Vecchia' });
     expect(w.get(m.id)!.owner!.chatId).toBe('b');
   });
-
-  it('says which project maps the job touches, from its plan, its chat and its steps\' chats', () => {
-    const w = maps({ projectsOf: c => (c.id === 'k' ? ['magazzino'] : ['negozio']) });
-    put(chat('k', { parentId: 'a' }));
-    saw(w, chat('a'));
-    const m = saw(w, chat('a', { plan: { ...plan('running', 100, [{ title: 'x', state: 'now', chatIds: ['k'] }]) } }));
-    expect(m.touches).toEqual(['negozio', 'cassa', 'magazzino']);
-    expect(m.project).toBe('negozio');
-    expect(w.touching('magazzino').map(i => i.id)).toEqual([m.id]);
-    expect(w.touching('altro')).toEqual([]);
-  });
 });
 
 describe('an idea alone', () => {
   it('is a map with no chat, planned later: «Parti» opens a Strategist that owns it', async () => {
     const started: unknown[] = [];
-    const w = maps({ projectNamed: x => (x === 'Negozio' ? 'negozio' : null), startStrategist: async (m, c, by) => { started.push([m.id, c, by]); return put(chat('s', { planId: m.id, plan: plan('asking', 300, []) })); } });
+    const w = maps({ startStrategist: async (m, c, by) => { started.push([m.id, c, by]); return put(chat('s', { planId: m.id, plan: plan('asking', 300, []) })); } });
     const m = w.idea({ title: '  Sconti   a fasce ', idea: 'Per quantità', project: 'Negozio' });
-    expect(m).toMatchObject({ title: 'Sconti a fasce', idea: 'Per quantità', project: 'negozio', touches: ['negozio'], state: 'idea', by: 'user' });
+    expect(m).toMatchObject({ title: 'Sconti a fasce', idea: 'Per quantità', project: 'Negozio', state: 'idea', by: 'user' });
     expect(m.owner).toBeUndefined();
-    expect(w.view(m.id)!.boxes).toHaveLength(1);
+    expect(w.view(m.id)!.steps).toHaveLength(0);
     expect(await w.act(m.id, 'start')).toMatchObject({ id: m.id, owner: { chatId: 's' }, state: 'idea', plan: { phase: 'asking' } });
     expect(started).toEqual([[m.id, undefined, 'user']]);
     expect(w.list()).toHaveLength(1);
@@ -122,13 +112,13 @@ describe('an idea alone', () => {
     const w = maps();
     expect(() => w.idea({ title: ' ' })).toThrow(/title/);
     expect(() => w.idea({ title: 'x', idea: 'y'.repeat(4001) })).toThrow(/al massimo 4000/);
-    expect(w.idea({ title: 'x', project: 'Casa' })).toMatchObject({ project: 'Casa', touches: [] });
+    expect(w.idea({ title: 'x', project: 'Casa' })).toMatchObject({ project: 'Casa' });
   });
-  it('is archived and reopened, never deleted', async () => {
+  it('is archived and reopened; deleting it sends it to the trash, not away', async () => {
     const w = maps(), m = w.idea({ title: 'Poi' });
     await w.act(m.id, 'archive');
     expect(w.list()).toEqual([]);
-    expect(w.list({ archived: true })[0]).toMatchObject({ id: m.id, can: ['reopen'] });
+    expect(w.list({ archived: true })[0]).toMatchObject({ id: m.id, can: ['reopen', 'delete'] });
     expect((await w.act(m.id, 'reopen')).state).toBe('idea');
   });
 });
@@ -295,7 +285,7 @@ describe('at load', () => {
     again.adopt();
     expect(again.get(idea.id)).toEqual(before.idea);
     expect(again.get(kept.id)).toEqual(before.kept);
-    expect(again.get(lost.id)).toMatchObject({ state: 'stopped', stopped: { by: 'gone' }, plan: { steps: [{ id: 's1', title: 'Passo 1' }, { id: 's2', after: ['s1'], title: 'Passo 2' }] } });
+    expect(again.get(lost.id)).toMatchObject({ state: 'stopped', stopped: { by: 'gone' }, plan: { steps: [{ id: 's1', title: 'Passo 1' }, { id: 's2', title: 'Passo 2' }] } });
   });
 
   it('a map that cannot be saved never breaks the chat\'s own event', () => {
@@ -319,7 +309,7 @@ describe('the list and the versions', () => {
   it('an earlier version is seen as it was, with nothing to do on it', () => {
     const w = maps(), m = saw(w, chat('a', { plan: plan('proposed') }));
     w.observe('chat:updated', change('a', { plan: plan('running', 200) }));
-    expect(w.view(m.id, 1)).toMatchObject({ map: { version: 1, state: 'toApprove' }, info: { can: [] } });
+    expect(w.view(m.id, 1)).toMatchObject({ record: { version: 1, state: 'toApprove' }, info: { can: [] } });
     expect(w.view(m.id)!.info.can).toEqual(['stop', 'replan']);
     expect(w.view(m.id, 9)).toBeNull();
     expect(w.view('wm_nothere')).toBeNull();
@@ -327,20 +317,20 @@ describe('the list and the versions', () => {
 });
 
 describe('a new Strategist for a map', () => {
-  const map = (extra: Partial<Plan> = {}): Plan => ({ id: 'wm_abc123', version: 1, title: 'Sconti', idea: 'Sconti a fasce', touches: ['negozio'], state: 'idea', createdAt: 1, updatedAt: 1, by: 'user', summary: '', ...extra });
+  const map = (extra: Partial<Plan> = {}): Plan => ({ id: 'pl_abc123', version: 1, title: 'Sconti', idea: 'Sconti a fasce', project: 'negozio', constraints: [], links: [], state: 'idea', createdAt: 1, updatedAt: 1, by: 'user', summary: '', ...extra });
   it('gets the idea, the answers, the steps with where they were and what to change', () => {
-    const text = startPrompt(map({ owner: { chatId: 'a', task: 't' }, plan: { ...plan('running', 100, [{ title: 'Cerco', state: 'done', role: 'scout' }, { title: 'Faccio', state: 'now' }]), clarified: [{ q: 'Dove?', a: 'Ordini' }] } }), 'Prima i resi');
-    for (const part of ['Sconti a fasce', 'Titolo del lavoro: Sconti.', 'negozio (project_map_read)', 'aspetta di nuovo il mio ok', '- Dove? → Ordini', '1. Cerco (scout, fatto)', '2. Faccio (in corso)', 'Cosa cambiare: Prima i resi']) expect(text).toContain(part);
-    expect(startPrompt(map({ touches: [] }))).toBe('Sconti a fasce\nTitolo del lavoro: Sconti.');
+    const text = startPrompt(map({ owner: { chatId: 'a', task: 't' }, plan: { ...plan('running', 100, [{ id: 's5done', title: 'Cerco', state: 'done', role: 'scout', proof: { at: 1, by: 'report', text: 'ok' } }, { id: 's6now', title: 'Faccio', state: 'now' }]), clarified: [{ q: 'Dove?', a: 'Ordini' }] } }), 'Prima i resi');
+    for (const part of ['Sconti a fasce', 'Titolo del lavoro: Sconti.', 'Progetto: negozio', 'aspetta di nuovo il mio ok', '- Dove? → Ordini', '1. Cerco (scout, fatto, prova: ok)', '2. Faccio (in corso)', 'Cosa cambiare: Prima i resi']) expect(text).toContain(part);
+    expect(startPrompt(map({ project: undefined }))).toBe('Sconti a fasce\nTitolo del lavoro: Sconti.');
   });
   it('is a Strategist with the plan flow, linked to the map; the Orchestrator\'s start says it is not the user\'s text', async () => {
     const made: unknown[][] = [];
     const start = strategistStarter({ chats: { create: async (...a: unknown[]) => { made.push(a); return chat('s'); } } as never, harness: () => 'claude', folderOf: () => 'C:/repo' });
     await start(map(), undefined, 'user');
     await start(map({ plan: plan('running') }), 'Prima i resi', 'Orchestrator');
-    expect(made[0]).toEqual([{ harness: 'claude', cwd: 'C:/repo', title: 'Sconti', prompt: startPrompt(map()), goal: 'Sconti a fasce', orchestrator: false, roleId: 'strategist' }, 'agent', undefined, undefined, { planId: 'wm_abc123' }]);
+    expect(made[0]).toEqual([{ harness: 'claude', cwd: 'C:/repo', title: 'Sconti', prompt: startPrompt(map()), goal: 'Sconti a fasce', orchestrator: false, roleId: 'strategist' }, 'agent', undefined, undefined, { planId: 'pl_abc123' }]);
     expect((made[1]![0] as { prompt: string }).prompt).not.toBe(startPrompt(map({ plan: plan('running') }), 'Prima i resi'));
-    expect(made[1]![4]).toMatchObject({ planId: 'wm_abc123', resumePlan: { phase: 'running' } });
+    expect(made[1]![4]).toMatchObject({ planId: 'pl_abc123', resumePlan: { phase: 'running' } });
     await expect(strategistStarter({ chats: {} as never, harness: () => 'claude', folderOf: () => null })(map(), undefined, 'user')).rejects.toThrow(/cartella/);
   });
   it('requestOf leaves the app\'s instructions out', () => {
@@ -348,25 +338,33 @@ describe('a new Strategist for a map', () => {
   });
 });
 
-describe('the Orchestrator\'s actions', () => {
-  it('finds a map by id or exact title and acts on the plan proposed now', async () => {
-    const w = maps(), m = saw(w, chat('a', { plan: plan('proposed', 100) }));
-    expect(isJobAction('approve')).toBe(true);
-    expect(isJobAction('list')).toBe(false);
-    expect(await jobAction(w, 'jobs', {})).toMatchObject({ jobs: [{ id: m.id, state: 'toApprove' }] });
-    expect(await jobAction(w, 'job', { job: 'lavoro A' })).toContain('plan waits for the user');
-    expect(await jobAction(w, 'keep', { job: m.id })).toEqual({ ok: true, job: m.id, state: 'planned', chatId: 'a' });
+describe('the plans tool', () => {
+  it('lists, finds a plan by id or exact title, reads it and acts on the plan proposed now', async () => {
+    const w = maps(), m = saw(w, chat('a', { plan: plan('proposed', 100) })), orch = { kind: 'orchestrator' } as const;
+    expect(PLAN_TOOL_ACTIONS).toContain('restore');
+    expect(await planAction(w, orch, { action: 'list' })).toMatchObject({ plans: [{ id: m.id, state: 'toApprove' }] });
+    expect(await planAction(w, orch, { action: 'read', plan: 'lavoro A' })).toContain('plan waits for the user');
+    expect(await planAction(w, orch, { action: 'keep', plan: m.id })).toEqual({ ok: true, plan: m.id, state: 'planned', chatId: 'a' });
     expect(calls[0]).toEqual(['planDecide', 'a', 'approve', 100, undefined, 'pc', true]);
-    expect(await jobAction(w, 'replan', { job: m.id, text: 'Meno passi' })).toMatchObject({ ok: true });
+    expect(await planAction(w, orch, { action: 'replan', plan: m.id, text: 'Meno passi' })).toMatchObject({ ok: true });
     expect(calls.at(-1)).toEqual(['planReplan', 'a', 'Meno passi']);
   });
-  it('writes an idea down, and says what is wrong with a job it cannot find', async () => {
-    const w = maps();
-    expect(await jobAction(w, 'idea', { title: 'Sconti', text: 'A fasce', project: 'Negozio' })).toMatchObject({ ok: true, state: 'idea' });
+  it('writes an idea down, and says what is wrong with a plan it cannot find', async () => {
+    const w = maps(), orch = { kind: 'orchestrator' } as const;
+    expect(await planAction(w, orch, { action: 'create', title: 'Sconti', idea: 'A fasce', project: 'Negozio' })).toMatchObject({ ok: true, state: 'idea' });
     w.idea({ title: 'Sconti' });
-    await expect(jobAction(w, 'job', { job: 'Sconti' })).rejects.toThrow(/2 maps are called/);
-    await expect(jobAction(w, 'job', { job: 'Altro' })).rejects.toThrow(/no work map/);
-    await expect(jobAction(w, 'job', {})).rejects.toThrow(/work map's id/);
-    expect(await jobAction(w, 'jobs', { query: 'fasce' })).toMatchObject({ jobs: [{ title: 'Sconti', project: 'Negozio' }] });
+    await expect(planAction(w, orch, { action: 'read', plan: 'Sconti' })).rejects.toThrow(/2 plans are called/);
+    await expect(planAction(w, orch, { action: 'read', plan: 'Altro' })).rejects.toThrow(/no plan/);
+    await expect(planAction(w, orch, { action: 'read' })).rejects.toThrow(/plan's id/);
+    expect(await planAction(w, orch, { action: 'search', query: 'fasce' })).toMatchObject({ plans: [{ title: 'Sconti', project: 'Negozio' }] });
+  });
+  it('a Strategist reads every plan, edits its own and only proposes on the others; the user\'s decisions are not its own', async () => {
+    const w = maps(), m = saw(w, chat('a', { plan: plan('proposed', 100) })), other = w.idea({ title: 'Altro' });
+    const me = { kind: 'strategist', chatId: 'a' } as const;
+    expect(await planAction(w, me, { action: 'read', plan: other.id })).toContain('Altro');
+    expect(await planAction(w, me, { action: 'edit', plan: m.id, set: { goal: 'Scontare a fasce' } })).toMatchObject({ ok: true });
+    await expect(planAction(w, me, { action: 'edit', plan: other.id, set: { goal: 'x' } })).rejects.toThrow(/not yours/);
+    for (const action of ['approve', 'keep', 'start', 'stop', 'resume', 'archive', 'delete', 'restore']) await expect(planAction(w, me, { action, plan: m.id })).rejects.toThrow(/user decides/);
+    expect(calls).toEqual([]);
   });
 });

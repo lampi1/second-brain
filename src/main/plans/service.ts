@@ -77,7 +77,9 @@ export interface PlanFields { title?: string; idea?: string | null; goal?: strin
 /** One save: what to set, what to add or take away by name, and the steps' operations. Nothing else changes. */
 export interface PlanChange { set?: PlanFields; add?: { constraints?: readonly string[]; links?: readonly PlanLink[] }; remove?: { constraints?: readonly string[]; links?: readonly string[] }; steps?: readonly StepOp[] }
 /** what makes a version: everything but the version's own fields */
-const content = (m: Plan): string => JSON.stringify({ ...m, version: 0, updatedAt: 0, by: '', summary: '' });
+/** the same text whatever the order of the keys: a restart that builds the record in another order is no new version */
+const canon = (v: unknown): unknown => (Array.isArray(v) ? v.map(canon) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).sort(([x], [y]) => x.localeCompare(y)).map(([k, x]) => [k, canon(x)])) : v);
+const content = (m: Plan): string => JSON.stringify(canon({ ...m, version: 0, updatedAt: 0, by: '', summary: '' }));
 
 export class Plans {
   private maps = new Map<string, Plan>();
