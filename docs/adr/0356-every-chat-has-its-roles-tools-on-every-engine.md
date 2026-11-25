@@ -85,7 +85,8 @@ ripresa». Four failures were seen on 2026-11-25 (release fc55c02d), each traced
 - An ACP chat on a slow machine may be reloaded once when its first turn ends before its engine read the endpoint.
 - A user's own chat now also gets a panel for a database write, a production release or a cloud write, which before
   only the brain's rules could hold.
-- Known gaps: Claude's init `tools` is trusted as what it loaded; if it ever lists only part of the app's tools (deferred
+- Known gaps: a Strategist moved while its children are open keeps its plan on the old chat for good (as before this
+  ADR): the successor cannot revise it or reach those children. Claude's init `tools` is trusted as what it loaded; if it ever lists only part of the app's tools (deferred
   ones), every Claude chat would be reloaded once: to confirm on a real PC. agy drops tools inside its own process, so the app cannot see that drop; it relies on the budget, the
   fallback command and the JSON report. Real-PC checks on every installed engine are still to do: after start, after
   resume, after an engine change, and in a session over 250k tokens.
