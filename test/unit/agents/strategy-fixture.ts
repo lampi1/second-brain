@@ -65,7 +65,7 @@ export function fixture(limits: Partial<DelegationSettings> = {}, roles?: () => 
   return { m, dir, starts, sinks, sent, answers, call, root, task };
 }
 
-export const STEPS3 = [{ title: 'Trovo dove si calcola lo sconto', role: 'scout' }, { title: 'Applico lo sconto', role: 'artisan' }, { title: 'Scrivo il riepilogo' }];
+export const STEPS3 = [{ title: 'Trovo dove si calcola lo sconto', role: 'scout', after: [] }, { title: 'Applico lo sconto', role: 'artisan', after: [1] }, { title: 'Scrivo il riepilogo', after: [2] }];
 /** An ordinary plan proposal. Its doubts are listed: none is open. */
 export const PLAN = { steps: STEPS3, doneWhen: 'I test passano', doubts: [] };
 export const planOf = (f: ReturnType<typeof fixture>, id: string) => f.m.list().find(c => c.id === id)!.plan!;

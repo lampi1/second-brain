@@ -34,14 +34,13 @@ import { workflowState } from './store/workflows';
 import { engineLabel } from './lib/engines';
 import {
   askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
-  openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, callQuestions, setQuestionsAside, setChatExpanded, collapseAllChats, setTreeCollapsed, setBrowserOpen, setAgentView, setFullOrch, setMapsFull, setViewer, type Place,type BrainPageId,
+  openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, callQuestions, setQuestionsAside, setChatExpanded, collapseAllChats, setTreeCollapsed, setBrowserOpen, setAgentView, setFullOrch, setViewer, type Place,type BrainPageId,
 } from './store/ui';
 import { currentEntry, pushEntry, stepEntry, type Shot, type ViewerEntry } from './lib/viewer-stack';
 import { applyViewPrefs } from './lib/view-prefs';
 import { importFound } from './lib/recorder';
 import { errText } from './lib/ipc-error';
-import { workPlace } from './lib/work-maps';
-import { workMapOfChat } from './store/work-maps';
+import { planOfChat } from './store/plans';
 
 /** The Orchestrator's id (the right column), null while there is none. */
 export const orchestratorId = (): string | null => orchestratorIdOf(app.get());
@@ -170,29 +169,24 @@ export function placeOf(target: string): Place | null {
   return null;
 }
 
-/** The project maps (ADR 0276; the owner: «mi piace che rimanga la chat dell'orchestrator a destra»): the Mappa → Progetti
- *  page, beside the Orchestrator's column; opened by the user it starts full screen (ADR 0307) and Esc leaves it beside
- *  the column; at a project or a system inside it, else where the user left it. */
-export function openMaps(arg?: string | null, opts: { full?: boolean } = {}): void {
-  const at = arg ?? ui.get().mapsArg;
+/** The plans' page (ADR 0359; Ctrl+Shift+S): the list, or the plan last on screen. */
+export function openPlans(): void {
   if (ui.get().modal) closeModal();
-  // opened by the user: full screen (ADR 0307); opened by the Orchestrator while they talk: beside its column
-  setMapsFull(opts.full ?? true);
-  go({ page: 'collegamenti', arg: at ? `progetti/${at}` : 'progetti' });
+  go({ page: 'piani' });
 }
 
-/** The work maps (ADR 0343): the list, or one map. */
-export function openWorkMap(id: string | null): void {
+/** The plans (ADR 0359): the list, or one plan. */
+export function openPlan(id: string | null): void {
   if (ui.get().modal) closeModal();
-  go({ page: 'collegamenti', arg: workPlace(id) });
+  go({ page: 'piani', ...(id ? { arg: id } : {}) });
 }
 /** The map of a chat's job; with none, the list and why. */
-export async function openWorkMapOf(chatId: string): Promise<void> {
+export async function openPlanOf(chatId: string): Promise<void> {
   try {
-    const m = await workMapOfChat(chatId);
-    if (!m) toast(t('wm.none'), 'info');
-    openWorkMap(m?.id ?? null);
-  } catch (e) { toast(t('wm.failed', { why: errText(e) }), 'err'); }
+    const m = await planOfChat(chatId);
+    if (!m) toast(t('plans.none'), 'info');
+    openPlan(m?.id ?? null);
+  } catch (e) { toast(t('plans.failed', { why: errText(e) }), 'err'); }
 }
 
 /** onNavigate of the brain pages and of the map: every move goes through the history. */
@@ -749,8 +743,7 @@ export function uiCommand(cmd: EventMap['ui:command']): void {
     case 'back': back(); break;
     case 'forward': forward(); break;
     case 'palette': openModal('palette'); break;
-    case 'maps': openMaps(v || null, { full: false }); break; // app_project_map open: the map at <project>/<system>, beside the Orchestrator (ADR 0276)
-    case 'workMap': void openWorkMapOf(v); break; // a Strategist just proposed its plan (projectmap/service.ts): the map of its job (ADR 0343)
+    case 'plan': void openPlanOf(v); break; // a Strategist just proposed its plan (plans/service.ts): its plan, on the Piani page (ADR 0361)
     case 'next': nextThing(); break;
     case 'clock': freezeClock(Number(v)); break;
     case 'layout': setReporting(v !== 'off'); break;

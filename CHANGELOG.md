@@ -6,6 +6,12 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- Plans (page «Piani», ADR 0363): one concept replaces the project maps and the work maps. A plan has its goal, why, project,
+  steps with their true state and proof, the percentage done, the steps that run together side by side, doubts and decisions,
+  chats and versions; closing a plan or losing a chat never changes a step; every save is a version and changes only what it
+  names; delete goes to the trash with a one-click restore; «Riprendi» never opens a second Strategist. One tool, `plans`,
+  for the Orchestrator and the Strategists. The old maps become plans at the first start, with a backup and fingerprints.
+  The 3D brain map keeps its own menu entry; «Collegamenti» holds the links and notes.
 - One order of the engines for every role (Settings → Engines), a threshold per engine, an explicit exception per role, the
   engine in error passed over, a clear warning when every plan is spent, the reason on every chat. A configuration change
   the app does not apply stays «da applicare» on its own panel; a yes that names the change counts whatever news lands
@@ -305,6 +311,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   terminal routines.
 
 ### Removed
+- The project maps and the work maps, with app_project_map and project_map_* (the plans replace them).
 - Project maps: the strip of a plan's steps over the drawing («insieme», the step cards, «Chiudi i passi»). The plan is
   told in the side panel; one line over the drawing stays only while a plan waits for «Approva e parti» (ADR 0326).
 - Routines left the app: no Routine page, no `app_routine_*` tools for the Orchestrator, no scheduled requests

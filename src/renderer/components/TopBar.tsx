@@ -1,4 +1,4 @@
-// The app's top bar, kept to what is used all the time (ADR 0287): history, the project maps, search, ONE usage figure
+// The app's top bar, kept to what is used all the time (ADR 0287): history, the plans, search, ONE usage figure
 // (today's spend and the plan window; the rest on click: UsageBar.tsx), «Da rispondere», «Ferma tutti», the bell and one
 // menu (the gear). Everything used now and then lives in that menu: a new browser, «Manutenzione» (ADR 0132), the
 // language (ADR 0120), the engines' sign-in state with a switch each to turn them on and off (ADR 0347), the environment credentials, the shortcuts, the settings. What is out
@@ -28,7 +28,7 @@ import { UsageBar } from './UsageBar';
 import { SystemLoad } from './SystemLoad';
 import { ConnectorsChip } from './ConnectorsChip';
 import { SyncStatus } from './SyncStatus';
-import { MapsButton } from './MapsButton';
+import { PlansButton } from './PlansButton';
 import { MaintenanceButton } from './brain-model/MaintenanceButton';
 import { IconButton, Keys, MenuItem, MenuLabel, MenuSep, Popover } from './ui';
 import '../styles/settings.css';
@@ -214,7 +214,7 @@ export function TopBar() {
       {/* the mark only: the name and the version sit in its tooltip, the room went to the bar's actions (the user, 2026-10-12) */}
       <div className="brand" aria-label={version ? `second-brain v${version}` : 'second-brain'} data-tip={version ? `second-brain · v${version}` : 'second-brain'} data-testid="app-version"><span className="brand-mark" aria-hidden="true" /></div>
       <HistoryNav />
-      <MapsButton />
+      <PlansButton />
       <button type="button" className="search" onClick={() => openModal('palette')} data-testid="topbar-search" aria-label={auditText('audit.TopBar.searchChatsPagesAndCommandsCtrl')}>
         <IconSearch size={14} /><span className="search-text">{auditText('audit.TopBar.searchChatsIdeasOrACommand')}</span><Keys combo="Ctrl+K" />
       </button>

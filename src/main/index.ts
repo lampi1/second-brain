@@ -213,7 +213,7 @@ app.whenReady().then(async () => {
     userData: app.getPath('userData'),
     brainRoot: () => (demo ? demoLibraryBrain : s.brain.info().brainRoot),
     chats: () => s.chats.list(),
-    projectRoots: () => (s.projectMaps?.roots() ?? []).filter((r): r is string => typeof r === 'string'),
+    projectRoots: () => [],
     thumbnail: nativeThumb(nativeImage),
     // the demo (and its e2e) never starts a program of the system
     openPath: demo ? async () => '' : file => shell.openPath(file),

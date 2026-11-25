@@ -107,7 +107,6 @@ export const treeIt = {
   'tree.plan.title': 'Piano',
   'tree.plan.steps': (p: { n: number }) => `${p.n} step`,
   'tree.plan.progress': (p: { done: number; total: number }) => `${p.done} di ${p.total} passaggi conclusi`,
-  'tree.plan.resultBlocked': 'risultato non ottenuto',
   'tree.plan.partial': 'risultato parziale',
   'tree.plan.blocked': 'bloccato',
   'tree.plan.inWindow': 'La domanda è qui sotto, tra quelle che aspettano te.',
@@ -115,6 +114,6 @@ export const treeIt = {
   'tree.plan.ready': 'Piano pronto: lo approvi?',
   // the plan to approve in the questions window, its row and its card (PlanAskCard.tsx, ADR 0343)
   'tree.plan.ask.kicker': 'Piano da approvare',
-  'tree.plan.ask.onMap': 'Si legge e si approva sulla sua mappa.',
+  'tree.plan.ask.inPlan': 'Si legge e si approva nel suo piano.',
   'tree.plan.ask.label': (p: { chat: string }) => `Piano da approvare di ${p.chat}`,
 };

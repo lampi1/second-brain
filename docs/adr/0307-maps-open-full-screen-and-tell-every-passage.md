@@ -1,6 +1,6 @@
 # ADR 0307 · The maps open full screen, tell every step and every passage, and are redrawn from a button
 
-Date: 2026-11-14 · Status: accepted (owner, 2026-11-14: «le mappe quando le apro le voglio di default full screen, e
+Date: 2026-11-14 · Status: superseded by ADR 0363 (the plans replace the maps) · it was: accepted (owner, 2026-11-14: «le mappe quando le apro le voglio di default full screen, e
 voglio che si capisca bene ogni passaggio e vorrei anche poterle aggiornare da un tasto volendo, secondo me hanno un
 gran potenziale ma il contenuto testuale non è molto dettagliato») · Builds on: ADR 0271, ADR 0275, ADR 0276, ADR 0302 ·
 Amends: ADR 0276 (where the map opens when the user opens it) · Amended by: ADR 0316 (the side tells rules, keeps, size,

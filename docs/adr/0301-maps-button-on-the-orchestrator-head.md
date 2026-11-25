@@ -1,6 +1,6 @@
 # ADR 0301 · The project maps button is back on the Orchestrator's head
 
-Date: 2026-11-13 · Status: accepted (owner, 2026-11-13: «vorrei anche che le mappe si aprissero dal pulsante
+Date: 2026-11-13 · Status: superseded by ADR 0363 (the plans replace the maps) · it was: accepted (owner, 2026-11-13: «vorrei anche che le mappe si aprissero dal pulsante
 dell'orchestrator è sparito non capisco il perchè») · Amends: ADR 0287 (the quiet top bar) · Builds on: ADR 0275,
 ADR 0276
 

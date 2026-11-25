@@ -3,6 +3,7 @@ export const brainPagesIt = {
   // index.tsx - brain page labels
   'brainPages.nav.home': 'Grindhouse',
   'brainPages.nav.dashboard': 'Dashboard',
+  'brainPages.nav.mappa3d': 'Mappa 3D',
   'brainPages.nav.scacchi': 'Scacchi',
   'brainPages.nav.registrazioni': 'Registrazioni',
   'brainPages.registrazioni.subtitle': 'Le call registrate (audio del PC + microfono) e i file importati, trascritti sul PC a zero token: «Registra call», la trascrizione Tu/Altri, «Chiedi all’Orchestrator», «Trovate sul PC».',
@@ -15,7 +16,8 @@ export const brainPagesIt = {
   'brainPages.nav.skill': 'Skill',
   'brainPages.nav.impostazioni': 'Impostazioni',
   'brainPages.nav.memoria': 'Memoria',
-  'brainPages.nav.collegamenti': 'Mappa',
+  'brainPages.nav.piani': 'Piani',
+  'brainPages.nav.collegamenti': 'Collegamenti',
 
   // Esplora.tsx
 

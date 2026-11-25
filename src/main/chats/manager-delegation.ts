@@ -94,7 +94,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     // the parent Strategist's step for this child: done once every chat of the step reported done (ADR 0108)
     if (parent?.s.plan && (!run?.parentRunId || run.parentRunId === parent.s.run?.runId)) {
       // a sibling gone without a result (closed by the user) counts as not done: the step shows blocked, never stuck
-      const next = afterReport(parent.s.plan, chatId, id => this.stepOutcome(parent, id), at);
+      const next = afterReport(parent.s.plan, chatId, id => this.stepReport(parent, id), at);
       if (next !== parent.s.plan) { parent.s.plan = next; this.persist(); }
     }
     if (parent) {

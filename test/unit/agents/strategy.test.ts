@@ -15,8 +15,8 @@ import { ChatStore } from '../../../src/main/chats/store';
 import { CoordinationStore } from '../../../src/main/coordination/store';
 import { Workflows } from '../../../src/main/workflows/service';
 import { digest } from '../../../src/main/appctl/digest';
-import { stepPresetOf } from '../../../src/main/agents/strategy-tools';
-import { afterChatsEnded, finishPlan, afterReport, isPlanApproval, checkProposal, checkRevision, parallelSplit, delegationGate, proposalGate, ENOUGH_QUESTIONS, PLAN_APPROVED, planWaves, readPlan, STRATEGY_FLOW, stopsQuestions, withDelegated, withStep, type StrategyPlan } from '../../../src/shared/strategy';
+import { turnsOf } from '../../../src/shared/plan-steps';
+import { isPlanApproval, checkProposal, delegationGate, proposalGate, ENOUGH_QUESTIONS, PLAN_APPROVED, readPlan, STRATEGY_FLOW, stopsQuestions, type StrategyPlan } from '../../../src/shared/strategy';
 
 import { answerPanel, decide, fixture, managers, PLAN, planOf, STEPS3 } from './strategy-fixture';
 
@@ -44,7 +44,7 @@ async function expectUnconfirmedPlan(f: ReturnType<typeof fixture>, chatId: stri
 describe('a Strategist\'s plan with the user', () => {
   it('accepts the original plan after a workflow link while retaining its original job scope', async () => {
     const f = fixture(), s = await f.root('strategist');
-    const plan = f.m.planPropose(s.id, [{ title: 'Existing scoped work', state: 'todo' }]);
+    const plan = f.m.planPropose(s.id, [{ id: 's1', title: 'Existing scoped work', state: 'todo' }]);
     const store = new CoordinationStore(path.join(f.dir, 'app.db'));
     try {
       const original = store.original(s.id, `plan:${plan.at}`)!;
@@ -61,8 +61,8 @@ describe('a Strategist\'s plan with the user', () => {
   });
   it('cancels superseded plan A after B approval and a database restart', async () => {
     const f = fixture(), s = await f.root('strategist');
-    const a = f.m.planPropose(s.id, [{ title: 'Plan A', state: 'todo' }]);
-    const b = f.m.planPropose(s.id, [{ title: 'Plan B', state: 'todo' }]);
+    const a = f.m.planPropose(s.id, [{ id: 's1', title: 'Plan A', state: 'todo' }]);
+    const b = f.m.planPropose(s.id, [{ id: 's1', title: 'Plan B', state: 'todo' }]);
     await f.m.planDecide(s.id, 'approve', b.at);
     await f.m.shutdown();
     const store = new CoordinationStore(path.join(f.dir, 'app.db'));
@@ -74,7 +74,7 @@ describe('a Strategist\'s plan with the user', () => {
   });
   it('records night plan synchronous completion without a transport acknowledgement in list and digest', async () => {
     const f = fixture({}, undefined, undefined, {}, [], true), s = await f.root('strategist');
-    const plan = f.m.planPropose(s.id, [{ title: 'Night plan', state: 'todo' }]);
+    const plan = f.m.planPropose(s.id, [{ id: 's1', title: 'Night plan', state: 'todo' }]);
     const store = new CoordinationStore(path.join(f.dir, 'app.db'));
     try {
       const request = store.original(s.id, `plan:${plan.at}`)!;
@@ -89,7 +89,7 @@ describe('a Strategist\'s plan with the user', () => {
     const checkpoint = vi.spyOn(ChatStore.prototype, 'checkpoint').mockImplementationOnce(() => { throw new Error('Checkpoint failed'); });
     const store = new CoordinationStore(path.join(f.dir, 'app.db'));
     try {
-      expect(() => f.m.planPropose(s.id, [{ title: 'Night plan', state: 'todo' }])).toThrow('Checkpoint failed');
+      expect(() => f.m.planPropose(s.id, [{ id: 's1', title: 'Night plan', state: 'todo' }])).toThrow('Checkpoint failed');
       const request = store.requests().find(r => r.kind === 'plan')!;
       expect(request.state).toBe('accepted');
       expect(request.delivery).toBeUndefined();
@@ -182,8 +182,8 @@ describe('a Strategist\'s plan with the user', () => {
     const s = await f.root('strategist');
     await answerPanel(f, s.id, 'Vuoi aggiungere vincoli?', ENOUGH_QUESTIONS);
     await expect(f.call('agent_delegate', s.id, { tasks: [f.task('scout', 'Ordini · Dove')] })).rejects.toThrow(/not approved your plan/);
-    await expect(f.call('plan_propose', s.id, { steps: [] })).rejects.toThrow(/1 to 8/);
-    await expect(f.call('plan_propose', s.id, { steps: [{ title: 'x', role: 'orchestrator' }] })).rejects.toThrow(/work roles/);
+    await expect(f.call('plan_propose', s.id, { steps: [] })).rejects.toThrow(/1 to 40/);
+    await expect(f.call('plan_propose', s.id, { steps: [{ after: [], title: 'x', role: 'orchestrator' }] })).rejects.toThrow(/work roles/);
     const out = await f.call('plan_propose', s.id, PLAN);
     expect(out).toMatchObject({ shown: true, steps: 3 });
     expect(planOf(f, s.id)).toMatchObject({ phase: 'proposed', doneWhen: 'I test passano', steps: [{ title: 'Trovo dove si calcola lo sconto', role: 'scout', state: 'todo' }, { role: 'artisan' }, { title: 'Scrivo il riepilogo' }] });
@@ -226,8 +226,8 @@ describe('a Strategist\'s plan with the user', () => {
     f.sinks.get(s.id)!.pending({ id: 'q1', type: 'question', tool: 'AskUserQuestion', title: q.question, detail: '', input: {}, questions: [q], at: 1 });
     await f.m.answer(s.id, 'q1', { kind: 'question', answers: { [q.question]: ENOUGH_QUESTIONS } });
     expect(planOf(f, s.id)).toMatchObject({ enough: true, clarified: [] });
-    await f.call('plan_propose', s.id, { steps: [{ title: 'Trovo', role: 'scout', detail: '  carrello,   ordine e reso ' }, STEPS3[1]] });
-    expect(planOf(f, s.id)).toMatchObject({ phase: 'proposed', enough: true, steps: [{ title: 'Trovo', detail: 'carrello, ordine e reso' }, { title: 'Applico lo sconto' }] });
+    await f.call('plan_propose', s.id, { steps: [{ after: [], title: 'Trovo', role: 'scout', detail: '  carrello,   ordine e reso ' }, { ...STEPS3[1], after: [1] }] });
+    expect(planOf(f, s.id)).toMatchObject({ phase: 'proposed', enough: true, steps: [{ id: 's1', title: 'Trovo', detail: 'carrello, ordine e reso' }, { id: 's2', after: ['s1'], title: 'Applico lo sconto' }] });
     // a change asked by the user: the new proposal needs no reason
     await decide(f, s.id, 'change', 'Aggiungi i test');
     await f.call('plan_propose', s.id, { steps: STEPS3 });
@@ -246,47 +246,7 @@ describe('a Strategist\'s plan with the user', () => {
     expect(f.m.list().filter(c => c.parentId === s.id)).toEqual([]);
   });
 
-  it('a delegated step is under way, done once its children reported done, blocked when one did not; plan_update moves its own steps', async () => {
-    const f = fixture();
-    const s = await f.root('strategist');
-    await answerPanel(f, s.id, 'Vuoi aggiungere vincoli?', ENOUGH_QUESTIONS);
-    await f.call('plan_propose', s.id, PLAN);
-    await decide(f, s.id, 'approve');
-    await expect(f.call('agent_delegate', s.id, { tasks: [{ ...f.task('scout', 'Ordini · Dove'), step: 4 }] })).rejects.toThrow(/1 to 3/);
-    await f.call('agent_delegate', s.id, { tasks: [{ ...f.task('scout', 'Ordini · Dove'), step: 1 }, { ...f.task('scout', 'Resi · Dove'), step: 1 }, { ...f.task('artisan', 'Ordini · Sconto'), step: 2 }] });
-    const kids = f.m.list().filter(c => c.parentId === s.id);
-    let plan = planOf(f, s.id);
-    expect(plan.steps.map(x => x.state)).toEqual(['now', 'now', 'todo']);
-    expect(plan.steps[0]!.chatIds).toEqual([kids[0]!.id, kids[1]!.id]);
-    expect(plan.steps[0]!.startedAt).toBeGreaterThan(0);
-    const report = (id: string, outcome: string) => f.call('agent_report', id, { outcome, summary: 'ok', output: 'o', doneWhen: [{ criterion: 'criterion A', met: outcome === 'done' }] });
-    await report(kids[0]!.id, 'done');
-    expect(planOf(f, s.id).steps[0]!.state).toBe('now'); // its sibling still works
-    await report(kids[1]!.id, 'done');
-    plan = planOf(f, s.id);
-    expect(plan.steps[0]).toMatchObject({ state: 'done' });
-    expect(plan.steps[0]!.endedAt).toBeGreaterThan(0);
-    await report(kids[2]!.id, 'blocked');
-    expect(planOf(f, s.id).steps[1]!.state).toBe('blocked');
-    await f.call('plan_update', s.id, { step: 2, state: 'done' });
-    await expect(f.call('plan_update', s.id, { step: 3, state: 'finished' })).rejects.toThrow(/state/);
-    const out = await f.call('plan_update', s.id, { step: 3, state: 'done' });
-    expect(out).toMatchObject({ done: 3, of: 3, finished: true });
-    expect(planOf(f, s.id).phase).toBe('done');
-  });
 
-  it('a step whose sibling chat was closed without a result shows blocked, never stuck', async () => {
-    const f = fixture();
-    const s = await f.root('strategist');
-    await answerPanel(f, s.id, 'Vuoi aggiungere vincoli?', ENOUGH_QUESTIONS);
-    await f.call('plan_propose', s.id, PLAN);
-    await decide(f, s.id, 'approve');
-    await f.call('agent_delegate', s.id, { tasks: [{ ...f.task('scout', 'Ordini · Dove'), step: 1 }, { ...f.task('scout', 'Resi · Dove'), step: 1 }] });
-    const kids = f.m.list().filter(c => c.parentId === s.id);
-    await f.m.close(kids[1]!.id);
-    await f.call('agent_report', kids[0]!.id, { outcome: 'done', summary: 'ok', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }] });
-    expect(planOf(f, s.id).steps[0]!.state).toBe('blocked');
-  });
 
   it('never reuses a proposal token when a change and reproposal share the same clock tick', async () => {
     const f = fixture();
@@ -356,20 +316,6 @@ describe('a Strategist\'s plan with the user', () => {
     await expectUnconfirmedPlan(f, s.id, pending, 'dispatching');
   });
 
-  it('a parallel group starts in one agent_delegate call: a split group is refused, the whole group starts (2026-11-23)', async () => {
-    const f = fixture();
-    const s = await f.root('strategist');
-    await answerPanel(f, s.id, 'Vuoi aggiungere vincoli?', ENOUGH_QUESTIONS);
-    await f.call('plan_propose', s.id, { steps: [{ title: 'Cerco negli ordini', role: 'scout' }, { title: 'Cerco nei resi', role: 'scout', par: true }, { title: 'Applico', role: 'artisan' }] });
-    await decide(f, s.id, 'approve');
-    await expect(f.call('agent_delegate', s.id, { tasks: [{ ...f.task('scout', 'Ordini · Dove'), step: 1 }] })).rejects.toThrow(/step 1 is in a parallel group with step 2.*one call/);
-    expect(f.m.list().filter(c => c.parentId === s.id)).toEqual([]);
-    await f.call('agent_delegate', s.id, { tasks: [{ ...f.task('scout', 'Ordini · Dove'), step: 1 }, { ...f.task('scout', 'Resi · Dove'), step: 2 }] });
-    expect(planOf(f, s.id).steps.map(x => x.state)).toEqual(['now', 'now', 'todo']);
-    // a sequential step after the group is its own call
-    await f.call('agent_delegate', s.id, { tasks: [{ ...f.task('artisan', 'Ordini · Sconto'), step: 3 }] });
-    expect(planOf(f, s.id).steps[2]!.state).toBe('now');
-  });
 
   it('«aggiorna il piano»: plan_propose revise keeps the started steps and their chats, re-checks the groups, and waits for the user again', async () => {
     const f = fixture();
@@ -382,18 +328,19 @@ describe('a Strategist\'s plan with the user', () => {
     // without revise a plan under way is never proposed again
     await expect(f.call('plan_propose', s.id, PLAN)).rejects.toThrow(/revise: true/);
     // a started step must come back with keep, a kept step only once, a step to do never beside a started one
-    await expect(f.call('plan_propose', s.id, { revise: true, steps: [{ title: 'Nuovo', role: 'scout' }] })).rejects.toThrow(/step 1 «Trovo dove si calcola lo sconto» \(now\) already started: pass it as \{ keep: 1 \}/);
+    await expect(f.call('plan_propose', s.id, { revise: true, steps: [{ after: [], title: 'Nuovo', role: 'scout' }] })).rejects.toThrow(/step 1 «Trovo dove si calcola lo sconto» \(now\) already started: pass it as \{ keep: 1 \}/);
     await expect(f.call('plan_propose', s.id, { revise: true, steps: [{ keep: 1 }, { keep: 1 }] })).rejects.toThrow(/kept twice/);
-    await expect(f.call('plan_propose', s.id, { revise: true, steps: [{ keep: 1 }, { title: 'Insieme', role: 'scout', par: true }] })).rejects.toThrow(/same parallel group as a started step/);
-    await expect(f.call('plan_propose', s.id, { revise: true, steps: [{ keep: 1, title: 'altro' }] })).rejects.toThrow(/only keep and par/);
-    const out = await f.call('plan_propose', s.id, { revise: true, steps: [{ keep: 1 }, { title: 'Applico lo sconto', role: 'artisan', preset: 'max' }, { title: 'Controllo il codice', role: 'sentinel', par: true }] });
+    // a step to do may wait for a started one; a number out of range or a circle is refused (ADR 0359)
+    await expect(f.call('plan_propose', s.id, { revise: true, steps: [{ keep: 1 }, { title: 'Insieme', role: 'scout', after: [5] }] })).rejects.toThrow(/after: the numbers of other steps/);
+    await expect(f.call('plan_propose', s.id, { revise: true, steps: [{ keep: 1, title: 'altro' }] })).rejects.toThrow(/only keep and after/);
+    const out = await f.call('plan_propose', s.id, { revise: true, steps: [{ keep: 1 }, { title: 'Applico lo sconto', role: 'artisan', preset: 'max', after: [1] }, { title: 'Controllo il codice', role: 'sentinel', after: [1] }] });
     expect(out).toMatchObject({ shown: true, steps: 3 });
     const plan = planOf(f, s.id);
     expect(plan.phase).toBe('proposed');
     expect(plan.doneWhen).toBe('I test passano'); // the old line when none is given
     expect(plan.steps[0]).toMatchObject({ title: 'Trovo dove si calcola lo sconto', role: 'scout', state: 'now', chatIds: [kid] });
     expect(plan.steps[1]).toMatchObject({ role: 'artisan', state: 'todo', preset: 'max' });
-    expect(planWaves(plan.steps)).toEqual([1, 2, 2]);
+    expect(turnsOf(plan.steps)).toEqual([1, 2, 2]);
     // the user's approval is required again
     await expect(f.call('agent_delegate', s.id, { tasks: [{ ...f.task('artisan', 'Ordini · Sconto'), step: 2 }] })).rejects.toThrow(/not approved|waits for the user/);
     await decide(f, s.id, 'approve');
@@ -423,11 +370,11 @@ describe('shared/strategy.ts', () => {
     for (const text of ['non approvo', 'approvo se aggiungi i test', '"approvo"', 'ok vai ma cambia il piano', 'approvo?', 'sì', 'ok']) expect(isPlanApproval(text)).toBe(false);
   });
   it('checks a proposal: steps, roles, lengths, unknown fields', () => {
-    expect(checkProposal({ steps: [{ title: '  Due   spazi ' }] }).steps).toEqual([{ title: 'Due spazi', state: 'todo' }]);
-    expect(() => checkProposal({ steps: Array(9).fill({ title: 'x' }) })).toThrow(/1 to 8/);
-    expect(() => checkProposal({ steps: [{ title: 'x'.repeat(121) }] })).toThrow(/120/);
-    expect(() => checkProposal({ steps: [{ title: 'x', owner: 'me' }] })).toThrow(/unknown field owner/);
-    expect(() => checkProposal({ steps: [{ title: 'x' }], doneWhen: 3 })).toThrow(/doneWhen/);
+    expect(checkProposal({ steps: [{ after: [], title: '  Due   spazi ' }] }).steps).toEqual([{ id: 's1', title: 'Due spazi', state: 'todo' }]);
+    expect(() => checkProposal({ steps: Array(41).fill({ title: 'x', after: [] }) })).toThrow(/1 to 40/);
+    expect(() => checkProposal({ steps: [{ after: [], title: 'x'.repeat(121) }] })).toThrow(/120/);
+    expect(() => checkProposal({ steps: [{ after: [], title: 'x', owner: 'me' }] })).toThrow(/unknown field owner/);
+    expect(() => checkProposal({ steps: [{ after: [], title: 'x' }], doneWhen: 3 })).toThrow(/doneWhen/);
   });
   it('one open doubt keeps the plan from being approved; his answer, the code or the brain closes it (ADR 0344)', async () => {
     const f = fixture(), s = await f.root('strategist');
@@ -477,9 +424,9 @@ describe('shared/strategy.ts', () => {
   });
   it('the manager itself refuses an open doubt: the tool is not the only gate', async () => {
     const f = fixture(), s = await f.root('strategist');
-    expect(() => f.m.planPropose(s.id, [{ title: 'x', state: 'todo' }], undefined, undefined, false, [{ text: 'Vale?', state: 'open' }])).toThrow(/dubbio aperto/);
+    expect(() => f.m.planPropose(s.id, [{ id: 's1', title: 'x', state: 'todo' }], undefined, false, [{ text: 'Vale?', state: 'open' }])).toThrow(/dubbio aperto/);
     // a plan saved as proposed with a doubt open (an older or damaged file) is never approved, by him, the phone or the night
-    const plan = f.m.planPropose(s.id, [{ title: 'x', state: 'todo' }]);
+    const plan = f.m.planPropose(s.id, [{ id: 's1', title: 'x', state: 'todo' }]);
     const rec = (f.m as unknown as { chats: Map<string, { s: { plan: StrategyPlan } }> }).chats.get(s.id)!;
     rec.s.plan = { ...plan, doubts: [{ text: 'Vale?', state: 'open' }] };
     await expect(f.m.planDecide(s.id, 'approve', plan.at)).rejects.toThrow(/dubbio aperto/);
@@ -495,17 +442,6 @@ describe('shared/strategy.ts', () => {
     await f.call('plan_propose', s.id, { steps: STEPS3, doubts: [{ ...doubt, by: 'choice', answer: 'No', source: 'più prudente' }] });
     expect(planOf(f, s.id).phase).toBe('running');
   });
-  it('a step marked par shares the turn of the step before it (ADR 0302)', () => {
-    const steps = checkProposal({ steps: [{ title: 'a' }, { title: 'b', par: true }, { title: 'c' }, { title: 'd', par: true }, { title: 'e', par: true }, { title: 'f', par: false }] }).steps;
-    expect(steps.map(x => x.par)).toEqual([undefined, true, undefined, true, true, undefined]);
-    expect(planWaves(steps)).toEqual([1, 1, 2, 2, 2, 3]);
-    expect(planWaves([{ par: true }, {}])).toEqual([1, 2]); // the first step has no step before it
-    expect(planWaves([])).toEqual([]);
-    expect(() => checkProposal({ steps: [{ title: 'x', par: 'yes' }] })).toThrow(/par/);
-    // saved and read back with its mark
-    const plan: StrategyPlan = { phase: 'running', at: 1, clarified: [], steps };
-    expect(readPlan(JSON.parse(JSON.stringify(plan)))!.steps.map(x => x.par)).toEqual([undefined, true, undefined, true, true, undefined]);
-  });
   it('the gates, pure: proposal before any question, delegation before the ok', () => {
     const asking: StrategyPlan = { phase: 'asking', at: 1, clarified: [], steps: [] };
     expect(proposalGate(asking, false)).toMatch(/refused: pass .doubts./);
@@ -520,13 +456,13 @@ describe('shared/strategy.ts', () => {
     for (const phase of ['asking', 'proposed', 'revising'] as const) expect(delegationGate({ ...asking, phase }, 'agent_assign_task')).toMatch(new RegExp(`^agent_assign_task refused: .*«${PLAN_APPROVED}»`));
   });
   it('a step may carry a short detail, checked and kept across a restart; the questions asked are counted', () => {
-    expect(() => checkProposal({ steps: [{ title: 'x', detail: 'y'.repeat(201) }] })).toThrow(/detail: at most 200/);
-    expect(() => checkProposal({ steps: [{ title: 'x', detail: 3 }] })).toThrow(/detail: required text/);
-    expect(checkProposal({ steps: [{ title: 'x', detail: '' }] }).steps[0]).toEqual({ title: 'x', state: 'todo' });
-    const p: StrategyPlan = { phase: 'proposed', at: 1, asked: 2, clarified: [], steps: checkProposal({ steps: [{ title: 'x', role: 'scout', detail: 'carrello e reso' }] }).steps };
+    expect(() => checkProposal({ steps: [{ after: [], title: 'x', detail: 'y'.repeat(401) }] })).toThrow(/detail: at most 400/);
+    expect(() => checkProposal({ steps: [{ after: [], title: 'x', detail: 3 }] })).toThrow(/detail: required text/);
+    expect(checkProposal({ steps: [{ after: [], title: 'x', detail: '' }] }).steps[0]).toEqual({ id: 's1', title: 'x', state: 'todo' });
+    const p: StrategyPlan = { phase: 'proposed', at: 1, asked: 2, clarified: [], steps: checkProposal({ steps: [{ after: [], title: 'x', role: 'scout', detail: 'carrello e reso' }] }).steps };
     expect(readPlan(JSON.parse(JSON.stringify(p)))).toEqual(p);
     expect(readPlan({ ...p, asked: -1 })).toBeNull();
-    expect(readPlan({ ...p, steps: [{ title: 'x', state: 'todo', detail: 'y'.repeat(201) }] })).toBeNull();
+    expect(readPlan({ ...p, steps: [{ id: 's1', title: 'x', state: 'todo', detail: 'y'.repeat(1201) }] })).toBeNull();
     const q = { question: 'Dove?' };
     expect(withClarified(p, [q], { 'Dove?': ENOUGH_QUESTIONS })).toMatchObject({ asked: 2, enough: true, clarified: [] });
     expect(withClarified(p, [q], { 'Dove?': 'basta domande, vai' })).toMatchObject({ asked: 2, enough: true, clarified: [] });
@@ -539,42 +475,6 @@ describe('shared/strategy.ts', () => {
     expect(withClarified(p, [yn], { 'Tocco solo il carrello?': 'Sì (consigliato)' }).clarified).toEqual([{ q: 'Tocco solo il carrello?', a: 'Sì' }]);
     expect(withClarified(p, [{ question: 'Dove?', header: 'Luogo' }], { 'Dove?': 'Milano' }).clarified).toEqual([{ q: 'Dove?', a: 'Milano' }]);
   });
-  it('moves steps: times kept, every step done ends the plan, a reopened step reopens it', () => {
-    let p = withStep(plan(), 0, 'now', 10);
-    expect(p.steps[0]).toMatchObject({ state: 'now', startedAt: 10 });
-    p = withStep(p, 0, 'done', 20);
-    expect(p.steps[0]).toMatchObject({ state: 'done', startedAt: 10, endedAt: 20 });
-    p = withStep(withStep(p, 1, 'done', 30), 2, 'done', 40);
-    expect(p.phase).toBe('done');
-    p = withStep(p, 2, 'now', 50);
-    expect(p.phase).toBe('running');
-    expect(p.steps[2]!.endedAt).toBeUndefined();
-  });
-  it('a report moves only the step that delegated the chat', () => {
-    const p = withDelegated(plan(), 1, ['a', 'b'], 5);
-    expect(afterReport(p, 'zz', () => 'done', 9)).toBe(p);
-    expect(afterReport(p, 'a', id => (id === 'a' ? 'done' : undefined), 9)).toBe(p);
-    expect(afterReport(p, 'a', id => (id === 'a' ? 'done' : 'partial'), 9).steps[1]).toMatchObject({ state: 'done', outcome: 'partial' });
-    expect(afterReport(p, 'a', () => 'done', 9).steps[1]!.state).toBe('done');
-  });
-  it('finishes execution with a partial result and preserves its quality across restart', () => {
-    const p: StrategyPlan = { phase: 'running', at: 1, clarified: [], steps: [{ title: 'Research', state: 'now', chatIds: ['a'] }] };
-    const done = afterReport(p, 'a', () => 'partial', 9);
-    expect(done.phase).toBe('done');
-    expect(done.steps[0]).toMatchObject({ state: 'done', outcome: 'partial', endedAt: 9 });
-    expect(readPlan(JSON.parse(JSON.stringify(done)))).toEqual(done);
-    expect(withStep(done, 0, 'now', 10).steps[0]?.outcome).toBeUndefined();
-    expect(readPlan({ ...done, steps: [{ ...done.steps[0], outcome: 'unknown' }] })).toBeNull();
-  });
-  it('a terminal parent report ends execution without claiming unfinished criteria were met', () => {
-    const p = plan();
-    p.steps[0] = { ...p.steps[0]!, state: 'done' };
-    p.steps[1] = { ...p.steps[1]!, state: 'blocked' };
-    const done = finishPlan(p, 20);
-    expect(done.phase).toBe('done');
-    expect(done.steps.map(s => [s.state, s.outcome])).toEqual([['done', 'done'], ['done', 'blocked'], ['done', 'partial']]);
-    expect(readPlan(done)).toEqual(done);
-  });
   it('keeps the latest 8 answers, cut to 120 characters', () => {
     let p = plan();
     for (let i = 0; i < 10; i++) p = withClarified(p, [{ question: `q${i}` }], { [`q${i}`]: i === 9 ? 'x'.repeat(200) : ['a', 'b'] });
@@ -582,98 +482,6 @@ describe('shared/strategy.ts', () => {
     expect(p.clarified[0]).toEqual({ q: 'q2', a: 'a, b' });
     expect(p.clarified[7]!.a).toHaveLength(120);
   });
-  it('an old saved plan (no preset, a parallel group) comes to the current standard with revise; a step never keeps a model (ADR 0346)', () => {
-    // a plan saved before 2026-11-23: no preset, a group of two with its first step done; one saved on 2026-11-23 had a
-    // model beside the preset: it is dropped when read
-    const saved = JSON.parse(JSON.stringify({ phase: 'running', at: 1, clarified: [], doneWhen: 'fatto', steps: [
-      { title: 'Cerco', role: 'scout', state: 'done', outcome: 'done', chatIds: ['c_1'], startedAt: 2, endedAt: 3, model: 'sonnet-x' },
-      { title: 'Cerco ancora', role: 'scout', state: 'todo', par: true },
-      { title: 'Applico', role: 'artisan', state: 'todo' },
-    ] }));
-    const old = readPlan(saved)!;
-    expect(old.steps.every(x => x.preset === undefined && !('model' in x))).toBe(true);
-    // the group now mixes a done step and one to do: it must be split
-    expect(() => checkRevision(old, { steps: [{ keep: 1 }, { keep: 2, par: true }, { keep: 3 }] })).toThrow(/same parallel group/);
-    const { steps, doneWhen } = checkRevision(old, { steps: [{ keep: 1 }, { keep: 2 }, { keep: 3 }] });
-    expect(doneWhen).toBe('fatto');
-    expect(steps[0]).toEqual({ title: 'Cerco', role: 'scout', state: 'done', outcome: 'done', chatIds: ['c_1'], startedAt: 2, endedAt: 3 });
-    expect(steps[1]!.par).toBeUndefined();
-    // the app fills the preset on every step, never a model: a started one from its chat, the others from the card
-    const of = stepPresetOf(id => id === 'c_1' ? { model: 'sonnet-x', run: { runId: 'r', presetChoice: { preset: 'min' } } } as never : id === 'me' ? { model: 'opus-x' } as never : undefined,
-      (_role, preset) => ({ preset: preset ?? 'base' }));
-    expect(steps.map(x => of('me', x))).toEqual(['min', 'base', 'base']);
-    expect(of('me', { title: 'Riepilogo', state: 'todo' })).toBeUndefined();
-    // saved and read back with them
-    const next: StrategyPlan = { ...old, phase: 'proposed', steps: steps.map(x => ({ ...x, preset: of('me', x)! })) };
-    expect(readPlan(JSON.parse(JSON.stringify(next)))).toEqual(next);
-    expect(planWaves(next.steps)).toEqual([1, 2, 3]);
-  });
-  it('parallelSplit: the steps of a group to do are named together, started steps and own steps aside', () => {
-    const p: StrategyPlan = { phase: 'running', at: 1, clarified: [], steps: [
-      { title: 'a', role: 'scout', state: 'todo' }, { title: 'b', role: 'scout', state: 'todo', par: true }, { title: 'c', state: 'todo', par: true }, { title: 'd', role: 'artisan', state: 'todo' },
-    ] };
-    expect(parallelSplit(p, [0])).toMatch(/step 1 is in a parallel group with step 2, and a parallel group starts in one call/);
-    expect(parallelSplit(p, [0, 1])).toBeNull(); // c is the Strategist's own
-    expect(parallelSplit(p, [3])).toBeNull();
-    expect(parallelSplit(p, [])).toBeNull();
-    expect(parallelSplit({ ...p, steps: p.steps.map((x, i) => i === 1 ? { ...x, state: 'now' as const } : x) }, [0])).toBeNull(); // reused first with agent_assign_task
-  });
-  it('the flow text: a group is parallel or sequential, checked on real resources, a Sentinel with reviewOf, «aggiorna il piano» with revise', () => {
-    expect(STRATEGY_FLOW).toMatch(/free worktree slots and env leases, test nodes, local stacks/);
-    expect(STRATEGY_FLOW).toMatch(/in one agent_delegate call/);
-    expect(STRATEGY_FLOW).toMatch(/one Sentinel with reviewOf/);
-    expect(STRATEGY_FLOW).toMatch(/«aggiorna il piano».*revise: true.*keep/s);
-    expect(STRATEGY_FLOW).not.toMatch(/possib|at most \d+ (children|at once)|parallel limit/i);
-  });
-  it('reads a saved plan only when it is whole', () => {
-    const p = withDelegated(plan(), 0, ['c_1'], 5);
-    expect(readPlan(JSON.parse(JSON.stringify(p)))).toEqual(p);
-    expect(readPlan({ ...p, phase: 'other' })).toBeNull();
-    expect(readPlan({ ...p, steps: [{ title: 'x', state: 'now', role: 'judge' }] })).toBeNull();
-    expect(readPlan({ ...p, steps: [{ title: 'x', state: 'now', chatIds: ['../x'] }] })).toBeNull();
-    expect(readPlan(null)).toBeNull();
-  });
 });
 
-// Reusing a conversation moves only the active plan association; previous run reports remain in the ledger.
-describe('a step whose chats ended without moving it (ADR 0342)', () => {
-  const p = (over: Partial<StrategyPlan> = {}): StrategyPlan => ({ phase: 'running', at: 1, clarified: [], steps: [{ title: 'Uno', state: 'now', chatIds: ['a', 'b'] }, { title: 'Due', state: 'now', chatIds: ['c'] }, { title: 'Tre', state: 'now' }, { title: 'Quattro', state: 'todo' }], ...over });
-  const gave = (o: Record<string, 'done' | 'partial' | 'blocked'>) => (id: string) => o[id];
-  it('ends with what they gave: all of them, or the step goes on', () => {
-    expect(afterChatsEnded(p(), gave({ a: 'done' }), 9)).toEqual(p());
-    const one = p();
-    expect(afterChatsEnded(one, gave({ a: 'done' }), 9)).toBe(one);
-    const next = afterChatsEnded(p(), gave({ a: 'done', b: 'blocked', c: 'partial' }), 9);
-    expect(next.steps).toMatchObject([{ state: 'blocked', outcome: 'blocked', endedAt: 9 }, { state: 'done', outcome: 'partial' }, { state: 'now' }, { state: 'todo' }]);
-  });
-  it('only the step of one chat when asked for it', () => {
-    expect(afterChatsEnded(p(), gave({ a: 'done', b: 'done', c: 'done' }), 9, 'c').steps.map(s => s.state)).toEqual(['now', 'done', 'now', 'todo']);
-  });
-  it('a chat open again takes its blocked step back; a step the Strategist blocked itself stays', () => {
-    const blocked = afterChatsEnded(p(), gave({ c: 'blocked' }), 9, 'c');
-    expect(blocked.steps[1]).toMatchObject({ state: 'blocked', outcome: 'blocked' });
-    expect(afterChatsEnded(blocked, gave({}), 10, 'c').steps[1]!.state).toBe('now');
-    const own = p({ steps: [{ title: 'Due', state: 'blocked', chatIds: ['c'] }] });
-    expect(afterChatsEnded(own, gave({}), 10, 'c')).toBe(own);
-  });
-  it('the approval under way and the user\'s stop are kept', () => {
-    expect(afterChatsEnded(p({ phase: 'proposed', at: 5, stopped: true }), gave({ c: 'blocked' }), 9)).toMatchObject({ phase: 'proposed', at: 5, stopped: true, steps: [{}, { state: 'blocked' }, {}, {}] });
-  });
-});
-
-describe('reused child plan steps', () => {
-  it('moves a reused child to the new step and reopens finished execution', () => {
-    const plan: StrategyPlan = {phase:'done',at:1,clarified:[],steps:[
-      {title:'Original',state:'done',outcome:'done',chatIds:['child']},
-      {title:'Follow-up',state:'done',outcome:'partial',endedAt:1},
-    ]};
-    const next=withDelegated(plan,1,['child'],2);
-    expect(next.phase).toBe('running');
-    expect(next.steps[0]).toMatchObject({state:'done',outcome:'done',chatIds:[]});
-    expect(next.steps[1]).toMatchObject({state:'now',chatIds:['child']});
-    expect(next.steps[1]?.endedAt).toBeUndefined();
-    expect(next.steps[1]?.outcome).toBeUndefined();
-    expect(afterReport(next,'child',()=> 'done',3).phase).toBe('done');
-  });
-});
 

@@ -26,7 +26,7 @@ import { now } from '../lib/clock';
 import {
   back, copyLink, currentLink, focusChat, reopenChat, focusRequest, focusTile, forward, go, nextThing, openLink, recentPlaces, stopAllAsk, stopFocused, toggleCenter, toggleFocusMode,
   toggleMaximize, toggleOrchestrator, askRenewOrchestrator, askClearOrchestrator, orchestratorId, newBrowser, newRequest,
-  openMaps } from '../actions';
+  openPlans } from '../actions';
 import {
   HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconLearn, IconChess, IconBranch, IconFile, IconBrain, IconChart, IconFocus, IconGlobe,
   IconHistory, IconKeyboard, IconLayers, IconLightbulb, IconLink, IconList, IconLogin, IconMap, IconMaximize, IconMic, IconPlus, IconQuestion, IconSearch, IconSettings, IconStop,
@@ -45,7 +45,7 @@ const PAGE_ICON: Record<BrainPageId, ReactNode> = {
   agenti: <IconLayers />,
   andamento: <IconChart />, script: <IconTerminal />, log: <IconList />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
   registrazioni: <IconMic />, impara: <IconLearn />, scacchi: <IconChess />,
-  memoria: <IconHistory />, collegamenti: <IconMap />,
+  memoria: <IconHistory />, piani: <IconTicket />, collegamenti: <IconMap />,
 };
 
 function buildCommands(): Cmd[] {
@@ -84,7 +84,7 @@ function buildCommands(): Cmd[] {
   const orchestrator = rid ? s.chats[rid] : undefined;
   const to = orchestrator && otherEngine(orchestrator.harness);
   const actions: Omit<Cmd, 'group'>[] = [
-    { id: 'maps', title: auditText('pm.mapsTitle'), sub: auditText('pm.mapsSub'), shortcut: 'Ctrl+Shift+S', icon: <IconMap />, run: () => openMaps(), text: 'mappe mappa progetti fili linee sistemi project maps' },
+    { id: 'plans', title: auditText('plans.title'), sub: auditText('plans.lead'), shortcut: 'Ctrl+Shift+S', icon: <IconTicket />, run: () => openPlans(), text: 'piani piano lavori idee passi plans' },
     { id: 'stato', title: auditText('cmp.palette.status'), sub: auditText('cmp.palette.statusSub'), icon: <IconList />, run: () => openModal('stato'), text: 'stato come siamo messi a che punto siamo pr' },
     { id: 'next', title: auditText('cmp.palette.next'), shortcut: 'Ctrl+J', icon: <IconBolt />, run: () => nextThing() },
     { id: 'new', title: auditText('cmp.palette.newChat'), shortcut: 'Ctrl+N', icon: <IconPlus />, run: () => newRequest() },

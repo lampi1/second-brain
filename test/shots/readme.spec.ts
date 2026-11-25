@@ -1,7 +1,7 @@
 // The README screenshots, generated from the frozen demo (SB_DEMO=1 SB_DEMO_FREEZE=1, the synthetic brain of
 // scripts/demo-brain.mjs) so they always show the current UI with fictional data only: English UI (SB_LANG=en), dark
 // theme, 1600x1000, saved as WebP (< 300 KB each) in docs/screenshots/: the whole window, one part of it, or two parts
-// side by side. The showcase (memory, agent-levels, brain-map, orchestrator-column, reactions, plan, work-maps), the app's own pages
+// side by side. The showcase (memory, agent-levels, brain-map, orchestrator-column, reactions, plan, plans), the app's own pages
 // (voice, log, recordings, quality, learn, news, costs, maintenance, chess) and the rest. Not part
 // of `npm run check`: run by `npm run shots` (its own Playwright config, playwright.shots.config.ts). The app runs hidden
 // (SB_HIDDEN, set by launch()). The 3D map needs WebGL: on a machine without a GPU set
@@ -154,14 +154,6 @@ test('README screenshots', async () => {
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('brain-map')).toHaveCount(0);
 
-  // 5. A project drawn in place of its code (Map → Projects, ADR 0271): systems, links, statuses, the agents at work
-  await goPage(page, 'collegamenti');
-  await page.getByTestId('bm-map-page').getByRole('button', { name: 'Projects', exact: true }).click();
-  await expect(page.getByTestId('pm-node-negozio')).toBeVisible();
-  await setSize(app, 2000, 1250); // room for the agents column beside the map
-  await expect(page.getByTestId('pm-node-negozio')).toBeVisible();
-  await save('project-map', page.getByTestId('pm-view'));
-  await setSize(app, W, H);
 
 });
 
@@ -279,21 +271,21 @@ test('README showcase: the Strategist\'s plan to approve on its map', async () =
   if (!(await page.getByTestId('tile-chat-tree-plan').count())) await demo('tree');
   await expect(page.getByTestId('tile-chat-tree-plan')).toBeVisible({ timeout: 15_000 });
   const at = Date.now();
-  const plan = { phase: 'proposed', at, asked: 2, map: 'alfa-shop', doneWhen: 'Order tests pass and the release notes are ready.',
+  const plan = { phase: 'proposed', at, asked: 2, doneWhen: 'Order tests pass and the release notes are ready.',
     steps: [
-      { title: 'Find where the discount is computed today', detail: 'cart, order and refund', role: 'scout', state: 'todo', on: 'ordini', preset: 'min' },
-      { title: 'Apply the % discount to the full price', detail: 'no double discount on offers', role: 'artisan', state: 'todo', on: 'ordini', preset: 'max' },
-      { title: 'Check that the order tests pass', role: 'sentinel', state: 'todo', on: 'ordini', preset: 'base' },
-      { title: 'Write the release notes', role: 'herald', state: 'todo', on: 'note-di-rilascio', par: true, preset: 'min' },
+      { id: 's1', title: 'Find where the discount is computed today', detail: 'cart, order and refund', role: 'scout', state: 'todo', preset: 'min' },
+      { id: 's2', after: ['s1'], title: 'Apply the % discount to the full price', detail: 'no double discount on offers', role: 'artisan', state: 'todo', preset: 'max' },
+      { id: 's3', after: ['s2'], title: 'Check that the order tests pass', role: 'sentinel', state: 'todo', preset: 'base' },
+      { id: 's4', after: ['s2'], title: 'Write the release notes', role: 'herald', state: 'todo', preset: 'min' },
     ],
     clarified: [{ q: 'Where', a: 'Cart, order and refund' }, { q: 'Offers', a: 'No, full price only' }] } as StrategyPlan;
   await demo('plan', 'tree-plan', plan);
   await goPage(page, 'collegamenti');
   await page.getByTestId('bm-map-page').getByRole('button', { name: 'Jobs', exact: true }).click();
-  await page.getByTestId('wm-group-wait').locator('.wm-row-main').first().click({ timeout: 15_000 });
-  const map = page.getByTestId('wm-map');
-  await expect(map.getByTestId('wm-do-approve')).toBeVisible({ timeout: 15_000 });
-  await map.getByTestId('wm-box-pick-2').click(); // a step told in the side panel
+  await page.getByTestId('pl-group-wait').locator('.pl-row-main').first().click({ timeout: 15_000 });
+  const map = page.getByTestId('pl-map');
+  await expect(map.getByTestId('pl-do-approve')).toBeVisible({ timeout: 15_000 });
+  await map.getByTestId('pl-box-pick-2').click(); // a step told in the side panel
   await save('plan', map);
 });
 
@@ -424,12 +416,12 @@ test('README screenshot: Artifacts', async () => {
 });
 
 // Last: its jobs are chats of the demo, which no other picture should show.
-test('README screenshot: the work maps', async () => {
+test('README screenshot: the plans', async () => {
   // Map › Jobs (ADR 0343): one map per Strategist job or idea, by status, what waits for the user on top
   await keepQuestionsAside(page);
-  await demo('workMaps');
+  await demo('plans');
   await goPage(page, 'collegamenti');
   await page.getByTestId('bm-map-page').getByRole('button', { name: 'Jobs', exact: true }).click();
-  await expect(page.getByTestId('wm-group-planned')).toBeVisible({ timeout: 30_000 });
-  await save('work-maps', await frameOf(page.getByTestId('bm-map-page')));
+  await expect(page.getByTestId('pl-group-planned')).toBeVisible({ timeout: 30_000 });
+  await save('plans', await frameOf(page.getByTestId('bm-map-page')));
 });

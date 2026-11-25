@@ -25,12 +25,10 @@ import { CommandRunner } from './run/runner';
 import { CommandAsks } from './run/asks';
 import { RunResults } from './run/results';
 import { precheckCommand } from './run/precheck';
-import { ProjectMapStore } from './projectmap/store';
-import { ProjectMaps } from './projectmap/service';
-import { chatMapTools } from './projectmap/tools';
-import { WorkMapStore } from './workmap/store';
-import { WorkMaps } from './workmap/service';
-import { strategistStarter } from './workmap/start';
+import { PlanStore } from './plans/store';
+import { migratePlans } from './plans/migrate';
+import { Plans } from './plans/service';
+import { strategistStarter } from './plans/start';
 import { OrchestratorWake } from './chats/orchestrator-wake';
 import { AppSourceService, cleanEnv, findNode } from './update/source';
 import { spawn } from 'node:child_process';
@@ -159,30 +157,23 @@ export function attachRunResults(ctx: Pick<Ctx, 'emitter'>, chats: Pick<ChatServ
   return results;
 }
 
-/** The project maps (ADR 0271): in the brain's projects/, bound to the chats by watching the events main sends to the
- *  page (the emitter tapped once more); the agents' tools on every chat's own endpoint when `addChatTools` is given. */
-export function attachProjectMaps(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Pick<ChatService, 'list' | 'items' | 'pending'>, brainRoot: () => string | null, addChatTools?: (tools: McpTool[]) => void, now?: () => number): ProjectMaps {
-  const maps = new ProjectMaps({ store: new ProjectMapStore(brainRoot), chats: () => chats.list(), items: id => chats.items(id), pending: () => chats.pending(),
-    emit: project => ctx.emitter.emit('projectmap:changed', { project }), show: chatId => ctx.emitter.emit('ui:command', { action: 'workMap', value: chatId }), stateFile: path.join(ctx.userData, 'project-map.json'), ...(now ? { now } : {}) });
-  const send = ctx.emitter.emit.bind(ctx.emitter);
-  ctx.emitter.emit = (ch, p) => { send(ch, p); maps.observe(ch, p); };
-  addChatTools?.(chatMapTools({ maps, titleOf: id => chats.list().find(c => c.id === id)?.title ?? null, cwdOf: id => chats.list().find(c => c.id === id)?.cwd ?? null }));
-  return maps;
-}
-
-/** The work maps (ADR 0342): one per Strategist job or idea, kept by the app from the chats' own events (the emitter
- *  tapped once more); in the app's data, so they outlive the chats and a restart. Their live status is read again once a
- *  minute until stop(); tellTo(wake) says who hears of a job stopped by itself. */
-export function attachWorkMaps(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: ChatService, projectMaps: ProjectMaps, brain: Pick<BrainService, 'info' | 'settings'>, now?: () => number): WorkMaps {
-  const folderOf = (project: string | undefined): string | null => (project ? projectMaps.view(project)?.map.root ?? null : null);
+/** The plans (ADR 0359): one per Strategist job or idea, kept by the app from the chats' own events (the emitter tapped once
+ *  more); in the app's data, so they outlive the chats and a restart. Their live status is read again once a minute until
+ *  stop(); tellTo(wake) says who hears of a job stopped by itself. */
+export function attachPlans(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: ChatService, brain: Pick<BrainService, 'info' | 'settings' | 'publish'>, now?: () => number): Plans {
+  // the old plans and plans become plans, once; the old files stay as they were (plans/migrate.ts)
+  const moved = migratePlans({ userData: ctx.userData, brainRoot: brain.info().brainRoot, ...(now ? { now } : {}), reportOf: id => {
+    const c = chats.list().find(x => x.id === id), r = c?.delegation?.result ?? (c?.run?.report && c.run.report.via === 'agent_report' ? c.run.report : null);
+    return r && c ? { outcome: r.outcome, summary: ('summary' in r ? String(r.summary) : '') || c.lastText || 'Report consegnato.', at: r.at } : null;
+  } });
+  if (moved.error) brain.publish([{ kind: 'plans-migration', title: 'Piani: la migrazione non è riuscita', detail: `${moved.error}. I dati vecchi sono intatti e riprovo al prossimo avvio.` }]);
+  else if (moved.report) brain.publish([{ kind: 'plans-migration', title: `Piani: ${moved.report.before.jobs + moved.report.before.projects + moved.report.before.folders} record diventano ${moved.report.after.plans} piani`, detail: `${moved.report.after.steps} passi, ${moved.report.after.check} da verificare (nessuna prova leggibile), ${moved.report.after.versions} versioni. Copia di sicurezza con impronte in backups/. I dati vecchi non sono toccati.` }]);
   const orchestrator = (): ChatSummary | undefined => chats.list().find(c => c.isOrchestrator && !c.closedAt);
-  const maps = new WorkMaps({ store: new WorkMapStore(path.join(ctx.userData, 'work-maps')), chats, emit: id => ctx.emitter.emit('workmap:changed', { id }),
-    projectsOf: c => projectMaps.projectsOf(c), projectNamed: name => projectMaps.resolve(name),
+  const maps = new Plans({ store: new PlanStore(path.join(ctx.userData, 'plans')), chats, emit: id => ctx.emitter.emit('plans:changed', { id }), show: chatId => ctx.emitter.emit('ui:command', { action: 'plan', value: chatId }),
     startStrategist: strategistStarter({ chats, harness: () => brain.settings().orchestratorChats.harness,
-      folderOf: m => [m.owner?.chatId, ...(m.past ?? []).slice().reverse()].map(id => id && chats.list().find(c => c.id === id)?.cwd).find(f => f && fs.existsSync(f)) ?? [m.project, ...m.touches].map(folderOf).find(f => f && fs.existsSync(f)) ?? orchestrator()?.cwd ?? brain.info().brainRoot }), ...(now ? { now } : {}) });
+      folderOf: m => [m.owner?.chatId, ...(m.past ?? []).slice().reverse()].map(id => id && chats.list().find(c => c.id === id)?.cwd).find(f => f && fs.existsSync(f)) ?? orchestrator()?.cwd ?? brain.info().brainRoot }), ...(now ? { now } : {}) });
   const send = ctx.emitter.emit.bind(ctx.emitter);
   ctx.emitter.emit = (ch, p) => { send(ch, p); maps.observe(ch, p); };
-  projectMaps.jobsOf = project => maps.touching(project);
   maps.adopt();
   maps.start();
   return maps;

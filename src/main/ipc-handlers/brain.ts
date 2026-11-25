@@ -3,29 +3,32 @@
 // in ipc.ts keeps the set complete); each channel's shape is in src/shared/contract/*.ts.
 import type { HandlerContext, HandlersOf } from './context';
 
-/** the work maps' actions: the id and the text checked, the service says what a map allows now */
+/** the plans' actions: the id and the text checked, the service says what a map allows now */
 const jobId = (a: { id?: unknown } | undefined): string => String(a?.id ?? '').slice(0, 40);
 
-export function brainHandlers({ s, emitter, research, requireReviewRoot, search, proposals }: HandlerContext): HandlersOf<'projectmap' | 'workmap' | 'brain' | 'brainmodel' | 'queries' | 'memory' | 'learning' | 'proposals' | 'maintenance' | 'morning' | 'compare' | 'learn' | 'skills'> {
-  const jobs = () => { if (!s.workMaps) throw new Error('Qui le mappe dei lavori non ci sono.'); return s.workMaps; };
+export function brainHandlers({ s, emitter, research, requireReviewRoot, search, proposals }: HandlerContext): HandlersOf<'plans' | 'brain' | 'brainmodel' | 'queries' | 'memory' | 'learning' | 'proposals' | 'maintenance' | 'morning' | 'compare' | 'learn' | 'skills'> {
+  const jobs = () => { if (!s.plans) throw new Error('Qui i piani non ci sono.'); return s.plans; };
   return {
-    // the project maps (ADR 0271): read only from the page; agents draw and update them through their MCP tools
-    'projectmap:list': () => s.projectMaps?.list() ?? [],
-    'projectmap:view': a => s.projectMaps?.view(String(a?.project ?? ''), typeof a?.version === 'number' ? a.version : undefined) ?? null,
-    'projectmap:size': async a => (s.projectMaps ? s.projectMaps.size(String(a?.project ?? '').slice(0, 64), String(a?.element ?? '').slice(0, 64)) : null),
-    // the work maps (ADR 0342): one per Strategist job or idea; the app keeps them, the user decides here
-    'workmap:list': a => s.workMaps?.list({ archived: a?.archived === true, ...(typeof a?.query === 'string' ? { query: a.query.slice(0, 200) } : {}) }) ?? [],
-    'workmap:view': a => s.workMaps?.view(jobId(a), typeof a?.version === 'number' ? a.version : undefined) ?? null,
-    'workmap:idea': a => jobs().idea(a),
-    'workmap:approve': a => jobs().act(jobId(a), 'approve', { at: a?.at }),
-    'workmap:keep': a => jobs().act(jobId(a), 'keep', { at: a?.at }),
-    'workmap:start': a => jobs().act(jobId(a), 'start'),
-    'workmap:stop': a => jobs().act(jobId(a), 'stop'),
-    'workmap:resume': a => jobs().act(jobId(a), 'resume'),
-    'workmap:replan': a => jobs().act(jobId(a), 'replan', { text: typeof a?.text === 'string' ? a.text : '' }),
-    'workmap:archive': a => jobs().act(jobId(a), 'archive'),
-    'workmap:reopen': a => jobs().act(jobId(a), 'reopen'),
-    'workmap:seen': a => jobs().act(jobId(a), 'seen'),
+    // the plans (ADR 0342): one per Strategist job or idea; the app keeps them, the user decides here
+    'plans:list': a => s.plans?.list({ ...(a?.archived === true ? { archived: true } : {}), ...(a?.trash === true ? { trash: true } : {}), ...(typeof a?.query === 'string' ? { query: a.query.slice(0, 200) } : {}) }) ?? [],
+    'plans:view': a => s.plans?.view(jobId(a), typeof a?.version === 'number' ? a.version : undefined) ?? null,
+    'plans:idea': a => jobs().idea(a),
+    'plans:approve': a => jobs().act(jobId(a), 'approve', { at: a?.at }),
+    'plans:keep': a => jobs().act(jobId(a), 'keep', { at: a?.at }),
+    'plans:start': a => jobs().act(jobId(a), 'start'),
+    'plans:stop': a => jobs().act(jobId(a), 'stop'),
+    'plans:resume': a => jobs().act(jobId(a), 'resume', { ...(typeof a?.cwd === 'string' ? { cwd: a.cwd } : {}) }),
+    'plans:replan': a => jobs().act(jobId(a), 'replan', { text: typeof a?.text === 'string' ? a.text : '' }),
+    'plans:archive': a => jobs().act(jobId(a), 'archive'),
+    'plans:reopen': a => jobs().act(jobId(a), 'reopen'),
+    'plans:seen': a => jobs().act(jobId(a), 'seen'),
+    'plans:delete': a => jobs().act(jobId(a), 'delete'),
+    'plans:restore': a => jobs().act(jobId(a), 'restore'),
+    'plans:change': a => jobs().change(jobId(a), a.change as never, 'user'),
+    'plans:merge': a => jobs().merge(jobId(a), String(a?.other ?? '').slice(0, 40), 'user'),
+    'plans:split': a => jobs().split(jobId(a), Array.isArray(a?.numbers) ? a.numbers.map(Number) : [], String(a?.title ?? '').slice(0, 160), 'user'),
+    // «Elimina per sempre»: only the user's own click, only from the trash
+    'plans:forget': a => { jobs().forgetForever(jobId(a)); },
     'brain:share': () => s.agentPacks.share(),
     // the Brain pages (ADR 0077): read, the maintenance button, an undo, a skill toggle; Classificatori read-only
     'brainmodel:state': () => s.brainModel.stateAsync(),

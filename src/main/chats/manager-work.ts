@@ -26,6 +26,7 @@ import { ManagerLifecycle } from './manager-lifecycle';
 import { APP_EVENT_LABEL } from './orchestrator-wake';
 import { engineOf } from '../engines/registry';
 import { sameFolder } from '../agents/worktrees';
+import { applySteps, type StepOp } from '../../shared/plan-edit';
 import type { AppAsk } from './session';
 import { proposalHash } from '../coordination/store';
 import type { RequestKey } from '../coordination/model';
@@ -43,7 +44,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     return { originalRequestId, jobId, chatId: r.s.id,
       runId: r.s.run?.runId ?? null, taskVersion: r.s.run?.taskVersion ?? 1, proposalRevision: plan.at,
       // what is asked for, not how far it got: the started steps of a revision go on while the user decides (ADR 0342)
-      proposalHash: proposalHash({ steps: plan.steps.map(({ outcome: _o, chatIds: _c, startedAt: _s, endedAt: _e, ...s }) => ({ ...s, state: 'todo' })), clarified: plan.clarified, doneWhen: plan.doneWhen, pcOnly: plan.pcOnly, ...(plan.doubts ? { doubts: plan.doubts } : {}) }) };
+      proposalHash: proposalHash({ steps: plan.steps.map(({ proof: _p, chatIds: _c, startedAt: _s, endedAt: _e, ...s }) => ({ ...s, state: 'todo' })), clarified: plan.clarified, doneWhen: plan.doneWhen, pcOnly: plan.pcOnly, ...(plan.doubts ? { doubts: plan.doubts } : {}) }) };
   }
 
   /** A plan that goes on in another chat (continueChat, ADR 0356): the successor holds it, with its phase; a proposal
@@ -88,7 +89,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
   /** plan_propose (agents/strategy-tools.ts): the Strategist's plan waits for the user's ok on its strip. `revise`
    *  («aggiorna il piano», 2026-11-23): the same plan again, its started steps kept (shared/strategy.ts checkRevision),
    *  also once approved or finished; the user approves it as any plan. */
-  planPropose(chatId: string, steps: PlanStep[], doneWhen?: string, map?: string, revise = false, doubts: PlanDoubt[] | undefined = this.chats.get(chatId)?.s.plan?.doubts): StrategyPlan {
+  planPropose(chatId: string, steps: PlanStep[], doneWhen?: string, revise = false, doubts: PlanDoubt[] | undefined = this.chats.get(chatId)?.s.plan?.doubts): StrategyPlan {
     const r = this.need(chatId), plan = r.s.plan;
     if (!plan) throw new Error('plan_propose: only a Strategist the Orchestrator or the user started has a plan with the user.');
     if (!revise && (plan.phase === 'running' || plan.phase === 'done')) throw new Error('plan_propose: the plan is approved and under way; update its steps with plan_update, or bring it to the current standard with plan_propose revise: true.');
@@ -101,7 +102,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     // (a job the user stopped stays stopped: its plan waits; one only put away waits for him too, but is not stopped)
     const away = !!this.opts.away?.() && !plan.stopped;
     const settled = away ? withoutDropped({ ...plan, steps }) : { plan: { steps }, stop: [] };
-    const proposed: StrategyPlan = { phase: away ? 'running' : 'proposed', clarified: plan.clarified, ...(plan.pcOnly ? { pcOnly: true } : {}), ...(plan.asked ? { asked: plan.asked } : {}), ...(plan.enough ? { enough: true } : {}), steps: settled.plan.steps, ...(doneWhen ? { doneWhen } : {}), ...(map ? { map } : {}), ...(doubts ? { doubts } : {}), ...(plan.stopped && !plan.putAway ? { stopped: true } : {}), at: Math.max(Date.now(), plan.at + 1) };
+    const proposed: StrategyPlan = { phase: away ? 'running' : 'proposed', clarified: plan.clarified, ...(plan.pcOnly ? { pcOnly: true } : {}), ...(plan.asked ? { asked: plan.asked } : {}), ...(plan.enough ? { enough: true } : {}), steps: settled.plan.steps, ...(doneWhen ? { doneWhen } : {}), ...(doubts ? { doubts } : {}), ...(plan.stopped && !plan.putAway ? { stopped: true } : {}), at: Math.max(Date.now(), plan.at + 1) };
     const store = this.coordination;
     const key = this.planRequestKey(r, proposed);
     const prior = store.original(r.s.id, key.originalRequestId);
@@ -146,16 +147,29 @@ export abstract class ManagerWork extends ManagerLifecycle {
   }
 
   /** plan_update: a step the Strategist does itself (or corrects) moves on. */
-  planUpdate(chatId: string, i: number, state: StepState): StrategyPlan {
+  planUpdate(chatId: string, i: number, state: StepState, proof?: string): StrategyPlan {
     const r = this.need(chatId), plan = r.s.plan;
     const step = plan?.steps[i];
     // a revision waits for the user: the steps already started go on (ADR 0342), no other one moves
     const going = !!step && step.state !== 'todo' && state !== 'todo';
     if (!plan || plan.phase !== 'running' && plan.phase !== 'done' && !going) throw new Error('plan_update: the user has not approved a plan yet.');
     if (plan.stopped && !going) throw new Error('plan_update: the user stopped this job; wait for the user to resume it.');
-    r.s.plan = withStep(plan, i, state, Date.now());
+    const now = Date.now();
+    r.s.plan = withStep(plan, i, state, now, proof?.trim() ? { at: now, by: 'strategist', text: proof.trim().slice(0, 600) } : undefined);
     this.persist();
     this.updated(r);
+    return structuredClone(r.s.plan);
+  }
+
+  /** The steps of the plan this chat carries, by explicit operations (shared/plan-edit.ts): the Strategist's own, or the user's from the
+   *  plan's page. Nothing that is not named changes; one bad operation leaves the plan as it was. */
+  planEdit(chatId: string, ops: readonly StepOp[], by: 'user' | 'strategist'): StrategyPlan {
+    const r = this.need(chatId), plan = r.s.plan;
+    if (!plan) throw new Error('Questa chat non ha un piano.');
+    r.s.plan = applySteps(plan, ops, Date.now(), by);
+    this.persist();
+    this.updated(r);
+    log.info('chats', 'plan steps edited', { chat: chatId, data: { ops: ops.length, by } });
     return structuredClone(r.s.plan);
   }
 

@@ -62,7 +62,7 @@ test('Brain pages: skills with links and undo, rules, memory, map; the agent car
     // ── Mappa: agent → skills → rules → memory, with an inspector
     await goPage(page, 'collegamenti');
     const map = page.getByTestId('bm-map-page');
-    await expect(map.getByTestId('wm-list')).toBeVisible(); // it opens on the jobs (ADR 0343)
+    await expect(map.getByTestId('pl-list')).toBeVisible(); // it opens on the jobs (ADR 0343)
     await map.getByRole('button', { name: 'Agenti e skill', exact: true }).click();
     const graph = map.getByTestId('bm-map-graph');
     await expect(graph.locator('.dash-node').first()).toBeVisible();

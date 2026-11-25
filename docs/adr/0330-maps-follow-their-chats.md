@@ -1,6 +1,6 @@
 # ADR 0330 · The maps follow their chats: a box says what its pieces say, a step that is ok is «fatto»
 
-Date: 2026-11-20 · Status: accepted (owner, issue #456, 2026-11-20: «a chat was working on a map element but the map
+Date: 2026-11-20 · Status: superseded by ADR 0363 (the plans replace the maps) · it was: accepted (owner, issue #456, 2026-11-20: «a chat was working on a map element but the map
 still showed it as "planned" … maps update themselves»; «for a step the ok status should read "fatto": "funziona" only
 fits systems»; «the parent status should be derived from its children: all done = fatto, any in progress = in corso,
 any blocked = bloccato») · Amends: ADR 0271 (who keeps a status current), ADR 0276 (a plan's step on a box with pieces

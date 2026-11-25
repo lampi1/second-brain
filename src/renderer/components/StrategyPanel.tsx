@@ -1,12 +1,12 @@
 // A Strategist's plan on its strip (ADR 0108, 0343): while it asks, the answers already clear, «Basta domande» and a
 // pointer to its open question (QuestionsWindow.tsx); with a plan, one line: a round dot per step (ADR 0311), the count
-// and «apri mappa». The plan itself is seen, approved and followed only on its map (work-map/WorkMapView.tsx). Used by
+// and «apri mappa». The plan itself is seen, approved and followed only on its map (plans/PlanView.tsx). Used by
 // ChatTile.tsx and OrchestratorTile.tsx; the plan is ChatSummary.plan (shared/strategy.ts).
 import type { ChatSummary, PendingRequest } from '@shared/contract';
 import { ENOUGH_QUESTIONS, planCount, type StrategyPlan } from '@shared/strategy';
 import { t } from '../i18n';
 import { answer } from '../store/store';
-import { openWorkMapOf, reqKey } from '../actions';
+import { openPlanOf, reqKey } from '../actions';
 import { openQueue } from '../lib/later';
 import '../styles/strategy.css';
 
@@ -37,11 +37,10 @@ export function StrategyPanel({ chat, question, compact }: { chat: ChatSummary; 
     </div>;
   }
 
-  const { done, total } = planCount(plan);
+  const { done, total, percent } = planCount(plan);
   const note = plan.phase === 'proposed' ? 'tree.plan.ready'
     : plan.steps.some(s => s.state === 'blocked') ? 'tree.plan.blocked'
-      : plan.steps.some(s => s.outcome === 'blocked') ? 'tree.plan.resultBlocked'
-        : plan.steps.some(s => s.outcome === 'partial') ? 'tree.plan.partial' : null;
+        : plan.steps.some(s => s.state === 'partial') ? 'tree.plan.partial' : null;
   return <div tabIndex={-1} className={`sp-card sp-progress${compact ? ' is-compact' : ''}`} data-testid={`plan-${id}`} data-phase={plan.phase}>
     <div className="sp-summary">
       <span className="sp-kicker">{t('tree.plan.title')}</span>
@@ -49,9 +48,9 @@ export function StrategyPanel({ chat, question, compact }: { chat: ChatSummary; 
       <span className="sp-dots" aria-hidden="true">
         {plan.steps.map((s, i) => <i key={i} className={`is-${s.state}`} />)}
       </span>
-      <span className="sp-count">{done}/{total}</span>
+      <span className="sp-count" data-testid={`plan-percent-${id}`}>{percent}% · {done}/{total}</span>
       {note && <span className={plan.phase === 'proposed' ? 'sp-wait' : 'sp-blocked'}>{t(note)}</span>}
-      <button type="button" className="sp-link sp-right" onClick={() => void openWorkMapOf(id)} data-testid={`plan-map-${id}`}>{t('wm.openShort')}</button>
+      <button type="button" className="sp-link sp-right" onClick={() => void openPlanOf(id)} data-testid={`plan-map-${id}`}>{t('plans.do.open')}</button>
     </div>
     <span className="sr-only" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done} aria-label={t('tree.plan.progress', { done, total })} />
   </div>;

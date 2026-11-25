@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/renderer/sb', () => ({ sb: {} }));
 vi.mock('../../src/renderer/store/store', () => ({ useApp: vi.fn(), ensureOrchestrator: vi.fn(), stop: vi.fn() }));
 vi.mock('../../src/renderer/store/ui', () => ({ ui: { use: (fn: (s: unknown) => unknown) => fn({ focused: null, focusReq: null }) }, setFocused: vi.fn() }));
-vi.mock('../../src/renderer/actions', () => ({ awaitingCard: () => false, clearOrchestratorNow: vi.fn(), go: vi.fn(), openMaps: vi.fn() }));
+vi.mock('../../src/renderer/actions', () => ({ awaitingCard: () => false, clearOrchestratorNow: vi.fn(), go: vi.fn(), openPlans: vi.fn() }));
 vi.mock('../../src/renderer/lib/pairs', () => ({ usePair: () => ({ cls: '' }), pairHover: () => ({}) }));
 vi.mock('../../src/renderer/components/AwayToggle', () => ({ AwayButton: () => null, AwayLine: () => null }));
 vi.mock('../../src/renderer/components/RemoteControl', () => ({ RemoteButton: () => null, RemoteLine: () => null }));

@@ -18,7 +18,7 @@ import { systemLang } from './lang';
 import { ConfigStore } from './brain/config';
 import { DemoBrain, DemoChats, FROZEN_EPOCH, seed, demoTree, type Emit, demoQuality } from './demo';
 import { DemoBrowser } from './demo-browser';
-import { demoWorkMaps } from './demo-work-maps';
+import { demoPlans } from './demo-plans';
 import { demoBrainRuns, writeDemoBrain } from './brainmodel/demo';
 import { demoLearningRuns, writeDemoChanges } from './brainmodel/demo-learning';
 import { requestDemoSetting, writeDemoProposals } from './proposals/demo';
@@ -43,8 +43,7 @@ import { log, errText } from './log';
 import { McpServer, mcpPortFromEnv } from './mcp/server';
 import { demoMcpServers } from './mcp-servers/demo';
 import { recordMcpPort } from './health';
-import { attachArtifacts, attachCommandAsks, attachOrchestratorWake, attachRunResults, commandRunner, createAppSource, createLater, attachAppTools, attachProjectMaps, attachWorkMaps } from './wiring-shared';
-import { seedDemoMap } from './projectmap/demo';
+import { attachArtifacts, attachCommandAsks, attachOrchestratorWake, attachRunResults, commandRunner, createAppSource, createLater, attachAppTools, attachPlans } from './wiring-shared';
 import type { Ctx, Wired } from './wiring-types';
 import { attachHeldNews } from './chats/held-news';
 import { SkillsService } from './skills/service';
@@ -228,14 +227,11 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     devops: () => { const t = tasks.get(); return { prs: t.prs, repoDirs: t.repoDirs }; },
     changed: (state, lesson) => ctx.emitter.emit('impara:changed', { state, ...(lesson ? { lesson } : {}) }),
     tutorText: (lesson, turn, text) => ctx.emitter.emit('impara:tutor', { lesson, turn, text }) });
-  // the project maps (ADR 0271): the demo brain holds one, the shop the demo chats work on
-  const projectMaps = attachProjectMaps(ctx, chats, () => demoBrainRoot, undefined, now); // no chat endpoints in the demo
-  seedDemoMap(demoBrainRoot, projectMaps, now());
-  // the work maps follow the demo chats (ADR 0342); their clock moves while __sbDemo.workMaps() adds the older ones
+  // the plans follow the demo chats (ADR 0342); their clock moves while __sbDemo.plans() adds the older ones
   let mapsClock: number | null = null;
-  const workMaps = attachWorkMaps(ctx, chats, projectMaps, brain, () => mapsClock ?? now());
-  workMaps.tellTo(wake);
-  attachAppTools(mcp, { projectMaps, workMaps, recordings, impara: learn, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), resolveRole: req => agents.resolve(req), runFeedback, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd) }, source, true);
+  const plans = attachPlans(ctx, chats, brain, () => mapsClock ?? now());
+  plans.tellTo(wake);
+  attachAppTools(mcp, { plans, recordings, impara: learn, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), resolveRole: req => agents.resolve(req), runFeedback, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd) }, source, true);
   try { recordMcpPort(mcpPortFromEnv(), await mcp.listen(mcpPortFromEnv())); } catch (e) {
     log.warn('demo', 'MCP port busy, using a random one', { data: { error: errText(e) } });
     recordMcpPort(mcpPortFromEnv(), await mcp.listen(0), errText(e)); // the banner shows in the demo too (e2e)
@@ -282,23 +278,21 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     /** a delegation tree under a Strategist (README shots: the Grindhouse's thread cards) */
     tree: () => {
       const t = demoTree(now());
-      // its plan's new piece goes on the shop's map first, as plan_propose does (ADR 0276)
-      try { projectMaps.planDraw('tree-plan', { project: 'alfa-shop', add: [{ name: 'Note di rilascio', kind: 'doc', description: 'Cosa cambia per chi usa gli sconti' }], links: [{ from: 'ordini', to: 'note-di-rilascio', label: 'descritto in' }] }); } catch { /* a demo map edited by hand: the plan shows without it */ }
       chats.add(t.chats, t.items);
     },
-    /** many work maps in every state (demo-work-maps.ts), each made at its own moment; what the list shows afterwards */
-    workMaps: async () => {
-      const d = demoWorkMaps(now()), known = new Set([...workMaps.list(), ...workMaps.list({ archived: true })].map(m => m.title));
+    /** many plans in every state (demo-plans.ts), each made at its own moment; what the list shows afterwards */
+    plans: async () => {
+      const d = demoPlans(now()), known = new Set([...plans.list(), ...plans.list({ archived: true })].map(m => m.title));
       try {
-        for (const i of d.ideas) { mapsClock = i.at; if (!known.has(i.title)) workMaps.idea({ title: i.title, idea: i.idea, project: i.project }); }
+        for (const i of d.ideas) { mapsClock = i.at; if (!known.has(i.title)) plans.idea({ title: i.title, idea: i.idea, project: i.project }); }
         for (const j of d.jobs) {
           mapsClock = j.at;
           chats.add([...j.workers.map(w => w.chat), j.chat], Object.fromEntries([...j.workers.map(w => [w.chat.id, w.items]), [j.chat.id, j.items]]));
-          const m = workMaps.ofChat(j.chat.id);
-          if (m && j.then && workMaps.list().find(x => x.id === m.id)?.can.includes(j.then)) await workMaps.act(m.id, j.then);
+          const m = plans.ofChat(j.chat.id);
+          if (m && j.then && plans.list().find(x => x.id === m.id)?.can.includes(j.then)) await plans.act(m.id, j.then);
         }
       } finally { mapsClock = null; }
-      return [...workMaps.list(), ...workMaps.list({ archived: true })].map(m => ({ id: m.id, title: m.title, state: m.state }));
+      return [...plans.list(), ...plans.list({ archived: true })].map(m => ({ id: m.id, title: m.title, state: m.state }));
     },
     /** a Strategist's plan with the user as it would be at a moment (e2e: its strip asking, proposing, under way) */
     plan: (chatId: string, plan: StrategyPlan | null) => chats.patch(chatId, { plan: plan ?? undefined }),
@@ -365,7 +359,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   if (!news.state().items.length) void news.refresh();
 
   return {
-    morning, news, projectMaps, workMaps,
+    morning, news, plans,
     chats, browser, recordings, learn, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, engines, later: createLater(ctx),
     agents, runFeedback, agentLifecycle, agentPacks, brainModel, research, queries, memoryReview, learningReview,
     setup: new SetupService(ctx.userData, true, now),
@@ -374,7 +368,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     // the demo folders do not exist: made-up branches, so the "Stato" view shows one per chat
     branches: cwds => gitBranches(cwds, c => DEMO_BRANCHES[c.split(/[\\/]/).pop() ?? ''] ?? null),
     cli: () => ({ claude: demoCli('2.3.0 (demo)', 'demo@example.com'), cursor: demoCli('2026.10.01 (demo)', 'demo@example.com') }),
-    shutdown: async () => { projectMaps.stop(); workMaps.stop(); news.dispose(); engines.stop(); artifacts.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), Promise.resolve(tasks.shutdown()), brain.shutdown(), mcp.close()]); },
+    shutdown: async () => { plans.stop(); news.dispose(); engines.stop(); artifacts.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), Promise.resolve(tasks.shutdown()), brain.shutdown(), mcp.close()]); },
     killNow: () => {
       void chats.shutdown(); runner.shutdown(); // the demo starts no processes: stopping its timers is enough
       // SB_DEMO_QUIT_MS: a quit as slow as the real one's blocking taskkill of the CLIs (15-40 s on a loaded PC), so the

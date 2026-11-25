@@ -1,6 +1,6 @@
 # ADR 0326 · The maps tell how far the project is: a percentage, a progress card, the plan in the side panel
 
-Date: 2026-11-19 · Status: accepted (owner, 2026-11-19: «nella mappa la parte in alto dei passi è completamente inutile
+Date: 2026-11-19 · Status: superseded by ADR 0363 (the plans replace the maps) · it was: accepted (owner, 2026-11-19: «nella mappa la parte in alto dei passi è completamente inutile
 rimuovila occupa solo spazio … le mappe servono per tracciare l'andamento di un piano sarebbe bello ci fosse anche un
 progressivo una percentuale e più dettagli nella parte dx») · Amends: ADR 0302 and ADR 0307 (where a plan's steps are
 told), ADR 0276 (where «Approva e parti» sits), ADR 0322 (the side panel) · Amended by: ADR 0330 (what is stuck is read

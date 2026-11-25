@@ -1,6 +1,6 @@
 # ADR 0342: A work map per job
 
-**Status:** Accepted (2026-11-23). Amends ADR 0276 (a plan is drawn on a project map), 0108 (one «Approva e parti») and
+Status: superseded by ADR 0363 (the plans replace the maps) · it was: accepted (2026-11-23). Amends ADR 0276 (a plan is drawn on a project map), 0108 (one «Approva e parti») and
 0191 (night mode, kept). The screens come with the next change.
 
 ## Context

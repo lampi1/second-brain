@@ -28,7 +28,7 @@ export interface ChatService {
   /** by agent = an agent's chat (app_create_chat): its first turn may wait in the cold-start queue (ADR 0222).
    *  opts.boundByOrchestrator: a call from the unauthenticated /mcp/app mount: the chat runs no wider than the open
    *  Orchestrator (refused without one), since any local process can reach that mount */
-  create(req: NewChat, by?: 'user' | 'agent', inherited?: undefined, links?: undefined, opts?: { boundByOrchestrator?: boolean; intake?: IntakeSource; resumePlan?: StrategyPlan; workMap?: string }): Promise<ChatSummary>;
+  create(req: NewChat, by?: 'user' | 'agent', inherited?: undefined, links?: undefined, opts?: { boundByOrchestrator?: boolean; intake?: IntakeSource; resumePlan?: StrategyPlan; planId?: string }): Promise<ChatSummary>;
   /** images: the chat:send attachments, checked by the service (main/chats/images.ts) */
   /** from = not the user's message: who sent it (another chat, the Orchestrator), shown above the bubble */
   /** liveOnly = mail: fails instead of starting or reopening the chat (main/chats/mail.ts) */

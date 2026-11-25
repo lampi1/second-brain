@@ -47,6 +47,7 @@ import { tierModel } from './agents/model-tier';
 import { markLegacyDone, migratedCards, readLegacy } from './agents/legacy-cards';
 import { workDecisionTools } from './agents/work-decisions';
 import { stepPresetOf, strategyTools } from './agents/strategy-tools';
+import { strategistPlanTool } from './plans/tools';
 import { askTools } from './chats/ask-tool';
 import { portableId } from './agents/pack/flows';
 import { memoryTools } from './rules/memory-tool';
@@ -148,7 +149,7 @@ import { timersFor } from './timers';
 import { DailyQuipsService } from './quips/daily';
 const { setInterval, clearInterval } = timersFor('wiring/auto-close');
 
-import { attachAppTools, createLater, commandRunner, attachCommandAsks, attachOrchestratorWake, attachRunResults, attachProjectMaps, attachWorkMaps, attachArtifacts, createAppSource, createAgentCatalog } from './wiring-shared';
+import { attachAppTools, createLater, commandRunner, attachCommandAsks, attachOrchestratorWake, attachRunResults, attachPlans, attachArtifacts, createAppSource, createAgentCatalog } from './wiring-shared';
 import type { CommandRunner } from './run/runner';
 import type { Ctx, Wired } from './wiring-types';
 import { buildLearn, buildNews } from './wiring-builders';
@@ -602,9 +603,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   runsRef.current = runner;
   // brain_script_add on every chat's own endpoint: a work chat saves the script it ran with success itself
   addChatTools([chatScriptAddTool(brainScripts, id => chats.list().find(c => c.id === id)?.title ?? null, roleSkillOf)]);
-  // the project maps (ADR 0271): drawn and kept current by the agents (their own endpoint), live state from the chats
-  const projectMaps = attachProjectMaps(ctx, chats, () => brain.info().brainRoot, addChatTools);
-  const workMaps = attachWorkMaps(ctx, chats, projectMaps, brain);
+  // the plans (ADR 0271): drawn and kept current by the agents (their own endpoint), live state from the chats
+  const plans = attachPlans(ctx, chats, brain);
   // brain_query_add the same way: a query that ran and someone reruns goes to its skill's assets/queries/ (ADR 0124, 0263)
   addChatTools([chatQueryAddTool(brainQueries, id => chats.list().find(c => c.id === id)?.title ?? null, roleSkillOf)]);
   const asks = attachCommandAsks(ctx, runner, brain, undefined, chats);
@@ -678,7 +678,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const worktreeCleanup = () => { void worktreePool.autoCleanup().catch(e => log.warn('agents', 'worktree cleanup failed', { cause: errText(e), hint: 'the next run tries again; Settings → Avanzate has «Pulisci ora»' })); };
   const worktreeFirst = prodPollers ? setTimeout(worktreeCleanup, 5 * 60_000) : null, worktreeTimer = prodPollers ? setInterval(worktreeCleanup, 6 * 3600_000) : null;
   const wake = attachOrchestratorWake(ctx, chats, () => brain.settings().orchestratorEvents !== false && (!process.env.SB_TEST || process.env.SB_ORCHESTRATOR_EVENTS === '1'));
-  workMaps.tellTo(wake); // a job stopped by itself (ADR 0342): the Orchestrator takes it up again
+  plans.tellTo(wake); // a job stopped by itself (ADR 0342): the Orchestrator takes it up again
   manager.onUserWrote(n => wake.userMessage(n)); // the user typed in a work chat: quiet news (ADR 0083)
   // a root chat's clean result wakes the Orchestrator during an active workflow, or while the user is away (ADR 0191): the
   // Orchestrator carries the work on to its end instead of waiting for the user's next message
@@ -722,9 +722,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     remember: (roleId, line, chat) => { skillLessons.propose({ role: portableId(roleId), text: line, chatId: chat.id, ...(chat.run?.runId ? { runId: chat.run.runId } : {}) }); } }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
   // every step's preset, never a model (ADR 0346): a started step's chat, else the one the plan asks of the role's card
-  addChatTools(strategyTools(manager, awayOn, projectMaps, stepPresetOf(id => manager.list().find(c => c.id === id), (roleId, preset) => {
+  addChatTools(strategyTools(manager, awayOn, stepPresetOf(id => manager.list().find(c => c.id === id), (roleId, preset) => {
     try { return agents.presetChoice(roleId, preset ? { preset, presetWhy: 'plan step' } : {}); } catch { return null; }
   })));
+  // the plans, read by every Strategist and edited by its own (ADR 0361); the user's decisions stay the Orchestrator's
+  addChatTools([strategistPlanTool(plans)]);
   // the yes/no question of a chat whose engine has no question tool of its own (OpenCode over ACP)
   addChatTools(askTools(manager));
   addChatTools(workDecisionTools({ chats: manager, workflows, runs: manager.runs }));
@@ -838,7 +840,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       if (!p) throw new Error(`ruolo sconosciuto: ${c.agentId ?? ''}`);
       agentPacks.learning.save(changedDraft(p, c.key, c.value), p.id, roleReason(c.reason));
     } });
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: (req, o) => resolveStart(req, o), creditOf: (engine, model) => credits.verdict(engine, model), creditFresh: () => credits.freshAll(), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps, workMaps,
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: (req, o) => resolveStart(req, o), creditOf: (engine, model) => credits.verdict(engine, model), creditFresh: () => credits.freshAll(), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, plans,
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       held: pendingConfig,
@@ -1006,7 +1008,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     judging: { estimate: now => judgingEstimate(manager.runs.list(), now, { shares: judgeShares(), capUsd: Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD, lastBatch: judgeSampler.lastBatch() }) },
     phonePort: createPhonePort(manager, ctx.emitter, awayCommands),
     worktreePool,
-    chats, browser, recordings, learn, news, projectMaps, workMaps, brain, mcp, addChatTools, runner, asks, pendingConfig, briefYes: (id: string, ask: string) => artifacts.briefYes(id, ask), wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, modelLists, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, quips, userCorrections,
+    chats, browser, recordings, learn, news, plans, brain, mcp, addChatTools, runner, asks, pendingConfig, briefYes: (id: string, ask: string) => artifacts.briefYes(id, ask), wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, modelLists, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, quips, userCorrections,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : null),
       checkpoint: () => manager.checkpointForUpdate(),
@@ -1014,7 +1016,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { news.dispose(); projectMaps.stop(); workMaps.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (worktreeFirst) clearTimeout(worktreeFirst); if (worktreeTimer) clearInterval(worktreeTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); if (workDriverTimer) clearInterval(workDriverTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); modelLists.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { news.dispose(); plans.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (worktreeFirst) clearTimeout(worktreeFirst); if (worktreeTimer) clearInterval(worktreeTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); if (workDriverTimer) clearInterval(workDriverTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); modelLists.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { manager.killAll(); runner.shutdown(); },
   };
 }

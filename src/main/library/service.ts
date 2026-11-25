@@ -40,7 +40,7 @@ export interface LibraryPorts {
   platform?: NodeJS.Platform;
   brainRoot(): string | null;
   chats(): readonly LibraryChat[];
-  /** the project maps' folders (an artifact there belongs to that project) */
+  /** the project folders (an artifact there belongs to that project) */
   projectRoots?(): readonly string[];
   /** an image file scaled down to a card's picture (a JPEG data URL), or null; index.ts uses Electron's nativeImage */
   thumbnail?(file: string): Promise<string | null>;

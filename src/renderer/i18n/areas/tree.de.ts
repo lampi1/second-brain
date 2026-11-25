@@ -107,7 +107,6 @@ export const treeDe: typeof treeIt = {
   'tree.plan.title': 'Plan',
   'tree.plan.steps': (p: { n: number }) => p.n === 1 ? '1 Schritt' : `${p.n} Schritte`,
   'tree.plan.progress': (p: { done: number; total: number }) => `${p.done} von ${p.total} Schritten erledigt`,
-  'tree.plan.resultBlocked': 'Ergebnis nicht verfügbar',
   'tree.plan.partial': 'Teilergebnis',
   'tree.plan.blocked': 'blockiert',
   'tree.plan.inWindow': 'Die Frage steht unten bei denen, die auf dich warten.',
@@ -115,6 +114,6 @@ export const treeDe: typeof treeIt = {
   'tree.plan.ready': 'Plan fertig: gibst du ihn frei?',
   // the plan to approve in the questions window, its row and its card (PlanAskCard.tsx, ADR 0343)
   'tree.plan.ask.kicker': 'Plan zum Freigeben',
-  'tree.plan.ask.onMap': 'Auf seiner Karte lesen und freigeben.',
+  'tree.plan.ask.inPlan': 'Im Plan lesen und freigeben.',
   'tree.plan.ask.label': (p: { chat: string }) => `Plan zum Freigeben von ${p.chat}`,
 };

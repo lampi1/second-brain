@@ -17,7 +17,7 @@ import { useApp } from './store/store';
 import { openModal, closeModal, pageLabel, setFullOrch, setMap, setPrefs, toast, ui } from './store/ui';
 import {
   back, brainBridge, closeViewer, escapeOne, toggleViewerFull, viewerStep, focusChat, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, closeFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleOrchestrator, askRenewOrchestrator, newRequest,
-  openMaps } from './actions';
+  openPlans } from './actions';
 import { TopBar } from './components/TopBar';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { BrainSetupBanner } from './components/BrainSetupBanner';
@@ -46,7 +46,8 @@ import { LaunchBanner } from './components/LaunchBanner';
 import { MemoryPage } from './components/brain-model/MemoryPage';
 import { hubRedirect } from './lib/memory-hub';
 import { AndamentoPage } from './components/andamento/AndamentoPage';
-import { MapPage } from './components/brain-model/MapPage';
+import { LinksPage } from './components/brain-model/LinksPage';
+import { PlansRoute } from './components/plans/PlansRoute';
 import { LogPage } from './components/LogPage';
 import { RecordingsPage } from './components/RecordingsPage';
 import { ImparaPage } from './components/impara/ImparaPage';
@@ -123,7 +124,7 @@ function onKey(e: KeyboardEvent): void {
     case 'settings': go({ page: 'impostazioni' }); break;
     case 'voice': if (!e.repeat) shortcutVoice(); break;
     case 'talk': if (!e.repeat) shortcutTalk(); break;
-    case 'stato': openMaps(); break; // Ctrl+Shift+S: the project maps took «Stato»'s place (ADR 0275), full screen first (ADR 0307), then beside the Orchestrator (ADR 0276)
+    case 'stato': openPlans(); break; // Ctrl+Shift+S: the plans (ADR 0359)
     case 'escape': if (!escapeOne()) return; break;
   }
   e.preventDefault();
@@ -204,7 +205,7 @@ function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
           ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.settings')}><div className="bx-inner"><SettingsPage /></div></div>
           : id === 'memoria'
             ? <div className="bx bx-page bx-scroll" role="region" aria-label={pageLabel(id)}><div className="bx-inner mh-inner"><MemoryPage /></div></div>
-            : id === 'andamento' ? <AndamentoPage /> : id === 'collegamenti' ? <MapPage />
+            : id === 'andamento' ? <AndamentoPage /> : id === 'piani' ? <PlansRoute /> : id === 'collegamenti' ? <LinksPage />
               : <BrainPage id={id} arg={arg ?? undefined} onNavigate={goTarget} bridge={brainBridge} />}
         </ErrorBoundary>
       </div>

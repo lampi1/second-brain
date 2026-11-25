@@ -86,7 +86,7 @@ describe('a worker that delivered its final report closes by itself (#86)', () =
   it('progress mail with an active child and unfinished plan does not complete the assignment', async () => {
     const f = fixture(), r = await f.orchestrator();
     const w = await f.worker(r.id, { answer: 'Lavoro avviato.' });
-    f.m.seedPlan(w.id, { phase: 'running', clarified: [], steps: [{ title: 'Implement', state: 'now' }, { title: 'Review', state: 'todo' }], at: Date.now() });
+    f.m.seedPlan(w.id, { phase: 'running', clarified: [], steps: [{ id: 's1', title: 'Implement', state: 'now' }, { id: 's2', after: ['s1'], title: 'Review', state: 'todo' }], at: Date.now() });
     await f.m.create({ harness: 'claude', cwd: f.dir, parentId: w.id, delegation: { role: 'artisan', goal: 'Implement', doneWhen: ['Tests pass'], at: Date.now() } }, 'agent');
     f.m.noteMail(w.id, r.id, 'Analisi conclusa, correzione avviata e verifica predisposta.');
     expect(f.chat(w.id).work?.status).toBe('assigned');
@@ -105,7 +105,7 @@ describe('a worker that delivered its final report closes by itself (#86)', () =
   it.each(['plan', 'child'] as const)('a legacy final block cannot finish with unfinished %s work', async pending => {
     const f = fixture(), r = await f.orchestrator();
     const w = await f.worker(r.id, { answer: 'Avviato.' });
-    if (pending === 'plan') f.m.seedPlan(w.id, { phase: 'running', clarified: [], steps: [{ title: 'Review', state: 'todo' }], at: Date.now() });
+    if (pending === 'plan') f.m.seedPlan(w.id, { phase: 'running', clarified: [], steps: [{ id: 's1', title: 'Review', state: 'todo' }], at: Date.now() });
     else await f.m.create({ harness: 'claude', cwd: f.dir, parentId: w.id, delegation: { role: 'artisan', goal: 'Implement', doneWhen: ['Tests pass'], at: Date.now() } }, 'agent');
     f.script.get(w.id)!.push({ answer: '```run-report\n{"outcome":"done","verified":"yes","summary":"Done"}\n```' });
     await f.m.send(w.id, 'Stato', undefined, false, 'Orchestrator');
@@ -128,7 +128,7 @@ describe('a worker that delivered its final report closes by itself (#86)', () =
   it('a completed plan can finish with an explicit final report', async () => {
     const f = fixture(), r = await f.orchestrator();
     const w = await f.worker(r.id, { answer: 'Avviato.' });
-    f.m.seedPlan(w.id, { phase: 'done', clarified: [], steps: [{ title: 'Review', state: 'done' }], at: Date.now() });
+    f.m.seedPlan(w.id, { phase: 'done', clarified: [], steps: [{ id: 's1', proof: { at: 1, by: 'report', text: 'ok' }, title: 'Review', state: 'done' }], at: Date.now() });
     f.script.get(w.id)!.push({ report: 'Verifica conclusa.', answer: 'Fatto.' });
     await f.m.send(w.id, 'Risultato', undefined, false, 'Orchestrator');
     expect(f.chat(w.id).work?.status).toBe('completed');
@@ -264,7 +264,7 @@ describe('a worker that delivered its final report closes by itself (#86)', () =
   it('an explicit non-blocked report finalizes a running plan before the plan guard, then completes', async () => {
     const f = fixture(), r = await f.orchestrator();
     const w = await f.worker(r.id, { answer: 'Avviato.' });
-    f.m.seedPlan(w.id, { phase: 'running', clarified: [], steps: [{ title: 'Review', state: 'todo' }], at: Date.now() });
+    f.m.seedPlan(w.id, { phase: 'running', clarified: [], steps: [{ id: 's1', title: 'Review', state: 'todo' }], at: Date.now() });
     f.script.get(w.id)!.push({ report: 'Chiuso con quello che c’è.', answer: 'Fatto.' });
     await f.m.send(w.id, 'Risultato', undefined, false, 'Orchestrator');
     expect(f.chat(w.id).plan?.phase).toBe('done');

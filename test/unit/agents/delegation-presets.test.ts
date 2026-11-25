@@ -107,7 +107,7 @@ describe('agent_assign_task with a preset', () => {
 // ADR 0346 (issue #462): the plan names a preset, never a model; the part that starts a step takes the step's preset
 // when it names none, and the model behind it is the role card's at that moment (presetChoice reads the card)
 describe('a part of an approved plan takes its step\'s preset', () => {
-  const plan: StrategyPlan = { phase: 'running', at: 1, clarified: [], steps: [{ title: 'Cerco', role: 'scout', state: 'todo', preset: 'max' }, { title: 'Riassumo', role: 'scout', state: 'todo' }] };
+  const plan: StrategyPlan = { phase: 'running', at: 1, clarified: [], steps: [{ id: 's1', title: 'Cerco', role: 'scout', state: 'todo', preset: 'max' }, { id: 's2', after: ['s1'], title: 'Riassumo', role: 'scout', state: 'todo' }] };
   it('stepAsk: the part\'s own preset wins, a step on Base or no step changes nothing', () => {
     expect(stepAsk({}, 'max')).toEqual({ preset: 'max', presetWhy: 'the preset of the approved plan step' });
     expect(stepAsk({ presetWhy: 'serve' }, 'min')).toEqual({ preset: 'min', presetWhy: 'serve' });

@@ -89,7 +89,6 @@ Each one has a vice for the quiet moments:
   your agents.
 
 <p align="center"><img src="docs/screenshots/plan.webp" alt="A Strategist's plan on its own map: a box per step with role and model, Approve and start above the drawing" width="720"></p>
-<p align="center"><img src="docs/screenshots/work-maps.webp" alt="The list of the work maps by status, with search, project filter and order" width="720"></p>
 
 ## Quick start
 
