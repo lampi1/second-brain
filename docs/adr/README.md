@@ -262,12 +262,10 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0268](0268-brief-maps-engine-labels-to-yes-no.md) A brief maps an engine's own option labels to Sì / No — accepted
 - [0269](0269-questions-live-in-the-orchestrator.md) Questions live in the Orchestrator; it speaks for the user — accepted; amended by 0274, 0275, 0327
 - [0270](0270-short-recap-by-default.md) The recap is short by default; the detail on request — accepted
-- [0271](0271-project-maps.md) Project maps: a project drawn in place of its code, kept current by its agents — accepted; amended by 0316, 0322, 0330
 - [0272](0272-esegui-precheck.md) Esegui commands are checked before the user sees them — accepted
 - [0273](0273-mcp-oauth-login.md) Remote MCP connectors log in with the MCP OAuth flow — accepted
 - [0274](0274-answers-in-the-users-words.md) The user answers in his own words; the Orchestrator's column has no answer box — accepted; amended by 0275, 0327, 0329
 - [0275](0275-orchestrator-counts-as-the-user.md) What the Orchestrator says counts as the user's own, always; the project maps take «Stato»'s place — accepted
-- [0276](0276-planning-on-the-project-maps.md) Planning on the project maps: the Strategist proposes a map, the app keeps it live — accepted; amended by 0307, 0326, 0330
 - [0277](0277-brain-documents-in-the-brain-rules-skill.md) The brain tools find the brain's own documents at the root or in the `brain-rules` skill — accepted
 - [0278](0278-roles-use-any-installed-skill.md) A role may use any installed skill, and looking never asks — accepted
 - [0279](0279-onboarding-in-three-moments.md) Onboarding in three moments: language and name, your AI, the first real request — accepted
@@ -291,13 +289,10 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0298](0298-weekly-limit-on-the-top-bar.md) The weekly limit on the top bar, the 5-hour window from 70% — accepted
 - [0299](0299-one-command-one-panel.md) One command, one panel: an identical command never runs twice by accident — accepted
 - [0300](0300-quote-what-is-on-screen.md) Quote what is on screen: select a text, right click, it is in the prompt field — accepted
-- [0301](0301-maps-button-on-the-orchestrator-head.md) The project maps button is back on the Orchestrator's head — accepted
-- [0302](0302-maps-show-what-moves-and-the-order.md) The maps show what moves, the order of the steps, and the passage between levels — accepted; amended by 0326
 - [0303](0303-little-people-speak.md) The little people speak: two words of nonsense, a character per role — accepted; amended by 0312
 - [0304](0304-chess-against-the-agents.md) Scacchi: chess against the agents, Stockfish as a separate program — accepted
 - [0305](0305-little-people-show-the-work-lines-of-the-day.md) The little people show the work at hand, speak while they work, and get new lines every day — accepted; amended by 0311, 0312
 - [0306](0306-the-people-of-the-roles-grow-up.md) The people of the roles grow up: adult bodies, faces and characters — accepted
-- [0307](0307-maps-open-full-screen-and-tell-every-passage.md) The maps open full screen, tell every step and every passage, and are redrawn from a button — accepted; amended by 0316, 0326
 - [0309](0309-one-review-chat-per-piece-of-work.md) One review chat per piece of work: after a fix it reviews only the delta — accepted, partly superseded by 0352
 - [0310](0310-sign-in-by-credential-name.md) Sign-in by credential name: the app types the password, the agent never holds it — accepted
 - [0311](0311-the-grindhouse-becomes-a-workshop.md) The Grindhouse becomes a workshop: square benches, scenes without screens, a vice at rest — accepted; amended by 0312
@@ -305,33 +300,26 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0313](0313-the-workshop-picture-and-people-in-full.md) The workshop picture behind the people, and every person in full — accepted; amended by 0315
 - [0314](0314-ci-green-on-three-systems.md) CI that tells the truth on Windows, Linux and macOS — accepted
 - [0315](0315-no-dot-over-the-helpers.md) No dot over the helpers' heads — accepted
-- [0316](0316-maps-in-depth-and-a-readable-viewer.md) Maps in depth, key files in the viewer, and code read as in an editor — accepted; amended by 0322
 - [0317](0317-link-a-site-to-a-credential-with-one-click.md) Link a sign-in page's site to a test account with one click — accepted
 - [0318](0318-a-chat-stops-showing-work-when-its-reply-is-complete.md) A chat stops showing work when its reply is complete — accepted
 - [0319](0319-artifacts-in-memoria.md) Artifacts in Memoria: every file the chats produce, indexed where it is — kinds, partly superseded by 0328; amended by 0323
 - [0320](0320-maintenance-fixes-one-line-of-an-always-loaded-file.md) The maintenance fixes one line of an always-loaded file — accepted
 - [0321](0321-a-routine-step-can-leave-the-login-page-unsigned.md) A routine step can leave the login page as it is (`relogin: false`) — accepted
-- [0322](0322-project-maps-told-as-a-line-of-phases.md) Project maps told as a line of phases and steps, with a richer and wider panel — accepted; amended by 0326, 0330, 0335
 - [0323](0323-artifacts-light-paged-and-cleaned.md) Artifacts: twenty at a time, light pictures, and a daily cleanup of old screenshots — the, partly superseded by 0328
 - [0324](0324-retrigger-tags-and-entries-for-routine-packages.md) A routine package can run a work item again: retrigger tags and entries — accepted
 - [0325](0325-routines-leave-the-app.md) Routines leave the app — accepted
-- [0326](0326-maps-tell-how-far-the-project-is.md) The maps tell how far the project is: a percentage, a progress card, the plan in the side panel — accepted; amended by 0330
 - [0327](0327-one-question-one-row-one-answer.md) One question, one row, one answer — accepted
 - [0328](0328-artifacts-only-what-the-user-asked-for.md) Artifacts: only what the user asked for, one list, all opened in the app, and a real full screen — accepted
 - [0329](0329-an-open-card-takes-the-orchestrators-field.md) An open card takes what he writes in the Orchestrator's field — accepted
-- [0330](0330-maps-follow-their-chats.md) The maps follow their chats: a box says what its pieces say, a step that is ok is «fatto» — accepted
 - [0331](0331-code-mode.md) Code Mode: work chats call their tools from one script (run_code), under the same permission chain — accepted
 - [0332](0332-antigravity-engine.md) Antigravity (agy acp) joins the ACP engine catalog; its permissions go through the app's gates — accepted
 - [0333](0333-web-fetch-subagent.md) Claude chats keep WebFetch as a plain tool (built-in web-fetch agent off) — accepted
 - [0334](0334-multi-harness-usage-bar.md) Multi-harness plan usage popover and pinned weekly limits — not stated
-- [0335](0335-project-map-line-top-to-bottom-with-parallel-frames.md) A line of phases and steps is drawn top to bottom, with parallel groups in their own frame — accepted
 - [0336](0336-model-presets.md) Per-task model presets (Minimo / Base / Massimo) on each role card — not stated; amended by 0346, 0347
 - [0337](0337-model-choice-on-the-role-card.md) Model choice and Code Mode live on the role card; Settings has none — not stated; amended by 0347
 - [0338](0338-no-leftover-processes.md) No leftover processes: no breakaway from an engine's job, engines recorded at once, leased stacks spared — not stated
 - [0340](0340-no-guide-page-and-a-four-tab-memory.md) No Guida page, and a Memoria of four tabs with a real Skill view — not stated
 - [0341](0341-ten-principles-of-the-app.md) Ten principles of the app, and what was removed to follow them — not stated
-- [0342](0342-a-work-map-per-job.md) A work map per job — not stated
-- [0343](0343-the-plan-is-its-map.md) The plan is its map, the maps are a list — not stated; amended by 0346
 - [0344](0344-question-ladder-and-open-doubts.md) A worker's question goes up one level at a time; the Strategist's open doubts block its plan — accepted
 - [0345](0345-a-child-works-in-any-repository.md) A delegated chat works in any folder its parent names, also of another repository — accepted
 - [0346](0346-plan-names-the-preset-a-chat-out-of-credits-waits.md) A plan names the preset, never the model; a chat out of credits waits for its role's card — accepted, partly superseded by 0354; amended by 0347, 0348
@@ -351,6 +339,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0360](0360-the-users-x-keeps-the-chat-among-the-closed.md) The user's ✕ keeps the chat among the closed, and the Orchestrator hears of it — accepted
 - [0361](0361-one-order-of-the-engines.md) One order of the engines, a threshold each, the reason on every chat, and changes that are never lost — accepted
 - [0362](0362-whoever-opens-a-chat-chooses-its-folder.md) Whoever opens a chat chooses its folder, in place by default — accepted
+- [0363](0363-one-concept-the-plan.md) One concept, the Plan: it replaces the project maps and the work maps — accepted
 
 ## Replaced
 
@@ -373,4 +362,16 @@ Kept for the history only: the record named on each line holds the current decis
 - [0139](0139-delegated-writer-worktrees.md) Isolate delegated writers and stage integration — superseded by 0362
 - [0196](0196-guide-knows-when-stale.md) The Guida knows when it is stale, answers questions, draws from the code and picks cards for the user — superseded by 0340
 - [0218](0218-balanced-mode.md) 0218. «Balanced mode»: the engine, model and effort of a delegation follow the credits left — superseded by 0337
+- [0271](0271-project-maps.md) Project maps: a project drawn in place of its code, kept current by its agents — superseded by 0363
+- [0276](0276-planning-on-the-project-maps.md) Planning on the project maps: the Strategist proposes a map, the app keeps it live — superseded by 0363
 - [0281](0281-scheduled-routines.md) Scheduled routines: a request the Orchestrator receives at its time — superseded by 0325
+- [0301](0301-maps-button-on-the-orchestrator-head.md) The project maps button is back on the Orchestrator's head — superseded by 0363
+- [0302](0302-maps-show-what-moves-and-the-order.md) The maps show what moves, the order of the steps, and the passage between levels — superseded by 0363
+- [0307](0307-maps-open-full-screen-and-tell-every-passage.md) The maps open full screen, tell every step and every passage, and are redrawn from a button — superseded by 0363
+- [0316](0316-maps-in-depth-and-a-readable-viewer.md) Maps in depth, key files in the viewer, and code read as in an editor — superseded by 0363
+- [0322](0322-project-maps-told-as-a-line-of-phases.md) Project maps told as a line of phases and steps, with a richer and wider panel — superseded by 0363
+- [0326](0326-maps-tell-how-far-the-project-is.md) The maps tell how far the project is: a percentage, a progress card, the plan in the side panel — superseded by 0363
+- [0330](0330-maps-follow-their-chats.md) The maps follow their chats: a box says what its pieces say, a step that is ok is «fatto» — superseded by 0363
+- [0335](0335-project-map-line-top-to-bottom-with-parallel-frames.md) A line of phases and steps is drawn top to bottom, with parallel groups in their own frame — superseded by 0363
+- [0342](0342-a-work-map-per-job.md) A work map per job — superseded by 0363
+- [0343](0343-the-plan-is-its-map.md) The plan is its map, the maps are a list — superseded by 0363

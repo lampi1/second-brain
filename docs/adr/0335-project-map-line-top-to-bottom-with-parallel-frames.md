@@ -1,6 +1,6 @@
 # ADR 0335 · A line of phases and steps is drawn top to bottom, with parallel groups in their own frame
 
-Date: 2026-11-22 · Status: accepted (owner, through the Orchestrator: «the graph must never wrap to a new row. Lay the
+Date: 2026-11-22 · Status: superseded by ADR 0363 (the plans replace the maps) · it was: accepted (owner, through the Orchestrator: «the graph must never wrap to a new row. Lay the
 whole map out vertically (top to bottom: single steps one under the other, a parallel group as side-by-side columns
 inside its frame, then joined). Also make parallel group colours readable: the frame/label colour must signal
 "parallel" independently of each step's status colour»; on the mockup: «Il primo è il migliore»; «aggiorna anche le

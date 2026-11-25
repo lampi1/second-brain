@@ -1,6 +1,6 @@
 # ADR 0271 · Project maps: a project drawn in place of its code, kept current by its agents
 
-Date: 2026-11-12 · Status: accepted (owner, issue #385 and the thread of 2026-11-12: «a me serve qualcosa da vedere al
+Date: 2026-11-12 · Status: superseded by ADR 0363 (the plans replace the maps) · it was: accepted (owner, issue #385 and the thread of 2026-11-12: «a me serve qualcosa da vedere al
 posto del codice, una mappa … la struttura di un progetto nei vari sistemi, connessione, utenti … e l'avanzamento di
 ogni agente con un colpo d'occhio»; «entrare dentro un sistema e vedere anche altri sistemi»; «sia tutto sempre
 aggiornato, navigabile dall'inizio alla fine e riconsultabile chiedendolo all'Orchestrator») · Amended by: ADR 0316 (parts

@@ -1,6 +1,6 @@
 # ADR 0302 · The maps show what moves, the order of the steps, and the passage between levels
 
-Date: 2026-11-13 · Status: accepted (owner, 2026-11-13: «vorrei che nelle mappe fosse evidente con una discreta
+Date: 2026-11-13 · Status: superseded by ADR 0363 (the plans replace the maps) · it was: accepted (owner, 2026-11-13: «vorrei che nelle mappe fosse evidente con una discreta
 animazione la parte in corso se presente se non sono tutte finite, che si capisse quando i lavori sono in parallelo o
 uno dopo l'altro, e che la transizione da una mappa padre a una mappa interna fosse meglio, e cambia quel dropdown con
 una selezione laterale tipo quella della sezione giornale») · Builds on: ADR 0271, ADR 0275, ADR 0276 · Amended by:

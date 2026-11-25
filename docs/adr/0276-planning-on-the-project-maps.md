@@ -1,6 +1,6 @@
 # ADR 0276 · Planning on the project maps: the Strategist proposes a map, the app keeps it live
 
-Date: 2026-11-13 · Status: accepted (owner, thread of 2026-11-13: «vorrei che si potesse modificare in corso d'opera
+Date: 2026-11-13 · Status: superseded by ADR 0363 (the plans replace the maps) · it was: accepted (owner, thread of 2026-11-13: «vorrei che si potesse modificare in corso d'opera
 aggiungere pezzi insomma fosse la base per la pianificazione»; «solo l'orchestrator può fare modifiche alla mappa e mi
 piace che rimanga la chat dell'orchestrator a destra, l'orchestrator deve sempre sapere dove è l'utente e che mappa sta
 visualizzando ma in generale ogni punto dell'app»; «lo stratega deve proporre le mappe non più i piani come oggi e ogni

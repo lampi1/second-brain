@@ -1,6 +1,6 @@
 # ADR 0316 · Maps in depth, key files in the viewer, and code read as in an editor
 
-Date: 2026-11-15 · Status: accepted (owner, thread «Capire come esplorare il codice dei progetti», 2026-11-15: «non
+Date: 2026-11-15 · Status: superseded by ADR 0363 (the plans replace the maps) · it was: accepted (owner, thread «Capire come esplorare il codice dei progetti», 2026-11-15: «non
 vorrei vedere codice, vorrei capire bene come è strutturato senza vederlo e la mappa al momento non è perfetta in
 questo, troppi pochi dettagli», «vorrei un link al file chiave … che lo apre nel viewer»; he picked «Tutti e tre» on the
 three kinds of detail shown in a draft; then «al momento non posso vedere i file esterni all'app e il codice vorrei

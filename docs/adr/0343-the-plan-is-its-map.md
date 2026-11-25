@@ -1,6 +1,6 @@
 # ADR 0343: The plan is its map, the maps are a list
 
-**Status:** Accepted (2026-11-24). Screens of ADR 0342. Amends ADR 0108 and 0312 (the plan's steps on the strip), 0269 (the
+Status: superseded by ADR 0363 (the plans replace the maps) · it was: accepted (2026-11-24). Screens of ADR 0342. Amends ADR 0108 and 0312 (the plan's steps on the strip), 0269 (the
 plan's card among the questions), 0276 and 0326 (a plan approved on the project map). Amended by ADR 0346 (a box shows
 role and preset, never a model).
 
