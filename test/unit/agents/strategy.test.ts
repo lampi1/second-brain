@@ -15,9 +15,8 @@ import { ChatStore } from '../../../src/main/chats/store';
 import { CoordinationStore } from '../../../src/main/coordination/store';
 import { Workflows } from '../../../src/main/workflows/service';
 import { digest } from '../../../src/main/appctl/digest';
-import { stepPresetOf } from '../../../src/main/agents/strategy-tools';
 import { turnsOf } from '../../../src/shared/plan-steps';
-import { finishPlan, afterReport, isPlanApproval, checkProposal, checkRevision, stepGate, delegationGate, proposalGate, ENOUGH_QUESTIONS, PLAN_APPROVED, readPlan, STRATEGY_FLOW, stopsQuestions, withDelegated, withStep, type StrategyPlan } from '../../../src/shared/strategy';
+import { isPlanApproval, checkProposal, delegationGate, proposalGate, ENOUGH_QUESTIONS, PLAN_APPROVED, readPlan, STRATEGY_FLOW, stopsQuestions, type StrategyPlan } from '../../../src/shared/strategy';
 
 import { answerPanel, decide, fixture, managers, PLAN, planOf, STEPS3 } from './strategy-fixture';
 

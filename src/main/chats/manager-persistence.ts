@@ -20,7 +20,6 @@ import type { Rec } from './manager-types';
 import { clearTimeout, workBehind, storedResult, coldDivider, MAX_ARCHIVED, RUN_SAVE_MS, restoredOwner } from './manager-helpers';
 import { afterReopen, type StepReport } from '../../shared/strategy';
 import { proved } from '../../shared/plan-steps';
-import type { DelegationOutcome } from '../../shared/delegation';
 import { receiptsReading } from './receipt-reads';
 import { ManagerCore } from './manager-core';
 

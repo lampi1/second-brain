@@ -10,7 +10,7 @@ import { openDoubts } from './plan-doubts';
 import type { PresetId } from './model-presets';
 import { ladderText, type LadderQuestion } from './question-ladder';
 import type { WorkRoleId } from './roles';
-import { opens, progressOf, readySteps, timeOf, turnsOf, waitingFor, type PlanStep, type StepProof, type StepState } from './plan-steps';
+import { opens, progressOf, readySteps, timeOf, turnsOf, waitingFor, type StepProof, type StepState } from './plan-steps';
 import { readPlan, type StrategyPlan } from './strategy';
 
 /** One version of a plan, in the history list. */

@@ -14,7 +14,7 @@ import { isWorkRole, type WorkRoleId } from './roles';
 import type { DelegationOutcome } from './delegation';
 import { reservedText } from './away';
 import { isPresetId, PRESET_IDS, type PresetId } from './model-presets';
-import { circleOf, clashes, ended, nextStepId, progressOf, readSteps, readySteps, stepState, waitingFor, STEP_CHATS_MAX, STEP_DETAIL_MAX, STEP_PROOF_MAX, STEP_TITLE_MAX, STEPS_ALL_MAX, TOUCHES_MAX, TOUCH_LEN, type PlanStep, type StepProof, type StepState } from './plan-steps';
+import { circleOf, clashes, ended, nextStepId, progressOf, readSteps, readySteps, stepState, waitingFor, STEP_CHATS_MAX, STEP_PROOF_MAX, STEPS_ALL_MAX, TOUCHES_MAX, TOUCH_LEN, type PlanStep, type StepProof, type StepState } from './plan-steps';
 import { readDoubts, type PlanDoubt } from './plan-doubts';
 
 /** asking = it questions the user · proposed = the plan waits for the user's ok · revising = the user asked for changes ·
@@ -330,7 +330,7 @@ export function afterReport(plan: StrategyPlan, chatId: string, reports: (id: st
 }
 /** A chat of a blocked step works again, with its work still to give: the step is under way. The plan itself when nothing moved. */
 export function afterReopen(plan: StrategyPlan, chatId: string): StrategyPlan {
-  const i = plan.steps.findIndex(s => s.state === 'blocked' && s.chatIds?.includes(chatId));
+  const i = plan.steps.findIndex(s => s.state === 'blocked' && s.proof?.by === 'report' && s.chatIds?.includes(chatId));
   return i < 0 ? plan : withStep(plan, i, 'now', Date.now());
 }
 
