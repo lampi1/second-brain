@@ -689,7 +689,7 @@ export class AgentCatalogService {
   cardNow(roleId: string, ask: PresetAsk, o: { asker?: string; skip?: readonly string[] } = {}): CardPick {
     const p = this.find(roleId);
     // a chat that moves keeps its level: no delegator's price ceiling (it could lower the preset, ADR 0354 point 8)
-    const r = this.resolve({ harness: p.engine, cwd: '', roleId, ...ask } as NewChat, { holdLevel: true, claim: true, ...(o.asker ? { asker: o.asker } : {}), ...(o.skip ? { skip: o.skip } : {}) });
+    const r = this.resolve({ harness: p.engine, cwd: '', roleId, ...ask } as NewChat, { holdLevel: true, ...(o.asker ? { asker: o.asker } : {}), ...(o.skip ? { skip: o.skip } : {}) });
     const c = r.presetChoice;
     return { engine: r.request.harness, model: r.request.model ?? null, effort: r.request.effort ?? null, preset: c?.preset ?? 'base', allOut: !!c?.allOut, skipped: c?.skipped ?? [], route: c?.route ?? '', rooms: c?.rooms ?? [] };
   }

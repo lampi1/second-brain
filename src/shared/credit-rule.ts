@@ -132,8 +132,9 @@ function probation(f: CreditFacts, now: number, asker: string | undefined, why: 
 
 /** The pause after a new limit error. Errors of turns that started before the current pause ended count as one; a probe
  *  that started after it and failed doubles it (cap: 1 hour on a readable pool, a day on a blind one). */
-export function nextError(prev: CreditError | null, errorAt: number, turnStartedAt: number, readable: boolean): CreditError {
-  if (!prev) return { at: errorAt, pauseFrom: errorAt, pauseMs: SHORT_PAUSE_MS };
+export function nextError(prev: CreditError | null, errorAt: number, turnStartedAt: number, readable: boolean, workedFrom: number | null = null): CreditError {
+  // a clean turn after the last error proved the pool worked: a new error starts again from the short pause
+  if (!prev || (workedFrom !== null && workedFrom > prev.at)) return { at: errorAt, pauseFrom: errorAt, pauseMs: SHORT_PAUSE_MS };
   const end = prev.pauseFrom + prev.pauseMs;
   if (turnStartedAt < end) return { ...prev, at: Math.max(prev.at, errorAt) };
   return { at: errorAt, pauseFrom: errorAt, pauseMs: Math.min(readable ? PAUSE_CAP_READ_MS : PAUSE_CAP_BLIND_MS, prev.pauseMs * 2) };

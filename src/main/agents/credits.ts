@@ -13,7 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Harness } from '../../shared/contract';
-import { SHORT_PAUSE_MS, creditVerdict, nextError, type CreditError, type CreditReading, type CreditVerdict } from '../../shared/credit-rule';
+import { PROBE_TTL_MS, SHORT_PAUSE_MS, creditVerdict, nextError, type CreditError, type CreditReading, type CreditVerdict } from '../../shared/credit-rule';
 import { errText, log } from '../log';
 import { renameWithRetry } from './local-store';
 
@@ -87,7 +87,7 @@ export const FRESH_WAIT_MS = 2500;
 
 export class CreditBook {
   private pools = new Map<string, PoolFacts>();
-  private reading: Promise<void> | null = null;
+  private reading = new Map<string, Promise<void>>();
 
   constructor(private readonly file: string | null, private readonly d: CreditBookDeps, private readonly clock: () => number = d.now ?? Date.now) {
     if (file) this.read();
@@ -104,8 +104,8 @@ export class CreditBook {
 
   /** A chat starts on a pool on probation: it is the one that tries; the others take the next model until it reports. */
   claim(pool: string, owner: string): void {
-    const f = this.pools.get(pool);
-    if (!f || this.verdict(pool, null, owner).state !== 'probation') return;
+    if (this.verdict(pool, null, owner).state !== 'probation') return;
+    const f = this.pools.get(pool) ?? this.empty(pool);
     if (f.probe && f.probe.owner === owner) return;
     this.set({ ...f, probe: { owner, at: this.clock() } });
   }
@@ -113,7 +113,7 @@ export class CreditBook {
   /** A limit error seen in a chat's turn (`startedAt` = the turn's start): the pool pauses, see nextError. */
   signal(pool: string, startedAt: number, text = ''): void {
     const now = this.clock(), f = this.pools.get(pool) ?? this.empty(pool);
-    const error = nextError(f.error, now, startedAt, this.d.readable?.(pool) ?? false);
+    const error = nextError(f.error, now, startedAt, this.d.readable?.(pool) ?? false, f.workedFrom);
     const account = this.d.reading(pool)?.account ?? f.account;
     this.set({ ...f, account, error, probe: null });
     log.info('agents', 'credit pool paused by a limit error', { data: { pool, pauseMin: Math.round(error.pauseMs / 60e3), same: error.pauseFrom !== now, text: String(text).replace(/\s+/g, ' ').slice(0, 80) } });
@@ -157,9 +157,15 @@ export class CreditBook {
   async fresh(pools: readonly string[], ms = FRESH_WAIT_MS): Promise<void> {
     const due = [...new Set(pools)].filter(p => this.verdict(p, null).reread);
     if (!due.length || !this.d.read) return;
-    if (!this.reading) this.reading = this.d.read(due).catch(e => { log.warn('agents', 'credit reading failed', { cause: errText(e), hint: 'the pick uses the known state', data: { pools: due } }); }).finally(() => { this.reading = null; });
+    // one read at a time per pool: pools already being read share it, the others get their own
+    const start = due.filter(p => !this.reading.has(p));
+    if (start.length) {
+      const p = this.d.read(start).catch(e => { log.warn('agents', 'credit reading failed', { cause: errText(e), hint: 'the pick uses the known state', data: { pools: start } }); })
+        .finally(() => { for (const x of start) if (this.reading.get(x) === p) this.reading.delete(x); });
+      for (const x of start) this.reading.set(x, p);
+    }
     let timer: ReturnType<typeof setTimeout> | undefined;
-    await Promise.race([this.reading, new Promise<void>(res => { timer = setTimeout(res, ms); (timer as { unref?: () => void }).unref?.(); })]);
+    await Promise.race([Promise.all(due.map(p => this.reading.get(p))), new Promise<void>(res => { timer = setTimeout(res, ms); (timer as { unref?: () => void }).unref?.(); })]);
     if (timer) clearTimeout(timer);
   }
 
@@ -168,7 +174,7 @@ export class CreditBook {
   async retry(pool: string): Promise<CreditVerdict> {
     await this.d.read?.([pool]).catch(() => undefined);
     const v = this.verdict(pool, null), f = this.pools.get(pool);
-    if (v.state === 'out' && v.source === 'error' && f?.error) {
+    if (v.state === 'out' && v.source === 'error' && f?.error && !(f.probe && this.clock() - f.probe.at < PROBE_TTL_MS)) {
       const now = this.clock();
       this.set({ ...f, error: { ...f.error, pauseFrom: now - f.error.pauseMs, at: Math.min(f.error.at, now - f.error.pauseMs) }, probe: null });
     }

@@ -8,12 +8,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { CreditBook, FRESH_WAIT_MS } from '../../../src/main/agents/credits';
-import { creditLive, readingOf, type CreditUsage } from '../../../src/main/agents/credit-live';
+import { KICK_MS, creditLive, readingOf, type CreditUsage } from '../../../src/main/agents/credit-live';
+import { GRACE_MS, creditWaitWatch } from '../../../src/main/agents/credit-wait';
 import { inheritUserModel } from '../../../src/main/agents/catalog';
 import { UsageMonitor, READ_MIN_MS, accountHash } from '../../../src/main/brain/usage';
 import { SHORT_PAUSE_MS, type CreditReading } from '../../../src/shared/credit-rule';
 import { pickInLevel, pickLines, roomOf, type LevelModel } from '../../../src/shared/model-levels';
-import type { HarnessUsage, HarnessUsageWindow } from '../../../src/shared/contract';
+import type { ChatSummary, HarnessUsage, HarnessUsageWindow } from '../../../src/shared/contract';
 
 const MIN = 60e3, HOUR = 60 * MIN;
 const T = Date.UTC(2026, 10, 24, 21, 0);
@@ -254,5 +255,58 @@ describe('the user\'s own model for a piece of work (13, 14)', () => {
     book.observe('opencode', SOL, LIMIT, true, T);
     const p = pick(book, T)!;
     expect(pickLines({ chosen: `${p.chosen.model} (${p.chosen.engine})`, skipped: p.skipped }, T)).toBe(`${SOL} (opencode) saltato: credito finito, errore di limite: pausa breve, torna alle ${hm(T + SHORT_PAUSE_MS)} · parte su ${OTHER} (opencode)`);
+  });
+});
+
+describe('review fixes', () => {
+  it('a pick that finds a stopped pool wakes the waiting chats at most once per pool in KICK_MS, never in a loop', async () => {
+    const clock = { t: T };
+    const later: (() => void)[] = [];
+    let calls = 0;
+    const ref: { c?: ReturnType<typeof creditLive> } = {};
+    const c = creditLive({ file: null, usage: { usageReadNow: async () => {} }, now: () => clock.t, later: (fn, ms) => { if (ms === 0) later.push(fn); return { cancel() {} }; },
+      changed: () => { calls++; ref.c!.room('cursor', null); } });
+    ref.c = c;
+    c.observe('cursor', null, LIMIT, true, T);
+    c.room('cursor', null);
+    for (let i = 0; i < 5; i++) { await new Promise(r => setImmediate(r)); for (const fn of later.splice(0)) fn(); }
+    expect(calls).toBeLessThanOrEqual(2);
+    clock.t += KICK_MS;
+    c.room('cursor', null);
+    await new Promise(r => setImmediate(r)); for (const fn of later.splice(0)) fn();
+    expect(calls).toBeLessThanOrEqual(3);
+  });
+  it('a pause starts again from the short one after a clean turn: errors days apart never grow to a day', () => {
+    const { book, clock } = bookOf({ readable: false });
+    for (let day = 0; day < 10; day++) {
+      clock.t = T + day * 24 * HOUR;
+      book.observe('cursor', null, LIMIT, true, clock.t - 10e3);
+      clock.t += SHORT_PAUSE_MS + MIN;
+      book.observe('cursor', null, null, false, clock.t - 10e3);
+    }
+    expect(book.facts('cursor')!.error!.pauseMs).toBe(SHORT_PAUSE_MS);
+  });
+  it('a pool on probation after a passed reset gets its one probe too; «Riprova ora» never wipes a probe in flight', async () => {
+    const { book, readings, clock } = bookOf({ read: async () => {} });
+    readings.set('claude', read('claude', T - 3 * HOUR, [win('5h', 100, T - HOUR)]));
+    book.claim('claude', 'chat-1');
+    expect(book.verdict('claude', null, 'chat-2').state).toBe('out');
+    book.observe('opencode', SOL, LIMIT, true, T);
+    clock.t = T + SHORT_PAUSE_MS + 1;
+    book.claim('opencode:openai', 'chat-1');
+    await book.retry('opencode:openai');
+    expect(book.facts('opencode:openai')!.probe!.owner).toBe('chat-1');
+  });
+  it('the watch claims a probation pool only when the move runs, not while it is announced', async () => {
+    const clock = { t: 1000 };
+    const claim = vi.fn();
+    const chat = { id: 'a', harness: 'claude', model: 'm-old', state: 'idle', agent: { id: 'scout', source: 'catalog' }, creditWait: { at: 1, model: 'm-old', card: 'claude:m-old' } } as unknown as ChatSummary;
+    const chats = { list: () => [chat], creditPlan: (_id: string, next: { card: string; at: number }) => { chat.creditWait = { ...chat.creditWait!, next }; },
+      creditResume: vi.fn(async () => true), creditContinue: vi.fn(async () => true), creditWaiting() {}, creditHold() {}, creditFailed() {} };
+    const watch = creditWaitWatch({ chats, card: () => ({ engine: 'claude', model: 'm-next', effort: null }), claim, now: () => clock.t, later: () => {} });
+    watch();
+    expect(claim).not.toHaveBeenCalled();
+    clock.t += GRACE_MS + 1; watch();
+    expect(claim).toHaveBeenCalledWith(expect.objectContaining({ model: 'm-next' }), 'a');
   });
 });

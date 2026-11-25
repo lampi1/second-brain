@@ -34,6 +34,9 @@ export function readingOf(h: HarnessUsage | undefined): CreditReading | null {
   return { at: h.at, ok: h.status === 'ok', pool: h.pool, account: h.account ?? null, windows: h.windows };
 }
 
+/** The shortest gap between two background reads a pick starts for one pool. */
+export const KICK_MS = 30e3;
+
 export interface CreditLive {
   book: CreditBook;
   verdict(engine: Harness, model: string | null, asker?: string): CreditVerdict;
@@ -61,6 +64,9 @@ export function creditLive(d: CreditLiveDeps): CreditLive {
     now,
   }, now);
   let timer: { cancel(): void } | null = null, stopped = false;
+  // a pick that finds a stopped pool reads it in the background and wakes the waiting chats: at most once per pool per
+  // KICK_MS, on a macrotask (a throttled read resolves at once: without this the watch and the pick would call each other)
+  const kicked = new Map<string, number>();
   const verdict = (engine: Harness, model: string | null, asker?: string) => book.verdict(poolOf(engine, model), model, asker);
 
   // the pools the panel and the timer look at: those the book has facts for and those with a reading
@@ -110,7 +116,11 @@ export function creditLive(d: CreditLiveDeps): CreditLive {
     room: (engine, model, asker) => {
       const v = verdict(engine, model, asker);
       // a stopped pool without a valid reading: read it again now (shared, throttled); this pick goes on with what it knows
-      if (v.reread) void book.fresh([poolOf(engine, model)]).then(() => d.changed());
+      const pool = poolOf(engine, model);
+      if (v.reread && now() - (kicked.get(pool) ?? -Infinity) >= KICK_MS) {
+        kicked.set(pool, now());
+        void book.fresh([pool]).then(() => { later(() => d.changed(), 0); });
+      }
       return roomOf(v);
     },
     fresh: async models => book.fresh(models.map(m => poolOf(m.engine, m.model))),

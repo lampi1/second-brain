@@ -854,7 +854,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   ctx.emitter.tap(ch => { if (ch === 'brainmodel:changed' || ch === 'agents:changed') brainModel.invalidate(); });
   // a role chat out of credits moves by itself to the first model with room of its level (ADR 0346, 0348, 0354): at each
   // change of the catalog, of a waiting chat, of a usage reading and at the end of a pause or a spent window
-  const creditWait = creditWaitWatch({ chats: manager, card: (roleId, ask, o) => agents.cardNow(roleId, ask, o),
+  const creditWait = creditWaitWatch({ chats: manager, card: (roleId, ask, o) => agents.cardNow(roleId, ask, o), claim: (on, owner) => credits.claim(on.engine, on.model, owner),
     levelsKey: roleId => { const p = agents.list().profiles.find(x => x.id === roleId); return p ? JSON.stringify(agents.levelsFor(p)) : ''; } });
   creditWaitRef.current = creditWait;
   ctx.emitter.tap((ch, payload) => { if (ch === 'agents:changed' || (ch === 'chat:updated' && (payload as ChatSummary | undefined)?.creditWait)) creditWait(); });
