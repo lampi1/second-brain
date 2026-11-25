@@ -347,6 +347,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0355](0355-a-contracts-tools-never-limit-what-a-delegated-chat-may-run.md) A contract's tools never limit what a delegated chat may run; three writes wait for the user — accepted
 - [0356](0356-every-chat-has-its-roles-tools-on-every-engine.md) Every chat has its role's app tools on every engine, from the first turn to the last — accepted
 - [0357](0357-claude-and-gpt-on-antigravity-have-their-own-quota-pool.md) Claude and GPT models on Antigravity have their own quota pool — accepted
+- [0358](0358-a-stopped-root-strategist-wakes-the-orchestrator.md) A root Strategist stopped without a result wakes the Orchestrator — accepted
 
 ## Replaced
 
