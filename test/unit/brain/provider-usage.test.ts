@@ -110,10 +110,10 @@ describe('provider-usage normalizers', () => {
     }, null, NOW);
     expect(ag.status).toBe('ok');
     expect(ag.planLabel).toBe('Google AI Pro');
-    expect(ag.windows.map(w => [w.label, w.usedPercent])).toEqual([['5h', 25], ['7g', 19], ['7g · 3P', 50]]);
+    expect(ag.windows.map(w => [w.label, w.usedPercent])).toEqual([['5h', 25], ['7g', 19], ['7g · Claude/GPT', 50]]);
   });
 
-  it('reads agy 1.5.14 statusLine JSON: Gemini 5h and weekly, unused 3P and other buckets left out', () => {
+  it('reads agy 1.5.14 statusLine JSON: Gemini and Claude/GPT pools apart, other buckets left out', () => {
     // the shape agy wrote on Windows (anonymized): the first status has no quota yet, the second has five buckets
     const first = JSON.stringify({ product: 'antigravity', agent_state: 'initializing', email: 'dev@example.com' });
     const second = JSON.stringify({
@@ -136,6 +136,8 @@ describe('provider-usage normalizers', () => {
     expect(ag.windows.map(w => [w.kind, w.label, w.usedPercent, w.resetsAt])).toEqual([
       ['five-hour', '5h', 100, Date.parse('2026-11-22T21:23:54Z')],
       ['weekly', '7g', 28.8, Date.parse('2026-11-29T16:23:54Z')],
+      ['five-hour', '5h · Claude/GPT', 0, Date.parse('2026-11-23T00:07:06Z')],
+      ['weekly', '7g · Claude/GPT', 0, Date.parse('2026-11-29T19:07:06Z')],
     ]);
   });
 
@@ -226,5 +228,15 @@ describe('sweepStaleAgyDirs', () => {
     expect(fs.existsSync(fresh)).toBe(true);
     expect(fs.existsSync(other)).toBe(true);
     fs.rmSync(base, { recursive: true, force: true });
+  });
+});
+
+describe('Antigravity window scopes (ADR 0357)', () => {
+  it('Gemini windows count for Gemini models, used 3P windows for Claude/GPT ones', () => {
+    const ag = normalizeAntigravityUsage({ quota: {
+      'gemini-5h': { remaining_fraction: 0, reset_in_seconds: 7200 },
+      '3p-weekly': { remaining_fraction: 0.4, reset_in_seconds: 7200 },
+    } }, null, 1_000_000);
+    expect(ag.windows.map(w => [w.label, w.scope])).toEqual([['5h', 'gemini'], ['7g · Claude/GPT', '3p']]);
   });
 });

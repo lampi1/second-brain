@@ -77,7 +77,7 @@ export function creditLive(d: CreditLiveDeps): CreditLive {
   // the pools the panel and the timer look at: those the book has facts for and those with a reading
   const pools = (): string[] => {
     const all = new Set(book.list());
-    for (const h of ['claude', 'cursor', 'codex', 'antigravity', 'opencode:openai', 'opencode:zen'] as const) if (d.usage.usageReading?.(h)) all.add(h);
+    for (const h of ['claude', 'cursor', 'codex', 'antigravity', 'antigravity:3p', 'opencode:openai', 'opencode:zen'] as const) if (d.usage.usageReading?.(h)) all.add(h);
     return [...all];
   };
 

@@ -63,9 +63,16 @@ export function clock(at: number, now: number, fmt?: (at: number) => string): st
 }
 const fmtLeft = (ms: number): string => ms >= DAY ? `${Math.floor(ms / DAY)}g ${Math.floor(ms % DAY / HOUR)}h` : ms >= HOUR ? `${Math.floor(ms / HOUR)}h ${Math.floor(ms % HOUR / MIN)}m` : `${Math.max(1, Math.round(ms / MIN))}m`;
 
+/** Models the Antigravity plan counts in its «Claude and GPT» pool (the rest is Gemini). */
+const THIRD_PARTY = /\b(claude|opus|sonnet|haiku|fable|mythos|gpt|oss)\b/i;
+/** Does this model name belong to Antigravity's Claude/GPT pool (one rule for the pool pick and the window scope)? */
+export const isThirdPartyModel = (model: string | null | undefined): boolean => THIRD_PARTY.test(String(model ?? '').replace(/[-_.]/g, ' '));
+
 /** A window that stops this model: the plan's own, or one of this model only (spend windows never stop the plan). */
-export function binding(w: HarnessUsageWindow, model: string | null | undefined): boolean {
+export function binding(w: HarnessUsageWindow, model: string | null | undefined, pool = ''): boolean {
   if (w.kind === 'spend') return false;
+  // a pool of one engine (Antigravity: Gemini apart from Claude/GPT, ADR 0357): it stops only the models of its pool
+  if (w.scope) { const third = model ? isThirdPartyModel(model) : pool.endsWith(':3p'); return w.scope === '3p' ? third : !third; }
   if (!w.model) return true;
   return !!model && model.toLowerCase().includes(w.model.toLowerCase());
 }
@@ -84,7 +91,7 @@ export function creditVerdict(f: CreditFacts, now: number, o: { asker?: string; 
   const at = (x: number) => clock(x, now, o.fmt);
   // 1. a window of the plan at 98% or more: spent until its reset (the farthest one); no reset = until a reading drops
   if (r) {
-    const spent = r.windows.filter(w => binding(w, f.model) && w.usedPercent >= SPENT_PCT);
+    const spent = r.windows.filter(w => binding(w, f.model, f.pool) && w.usedPercent >= SPENT_PCT);
     if (spent.length) {
       const label = spent.map(w => `${w.label} al ${Math.round(w.usedPercent)}%`).join(', ');
       if (spent.some(w => w.resetsAt === null)) {
@@ -111,13 +118,13 @@ export function creditVerdict(f: CreditFacts, now: number, o: { asker?: string; 
   // 3. the reading's pace (unchanged rule, ADR 0347): the share used against the share of the window gone by
   if (r) {
     for (const w of r.windows) {
-      if (!binding(w, f.model) || w.resetsAt === null) continue;
+      if (!binding(w, f.model, f.pool) || w.resetsAt === null) continue;
       const span = WINDOW_MS[w.kind], left = w.resetsAt - now;
       if (!span || left <= 0 || w.usedPercent < 50) continue;
       const gone = Math.min(1, Math.max(0, (span - left) / span));
       if (gone >= 0.1 && w.usedPercent / gone > 100) return { state: 'pace', why: `${w.label} al ${Math.round(w.usedPercent)}% con ${fmtLeft(left)} al rinnovo: a questo ritmo finisce prima`, source: 'reading', until: w.resetsAt, readingAt };
     }
-    const top = r.windows.filter(w => binding(w, f.model)).reduce<HarnessUsageWindow | null>((a, w) => !a || w.usedPercent > a.usedPercent ? w : a, null);
+    const top = r.windows.filter(w => binding(w, f.model, f.pool)).reduce<HarnessUsageWindow | null>((a, w) => !a || w.usedPercent > a.usedPercent ? w : a, null);
     return { state: 'free', why: top ? `${top.label} al ${Math.round(top.usedPercent)}%` : 'nessun limite riportato', source: 'reading', until: null, readingAt };
   }
   if (e) return { state: 'free', why: 'un turno è andato a buon fine dopo l’errore di limite', source: 'turn', until: null, readingAt: null };

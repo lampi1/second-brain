@@ -31,7 +31,7 @@ export function inOrder<T extends { engine: Harness }>(list: readonly T[], order
  *  has no threshold or nothing was read. */
 export function pastThreshold(reading: CreditReading | null, model: string | null, threshold: number | null | undefined, now: number): string | null {
   if (!threshold || !reading?.ok) return null;
-  const w = reading.windows.find(x => binding(x, model) && x.usedPercent >= threshold && (x.resetsAt === null || x.resetsAt > now));
+  const w = reading.windows.find(x => binding(x, model, reading.pool) && x.usedPercent >= threshold && (x.resetsAt === null || x.resetsAt > now));
   return w ? `${w.label} al ${Math.round(w.usedPercent)}%, soglia ${threshold}%` : null;
 }
 
