@@ -116,6 +116,12 @@ describe('Antigravity: Gemini and Claude/GPT are two quota pools (ADR 0357)', ()
     expect(on(f, 'gemini-3.8-flash')).toBe('free');
     expect(on(f, 'claude-opus-5-5')).toBe('out');
   });
+  it('a pool-level verdict (no model) looks at its own pool: antigravity:3p is out when Claude/GPT is spent', () => {
+    const f = { ...ag(gem(3), third(100)), pool: 'antigravity:3p' };
+    expect(v({ ...f, reading: { ...f.reading!, pool: 'antigravity:3p' } }, T + MIN).state).toBe('out');
+    const g = { ...ag(gem(100), third(3)), pool: 'antigravity:3p' };
+    expect(v({ ...g, reading: { ...g.reading!, pool: 'antigravity:3p' } }, T + MIN).state).toBe('free');
+  });
   it('a window without a scope still stops every model (other engines unchanged)', () => {
     expect(on(facts({ reading: reading(T, [w('5h', 100, T + 2 * HOUR)]) }), 'claude-opus-5-5')).toBe('out');
   });
