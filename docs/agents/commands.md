@@ -63,11 +63,11 @@ row and its line here in the same change.
 | `app_screenshot` | Orchestrator, /mcp/app | A screenshot of the app window and of each browser tab on screen. |
 | `app_ui` | Orchestrator, /mcp/app | Steer the UI without taking focus: open a page, maximize a chat, or read the screen outline. |
 | `app_create_chat` | Orchestrator, /mcp/app | Open a work chat that runs one role, started with a self-contained prompt; `map` links it to the pieces of a project map it works on (ADR 0330). |
-| `app_assign_task` | Orchestrator, /mcp/app | Give a finished work chat a new measured task in the same role and project; `map` moves it to other pieces of the map. |
+| `app_assign_task` | Orchestrator, /mcp/app | Give a finished work chat a new measured task in the same role and project, on any engine (a chat whose engine cannot run goes on in a new one on its card's engine, ADR 0352); `map` moves it to other pieces of the map. |
 | `app_task_events` | Orchestrator, /mcp/app | The ordered user decisions of a root task (optional: app_assign_task returns the unread ones). |
-| `app_send_to_chat` | Orchestrator, /mcp/app | Send a message to an active app chat, labelled as not the user's approval. |
+| `app_send_to_chat` | Orchestrator, /mcp/app | Send a message to an app chat on any engine (a stopped or auto-closed one resumes; ADR 0352), labelled as not the user's approval. |
 | `app_close_chat` | Orchestrator, /mcp/app | Close a chat for the user, like ✕: its engine, the tools it started and its delegation tree end; refused while it or an open descendant waits for the user. |
-| `app_reopen_chat` | Orchestrator, /mcp/app | Reopen a closed chat with its whole history. |
+| `app_reopen_chat` | Orchestrator, /mcp/app | Reopen a closed chat with its whole history and engine; `reopened: true` or why not (a chat the user closed: only right after his own ask). |
 | `app_handoff_chat` | Orchestrator, /mcp/app | Have a chat write its hand-off note now. |
 | `app_continue_chat` | Orchestrator, /mcp/app | «Riprendi»: a new chat on the same engine and folder from the old chat's hand-off. |
 | `app_set_chat_effort` | Orchestrator, /mcp/app | Pick the reasoning effort of one running chat for this conversation only. |

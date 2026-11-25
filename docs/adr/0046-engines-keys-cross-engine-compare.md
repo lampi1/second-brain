@@ -1,6 +1,6 @@
 # ADR 0046 · Generic engines: one registry, API keys in Settings, one cross-engine switch, model A vs model B
 
-Date: 2026-10-14 · Status: partly superseded by ADR 0065 (the cross-engine transport switch); accepted (design; built in four steps) · Amends: ADR 0032
+Date: 2026-10-14 · Status: partly superseded by ADR 0065 (the cross-engine transport switch) and [ADR 0352](0352-any-engine-reaches-any-engine.md) (`crossRefusal` deleted, `openRefusal` is the only engine rule); accepted (design; built in four steps) · Amends: ADR 0032
 (hard rules, harness names), ADR 0021 (the Regia's engine and the Claude ↔ Cursor rule)
 
 ## Context

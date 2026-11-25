@@ -169,7 +169,7 @@ export interface ChatManagerOptions {
 
 export interface HandoffOptions {
   reason?: 'manual' | 'threshold' | 'finished' | 'continue' | 'cold';
-  /** false = never start a stopped engine for it (an agent asking about a Cursor chat): a token-free note instead */
+  /** false = never start a stopped engine for it (its engine cannot run now, or the old engine has no credit): a token-free note instead */
   allowStart?: boolean;
   /** false = never ask the chat, even a running one: always the token-free note (the automatic closing of finished
    *  chats, owner 2026-10-11: no turn and no tokens at close) */
