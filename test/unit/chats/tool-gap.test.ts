@@ -131,7 +131,8 @@ describe('the required tools of a chat, checked at every start (ADR 0356)', () =
     await vi.waitFor(() => expect(f.sent.filter(t => t.includes('Al tuo motore mancano')).length).toBe(1));
     await f.m.send(c.id, 'continua');
     turn(2);
-    await new Promise(r => setImmediate(r));
+    await f.m.send(c.id, 'ancora');
+    await vi.waitFor(() => expect(f.sent.at(-1)).toContain('ancora'));
     expect(f.sent.filter(t => t.includes('Al tuo motore mancano')).length).toBe(1);
     const g = fixture(), k = await g.child('claude');
     g.m.toolsServed(k.id, ['show_ui', 'agent_report', 'agent_ask_parent']);

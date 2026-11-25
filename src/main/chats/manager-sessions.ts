@@ -43,7 +43,7 @@ export const DELIVERED_RELEASE_MS = 5 * 60_000;
 const turnAnswers = (items: readonly ChatItem[]): string => {
   const out: string[] = [];
   for (let i = items.length - 1; i >= 0 && items[i]!.kind !== 'user'; i--) { const it = items[i]!; if (it.kind === 'assistant') out.unshift(it.text); }
-  return out.join('\n');
+  return out.join('\n\n');
 };
 
 /** The engine is handed the app's MCP endpoint for sure (ADR 0356): Claude and Codex always; an ACP engine only when

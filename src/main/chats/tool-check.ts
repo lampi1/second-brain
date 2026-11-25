@@ -50,15 +50,15 @@ export function toolAction(required: readonly string[], s: ToolSession, reloads:
 }
 
 /** Words that say something is not there or cannot be used (Italian, English, German). */
-const ABSENT = /\b(?:non (?:ho|vedo|trovo|riesco a (?:trovare|usare|vedere)|posso usare|risulta|risultano|è disponibile|sono disponibili|è presente|sono presenti|esiste|esistono|è (?:tra|fra)|sono (?:tra|fra))|manca(?:no|nte|nti)?|assente|assenti|indisponibil\w*|not (?:available|exposed|present|found|listed|loaded|among|in my)|missing|unavailable|no access to|(?:can ?not|can'?t) (?:find|see|use|access)|don'?t (?:have|see)|do not (?:have|see)|isn'?t (?:available|there)|aren'?t (?:available|there)|nicht (?:verfügbar|vorhanden)|fehl(?:t|en))\b/i;
+const ABSENT = /\b(?:non (?:ho (?:accesso|a disposizione|lo strumento|gli strumenti|il tool|i tool)|vedo|trovo|riesco a (?:trovare|usare|vedere)|posso usare|risulta|risultano|è disponibile|sono disponibili|è presente|sono presenti|esiste|esistono|è (?:tra|fra)|sono (?:tra|fra))|manca(?:no|nte|nti)?|assente|assenti|indisponibil\w*|not (?:available|exposed|present|found|listed|loaded|among|in my)|missing|unavailable|no access to|(?:can ?not|can'?t) (?:find|see|use|access)|don'?t (?:have|see)|do not (?:have|see)|isn'?t (?:available|there)|aren'?t (?:available|there)|nicht (?:verfügbar|vorhanden)|fehl(?:t|en))\b/i;
 /** Words that say the sentence is about the speaker's own tools: without one, an absence is about something else. */
-const OWN_TOOLS = /\b(?:strument[oi]|tool(?:s|list)?|funzion[ei]|mia sessione|miei|a mia disposizione|my (?:session|tools|tool list)|available to me|i have|werkzeug\w*|meine)\b/i;
+const OWN_TOOLS = /\b(?:(?:i )?miei strumenti|tra i miei|fra i miei|nella mia sessione|a mia disposizione|lo strumento|gli strumenti dell'app|my (?:session|tools|tool list)|available to me|in my (?:tools|session|tool list)|among my|meine[nr]? werkzeug\w*)\b/i;
 
 /** The required tools an answer says the speaker lacks: a tool named (in any engine's spelling) in a sentence that says
  *  it is not there and is about the speaker's own tools. [] = none. Pure; a guess from words, so it only ever leads to
  *  the fallback command, once per session, and only where the app cannot see what the engine loaded. */
 export function saysToolMissing(text: string, required: readonly string[]): string[] {
-  const t = String(text ?? '').slice(0, 20_000);
+  const t = String(text ?? '').slice(-20_000);
   if (!t || !required.length) return [];
   const out = new Set<string>();
   for (const sentence of t.split(/(?<=[.!?\n])\s+/)) {

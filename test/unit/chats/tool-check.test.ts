@@ -51,6 +51,10 @@ describe('saysToolMissing', () => {
     expect(saysToolMissing('Non trovo il file config.ts, quindi chiedo con agent_ask_parent.', [...need, 'agent_ask_parent'])).toEqual([]);
     expect(saysToolMissing('Tests are missing for the parser; reporting with agent_report outcome partial.', need)).toEqual([]);
     expect(saysToolMissing('Non vedo motivo di usare show_ui qui.', need)).toEqual([]);
+    expect(saysToolMissing('I have finished the parser, but tests are missing; calling agent_report with outcome partial.', need)).toEqual([]);
+    expect(saysToolMissing('Ho controllato i miei file: manca il test, quindi chiamo agent_report.', need)).toEqual([]);
+    expect(saysToolMissing('Non ho altro da aggiungere: uso agent_report con gli strumenti del repo.', need)).toEqual([]);
+    expect(saysToolMissing('The missing tool check in tool-check.ts now ignores agent_report when the tools list is served.', need)).toEqual([]);
   });
   it('said missing: the fallback at once, also after a reload, never twice', () => {
     expect(toolAction(need, { startedAt: 1, served: need, saidMissing: ['plan_propose'] }, 0, true)).toMatchObject({ kind: 'fallback', missing: ['plan_propose'] });
