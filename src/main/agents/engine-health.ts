@@ -1,4 +1,4 @@
-// Engines whose chats just failed to start (ADR 0358): «se oggi l'app passa davvero al motore successivo quando il primo
+// Engines whose chats just failed to start (ADR 0359): «se oggi l'app passa davvero al motore successivo quando il primo
 // è … in errore». An engine is in trouble for TROUBLE_MS after one of its chats ended in error before its first turn (no
 // answer, a login that does not work, a crash at start); a turn that ends well on it clears it at once. A plan limit is not
 // trouble (the credit book has it, credits.ts). In memory only: a restart tries every engine again. Used by wiring.ts (the

@@ -323,7 +323,7 @@ function valid(x: unknown): StoredChat | null {
     ...(c.waitsOnWork === true ? { waitsOnWork: true as const } : {}),
     ...(readCreditWait(c.creditWait) ? { creditWait: readCreditWait(c.creditWait)! } : {}),
     ...(readCreditMoved(c.creditMoved) ? { creditMoved: readCreditMoved(c.creditMoved)! } : {}),
-    // the copy it works in, and what it was told of its folder: kept over a restart (ADR 0359)
+    // the copy it works in, and what it was told of its folder: kept over a restart (ADR 0360)
     ...(c.place === 'copy' ? { place: 'copy' as const } : {}),
     ...(Array.isArray(c.folderNotes) ? (() => { const n = c.folderNotes.filter((x: unknown): x is string => typeof x === 'string' && x.length <= 2000).slice(0, 6); return n.length ? { folderNotes: n } : {}; })() : {}),
     ...(readUserModel(c.userModel) ? { userModel: readUserModel(c.userModel)! } : {}),

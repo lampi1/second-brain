@@ -9,9 +9,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - One order of the engines for every role (Settings → Engines), a threshold per engine, an explicit exception per role, the
   engine in error passed over, a clear warning when every plan is spent, the reason on every chat. A configuration change
   the app does not apply stays «da applicare» on its own panel; a yes that names the change counts whatever news lands
-  after it (ADR 0358).
+  after it (ADR 0359).
 - Whoever opens a chat chooses its folder and works in it: a copy (isolated worktree) only when asked, uncommitted changes
-  and another writer told and never touched, reuse and «Riprendi» in another folder in a linked chat (ADR 0359).
+  and another writer told and never touched, reuse and «Riprendi» in another folder in a linked chat (ADR 0360).
 - Engine limits follow the real data: a chat starts on the first model of the card that really has credit, read from
   the usage of each engine, provider and account. A limit error opens a 5-minute pause, not a day; a clean turn or a
   fresh reading under 98% ends it. A skipped model is said in the chat and in the answers («saltato: 5h al 100%, torna

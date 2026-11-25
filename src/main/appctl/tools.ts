@@ -691,7 +691,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const cwd = typeof a.cwd === 'string' && a.cwd.trim() ? a.cwd.trim() : target.cwd, place = placeOf(a.place, 'place');
         const moved = !sameFolder(cwd, target.cwd) || place === 'copy' && target.place !== 'copy', noFolder = moved ? folderProblem(cwd) : null;
         if (noFolder) throw new ToolRefusal(noFolder);
-        // the engine its role starts on now (ADR 0358): another one goes on in a linked chat, never in place
+        // the engine its role starts on now (ADR 0359): another one goes on in a linked chat, never in place
         const on = d.chats.engineNow?.(target.id) ?? undefined;
         if (!d.agents) throw new Error('app_assign_task: the role catalog is not available.');
         // a card changed since the chat started does not stop the work (ADR 0352): the chat takes the card's current
@@ -801,7 +801,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         // a delegated chat goes on under its parent, which reads its hand-off (ADR 0083): not the Orchestrator's to continue
         const target = need(contentOf(String(a.chatId)));
         // the engine must be one agents may open (on, and the Orchestrators allowed there); the caller's own plays no part
-        // the engine the user's order starts the role on now (ADR 0358), else its own
+        // the engine the user's order starts the role on now (ADR 0359), else its own
         const on = d.chats.engineNow?.(target.id) ?? undefined;
         const refused = openRefusal(d.brain.settings(), on?.harness ?? target.harness);
         if (refused) throw new Error(`bloccato: ${refused}`);

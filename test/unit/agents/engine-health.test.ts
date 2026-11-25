@@ -1,4 +1,4 @@
-// An engine whose chats just failed to start (src/main/agents/engine-health.ts, ADR 0358): in trouble for ten minutes, once
+// An engine whose chats just failed to start (src/main/agents/engine-health.ts, ADR 0359): in trouble for ten minutes, once
 // per chat that enters the error, cleared by a good turn; a plan limit is the credit book's, never trouble.
 import { describe, expect, it } from 'vitest';
 import { EngineHealth, TROUBLE_MS } from '../../../src/main/agents/engine-health';
