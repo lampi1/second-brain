@@ -12,6 +12,7 @@ import { backedAnswer } from './ran-check';
 
 import { errText, log } from '../log';
 import { engineOf } from '../engines/registry';
+import { shellOfTool } from '../agents/command-steps';
 import { allowsClass, COMMAND_TOOLS, commandsReadOnly, readOnlyCommand, toolClassOf, type ReadScripts } from '../agents/tool-policy';
 import { readOnlyTools } from '../agents/read-tools';
 import { gateRequest, runtimePluginName } from '../agents/role-gate';
@@ -587,7 +588,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     const command = (req.input as { command?: unknown } | null)?.command;
     const parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
     const parentRuns = !!parent && !commandsReadOnly(parent.policy) && allowsClass(parent.policy, 'shell');
-    if (readOnlyCommand(command, this.permissionReadScripts(r, req)) || parentRuns) { req.noAlways = true; delete req.alwaysRules; return null; }
+    if (readOnlyCommand(command, this.permissionReadScripts(r, req), shellOfTool(req.tool)) || parentRuns) { req.noAlways = true; delete req.alwaysRules; return null; }
     const shown = typeof command === 'string' ? command.slice(0, 120) : req.tool;
     log.info('chats', 'command refused: read-only role', { chat: r.s.id, data: { tool: req.tool } });
     return { kind: 'deny', policy: 'read-only-role', item: sysItem('commandReadOnly', { command: shown }, 'warn'),
@@ -618,7 +619,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     const command = (req.input as { command?: unknown } | null)?.command;
     if (r.policy?.tools && c && !allowsClass(r.policy, c)) return toUser(`tool class not given to the chat: ${c}`);
     const readScripts = this.permissionReadScripts(r, req);
-    if (COMMAND_TOOLS.includes(req.tool) && commandsReadOnly(r.policy) && !readOnlyCommand(command, readScripts)) return toUser('the chat may only run commands that read');
+    if (COMMAND_TOOLS.includes(req.tool) && commandsReadOnly(r.policy) && !readOnlyCommand(command, readScripts, shellOfTool(req.tool))) return toUser('the chat may only run commands that read');
     const brainRoot = this.opts.brainRoot?.() ?? null;
     const v = autoPermit(whole ? { ...req, whole } : req, { cwd: r.s.cwd, ceiling: r.policy?.ceiling ?? null, readScripts, policy, ...(brainRoot ? { rulesFile: path.join(brainRoot, POLICY_FILE) } : {}) });
     if (v.kind === 'ask') {
@@ -681,13 +682,18 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     return { cwd: r.s.cwd, paths: readOnlyTools(this.opts.brainRoot?.() ?? null) };
   }
 
-  /** Resolve an Antigravity Shell script from where it will run, not from the chat's folder. */
+  /** A script a command runs is read from where the command runs: its own folder when the engine names one (Antigravity
+   *  and OpenCode `cwd`/`workdir`, Codex `cwd`), not the chat's (issue #485: a brain skill's script run by a chat
+   *  working in another repository). */
   private permissionReadScripts(r: Rec, req: Omit<PendingRequest, 'chatId'>): ReadScripts {
     const scripts = this.readScripts(r);
-    if (r.s.harness !== 'antigravity' || req.tool !== 'Shell') return scripts;
+    // Claude's Bash and PowerShell have no folder of their own: a key the model adds there is not where they run
+    if (req.tool !== 'Shell' && req.tool !== 'Command') return scripts;
     const input = req.input as { cwd?: unknown; workdir?: unknown; working_directory?: unknown } | undefined;
-    const own = [input?.cwd, input?.workdir, input?.working_directory].find((x): x is string => typeof x === 'string' && !!x);
-    return own ? { ...scripts, cwd: path.resolve(scripts.cwd, own) } : scripts;
+    const own = [...new Set([input?.cwd, input?.workdir, input?.working_directory].filter((x): x is string => typeof x === 'string' && !!x))];
+    // two different folders: which one the engine honours is not known, so only an absolute script path counts
+    if (own.length > 1) return { ...scripts, cwd: '' };
+    return own[0] ? { ...scripts, cwd: path.resolve(scripts.cwd, own[0]) } : scripts;
   }
 
   /** Each request once per run, by its id: question, permission or command. */

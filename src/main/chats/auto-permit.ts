@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { PermissionCeiling } from '../../shared/agents';
+import { shellOfTool } from '../agents/command-steps';
 import { COMMAND_TOOLS, readOnlyCommand, type ReadScripts } from '../agents/tool-policy';
 import { policyCovers, policyRead, type BrainPolicy, type PolicyRule } from './permit-policy';
 
@@ -254,7 +255,7 @@ export function autoPermit(req: PermitRequest, ctx: PermitContext): PermitVerdic
   if (unread && covered) return ask('a request the brain rules could not read whole');
   // looking never asks, whatever the role's limit (ADR 0278: the quick-answer role, limited to «Solo piano», asked the
   // user for Read, Glob and Grep)
-  const reads = command ? readOnlyCommand(raw, ctx.readScripts) : READ_TOOLS.has(req.tool);
+  const reads = command ? readOnlyCommand(raw, ctx.readScripts, shellOfTool(req.tool)) : READ_TOOLS.has(req.tool);
   if (reads) return ALLOW;
   if (ctx.ceiling === 'plan' || ctx.ceiling === 'default') return ask(`the chat's limit: ${ctx.ceiling}`);
   if (ctx.ceiling === 'acceptEdits' && !EDIT_TOOLS.has(req.tool)) return ask('the chat\'s limit: acceptEdits');
