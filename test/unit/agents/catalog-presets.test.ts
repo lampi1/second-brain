@@ -82,12 +82,10 @@ describe('resolve and presetChoice: the guards on a real card', () => {
     expect(capped.warnings[0]).toMatch(/costs more than your own model/);
     expect(c.presetChoice('scout', { preset: 'max', presetWhy: 'x' }, { model: 'gpt-x' })).toMatchObject({ preset: 'min', model: 'm-low', effort: 'low' });
   });
-  it('cardNow: what the card gives a chat of the role now, per preset, and it follows the card (ADR 0346)', () => {
+  it('cardNow: what the card gives a chat of the role now, per preset, and it follows the card (ADR 0346, 0354)', () => {
     const c = ready();
-    expect(c.cardNow('scout', {})).toEqual({ engine: 'claude', model: 'm-mid', effort: null });
-    expect(c.cardNow('scout', { preset: 'max', presetWhy: 'x' })).toEqual({ engine: 'claude', model: 'm-top', effort: 'high' });
-    // under the delegator's ceiling, as a launch
-    expect(c.cardNow('scout', { preset: 'max', presetWhy: 'x' }, { role: 'strategist', model: 'm-mid' })).toMatchObject({ model: 'm-mid' });
+    expect(c.cardNow('scout', {})).toMatchObject({ engine: 'claude', model: 'm-mid', effort: null, preset: 'base', allOut: false, skipped: [] });
+    expect(c.cardNow('scout', { preset: 'max', presetWhy: 'x' })).toMatchObject({ engine: 'claude', model: 'm-top', effort: 'high', preset: 'max' });
     // the user changes the card: the same preset now gives the new model, with nothing saved anywhere else
     c.save(edit(role(c), { presets: { min: { model: 'm-low', effort: 'low' }, max: { model: 'm-mid' } } }), 'scout');
     expect(c.cardNow('scout', { preset: 'max', presetWhy: 'x' })).toMatchObject({ model: 'm-mid' });

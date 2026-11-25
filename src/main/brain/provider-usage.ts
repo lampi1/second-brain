@@ -468,9 +468,13 @@ export async function collectCodexUsage(o: ProviderCollectorEnv = {}): Promise<H
   return fetchChatGptUsage(accessToken, accountId, email, fetchFn, now, { harness: 'codex', label: 'Codex' });
 }
 
-export async function collectOpenCodeUsage(o: ProviderCollectorEnv = {}): Promise<HarnessUsage> {
+/** OpenCode's readable plans, one reading per provider pool (ADR 0354): OpenCode Go/Zen (`opencode:zen`) and the
+ *  ChatGPT OAuth of its OpenAI provider (`opencode:openai`). The panel shows the first; the credit rule reads each pool's
+ *  own, so a limit of one never reads as the other's. */
+export async function collectOpenCodeUsages(o: ProviderCollectorEnv = {}): Promise<HarnessUsage[]> {
   const home = o.home ?? os.homedir(), env = o.env ?? process.env, fetchFn = o.fetchFn ?? fetch, now = (o.now ?? Date.now)();
   const auth = readJsonFile(opencodeAuthPath(home, env));
+  const out: HarnessUsage[] = [];
   // 1) OpenCode Go / Zen API key (CodexBar strategy)
   const ocEntry = auth && isObj(auth.opencode) ? auth.opencode : null;
   const goKey = str(env.OPENCODE_API_KEY) ?? str(ocEntry?.key) ?? str(ocEntry?.apiKey) ?? str(ocEntry?.access);
@@ -480,7 +484,7 @@ export async function collectOpenCodeUsage(o: ProviderCollectorEnv = {}): Promis
         headers: { Authorization: `Bearer ${goKey}`, Accept: 'application/json' },
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
-      if (res.ok) return normalizeOpenCodeGoUsage(await res.json(), now);
+      if (res.ok) out.push({ ...normalizeOpenCodeGoUsage(await res.json(), now), pool: 'opencode:zen' });
     } catch { /* fall through to other providers */ }
   }
   // 2) OpenAI ChatGPT OAuth inside OpenCode's auth.json (common when using Codex/ChatGPT subscription via OpenCode)
@@ -492,11 +496,11 @@ export async function collectOpenCodeUsage(o: ProviderCollectorEnv = {}): Promis
     const payload = decodeJwtPayload(oaAccess);
     const email = str(payload?.email) ?? (payload && isObj(payload['https://api.openai.com/profile']) ? str(payload['https://api.openai.com/profile'].email) : null);
     if (exp !== null && now >= exp) {
-      return { harness: 'opencode', label: 'OpenCode', status: str(openai?.refresh) ? 'error' : 'expired', planLabel: 'OpenAI', accountEmail: email, windows: [], message: str(openai?.refresh) ? 'Token OpenAI in rinnovo alla prossima risposta OpenCode.' : 'Sessione OpenAI in OpenCode scaduta.', source: 'oauth', at: now };
-    }
-    return fetchChatGptUsage(oaAccess, oaAccount, email, fetchFn, now, { harness: 'opencode', label: 'OpenCode', planPrefix: 'OpenAI' });
+      out.push({ harness: 'opencode', label: 'OpenCode', status: str(openai?.refresh) ? 'error' : 'expired', planLabel: 'OpenAI', accountEmail: email, windows: [], message: str(openai?.refresh) ? 'Token OpenAI in rinnovo alla prossima risposta OpenCode.' : 'Sessione OpenAI in OpenCode scaduta.', source: 'oauth', at: now, pool: 'opencode:openai' });
+    } else out.push({ ...await fetchChatGptUsage(oaAccess, oaAccount, email, fetchFn, now, { harness: 'opencode', label: 'OpenCode', planPrefix: 'OpenAI' }), pool: 'opencode:openai' });
   }
-  // 3) Local OpenCode log status (exhausted vs ok)
+  if (out.length) return out;
+  // 3) Local OpenCode log status (exhausted vs ok): shown on the panel, never a reading of the credit rule (no pool)
   const text = await opencodeLogTail(home, 128 * 1024);
   if (text) {
     try {
@@ -504,20 +508,23 @@ export async function collectOpenCodeUsage(o: ProviderCollectorEnv = {}): Promis
       for (const [prov, f] of facts) {
         const st = opencodeState(`opencode:${prov}`, f, now);
         if (st?.status === 'exhausted') {
-          return { harness: 'opencode', label: 'OpenCode', status: 'ok', planLabel: capWord(prov), accountEmail: null, windows: [{ kind: 'custom', label: 'Limite', usedPercent: 100, resetsAt: null }], message: st.note ?? 'Limite raggiunto nel log di OpenCode.', source: 'log', at: now };
+          return [{ harness: 'opencode', label: 'OpenCode', status: 'ok', planLabel: capWord(prov), accountEmail: null, windows: [{ kind: 'custom', label: 'Limite', usedPercent: 100, resetsAt: null }], message: st.note ?? 'Limite raggiunto nel log di OpenCode.', source: 'log', at: now }];
         }
       }
     } catch { /* ignore */ }
   }
   const providers = auth ? Object.keys(auth) : [];
-  return {
+  return [{
     harness: 'opencode', label: 'OpenCode', status: providers.length ? 'unavailable' : 'unauthenticated',
     planLabel: providers.length ? providers.map(p => capWord(p)).join(', ') : null,
     accountEmail: null, windows: [],
     message: providers.length ? 'Nessun abbonamento con quote leggibili (provider BYOK/API).' : 'Non connesso: esegui opencode auth login.',
     source: 'none', at: now,
-  };
+  }];
 }
+
+/** The panel's OpenCode reading (the first readable provider). */
+export async function collectOpenCodeUsage(o: ProviderCollectorEnv = {}): Promise<HarnessUsage> { return (await collectOpenCodeUsages(o))[0]!; }
 
 let agyTierCache: { tier: string | null; at: number; ttl: number } | null = null;
 let agyQuotaCache: { raw: Obj | null; at: number; ttl: number } | null = null;
@@ -654,14 +661,22 @@ export async function collectAntigravityUsage(o: ProviderCollectorEnv = {}): Pro
   }
 }
 
-/** Collects plan usage for all 5 harnesses in parallel. Never throws; each harness isolates its own errors. */
+/** Collects plan usage for all 5 harnesses in parallel (OpenCode: one reading per readable provider, ADR 0354). Never
+ *  throws; each harness isolates its own errors. Every reading names its credit pool. */
 export async function collectAllProviderUsage(o: ProviderCollectorEnv = {}): Promise<HarnessUsage[]> {
   const results = await Promise.all([
-    collectClaudeUsage(o),
-    collectCursorUsage(o),
-    collectCodexUsage(o),
-    collectOpenCodeUsage(o),
-    collectAntigravityUsage(o),
+    collectClaudeUsage(o).then(h => [h]),
+    collectCursorUsage(o).then(h => [h]),
+    collectCodexUsage(o).then(h => [h]),
+    collectOpenCodeUsages(o),
+    collectAntigravityUsage(o).then(h => [h]),
   ]);
-  return results;
+  return results.flat().map(h => h.pool || h.harness === 'opencode' ? h : { ...h, pool: h.harness });
+}
+
+/** One harness's readings now (the credit rule's «rileggi»: at a limit error, at a reset, before a pick). */
+export async function collectProviderUsage(h: Harness, o: ProviderCollectorEnv = {}): Promise<HarnessUsage[]> {
+  const one = h === 'claude' ? collectClaudeUsage(o) : h === 'cursor' ? collectCursorUsage(o) : h === 'codex' ? collectCodexUsage(o) : h === 'antigravity' ? collectAntigravityUsage(o) : null;
+  if (h === 'opencode') return collectOpenCodeUsages(o);
+  return one ? [{ ...await one, pool: h }] : [];
 }

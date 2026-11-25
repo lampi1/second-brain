@@ -1,12 +1,9 @@
 // Several models per level across engines (ADR 0347): the stored shape is checked, a card without lists reads as its
-// presets, the room of a plan (spent, on pace to run out, fine, unknown) and the pick in the user's order.
+// presets, a verdict of the one credit rule as a level's room (ADR 0354) and the pick in the user's order.
 import { describe, expect, it } from 'vitest';
 import { checkedLevels, headPresets, levelEngines, levelNamed, levelsOf, pickInLevel, roomOf, type LevelModel, type Room } from '../../../src/shared/model-levels';
-import type { HarnessUsage } from '../../../src/shared/contract';
 
 const H = 3600e3, NOW = 1_000 * H;
-const usage = (windows: HarnessUsage['windows'], status: HarnessUsage['status'] = 'ok'): HarnessUsage =>
-  ({ harness: 'claude', label: 'Claude', status, planLabel: null, accountEmail: null, windows, message: null, source: 'oauth', at: NOW });
 
 describe('checkedLevels', () => {
   it('keeps the three levels in order and drops empty ones', () => {
@@ -41,23 +38,9 @@ describe('levelsOf', () => {
 });
 
 describe('roomOf', () => {
-  it('a window at 98% or more is spent', () => {
-    expect(roomOf(usage([{ kind: 'five-hour', label: '5h', usedPercent: 99, resetsAt: NOW + H }]), null, NOW).state).toBe('out');
-  });
-  it('a limit the app saw hit is spent until it renews', () => {
-    expect(roomOf(undefined, { until: NOW + H }, NOW).state).toBe('out');
-    expect(roomOf(undefined, { until: NOW - 1 }, NOW).state).toBe('unknown');
-  });
-  it('86% of 5 hours with 2 hours left runs out before it renews: pace', () => {
-    expect(roomOf(usage([{ kind: 'five-hour', label: '5h', usedPercent: 86, resetsAt: NOW + 2 * H }]), null, NOW).state).toBe('pace');
-  });
-  it('37% of the week is fine, and so is a window used under half', () => {
-    expect(roomOf(usage([{ kind: 'weekly', label: '7g', usedPercent: 37, resetsAt: NOW + 6 * 24 * H }]), null, NOW).state).toBe('ok');
-    expect(roomOf(usage([{ kind: 'five-hour', label: '5h', usedPercent: 45, resetsAt: NOW + 4.5 * H }]), null, NOW).state).toBe('ok');
-  });
-  it('no reading, or a model-scoped window only, says nothing', () => {
-    expect(roomOf(usage([], 'unavailable'), null, NOW).state).toBe('unknown');
-    expect(roomOf(usage([{ kind: 'weekly', label: '7g · Sonnet', usedPercent: 99, resetsAt: NOW + H, model: 'sonnet' }]), null, NOW).state).toBe('ok');
+  it('maps the one rule\'s verdict to a level\'s room (no rule of its own)', () => {
+    expect(roomOf({ state: 'free', why: '5h al 3%', source: 'reading', until: null, readingAt: NOW })).toEqual({ state: 'ok', why: '5h al 3%', resetsAt: null, source: 'reading', readingAt: NOW });
+    expect(roomOf({ state: 'out', why: 'x', source: 'error', until: NOW + H, readingAt: null }).resetsAt).toBe(NOW + H);
   });
 });
 
@@ -70,7 +53,8 @@ describe('pickInLevel', () => {
   it('skips a plan on pace or spent while another has room, and says why', () => {
     const p = pickInLevel(list, () => null, room({ claude: 'pace' }))!;
     expect(p.chosen.engine).toBe('antigravity');
-    expect(p.reason).toContain('saltato sonnet (claude)');
+    expect(p.reason).toContain('sonnet (claude) saltato: ritmo alto');
+    expect(p.skipped).toEqual([expect.objectContaining({ engine: 'claude', kind: 'credit', state: 'pace' })]);
   });
   it('an engine that is off is never picked', () => {
     expect(pickInLevel(list, x => x.engine === 'claude' ? 'spento' : null, room({}))?.chosen.engine).toBe('antigravity');
@@ -81,5 +65,6 @@ describe('pickInLevel', () => {
     const all = pickInLevel(list, () => null, room({ claude: 'out', antigravity: 'out', opencode: 'out' }))!;
     expect(all.chosen.engine).toBe('claude');
     expect(all.reason).toContain('tutti i modelli del livello hanno finito il limite');
+    expect(all.allOut).toBe(true);
   });
 });

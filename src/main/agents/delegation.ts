@@ -37,6 +37,7 @@ import { log } from '../log';
 import { checkMemoryWorth } from '../rules/memory-worth';
 import { closeRefusal, descendantIds } from '../chats/close-rules';
 import { unreadInstructions } from '../../shared/user-events';
+import { pickLines } from '../../shared/model-levels';
 
 /** Two absolute folders are the same one: separators and a trailing slash aside, and letter case on Windows. */
 export function samePath(a: string, b: string, platform: NodeJS.Platform = process.platform): boolean {
@@ -99,6 +100,8 @@ export interface DelegationDeps {
   /** the preset a delegation of a role would get (catalog.presetChoice, ADR 0336);
    *  absent = Base, no ceiling (tests) */
   presetChoice?: (roleId: string, ask: PresetAsk, delegator?: Delegator) => PresetChoice;
+  /** reads again, before a pick, the engines that look stopped without a valid reading (ADR 0354; shared, a few s at most) */
+  creditFresh?: () => Promise<void>;
   /** the clock (tests) */
   now?: () => number;
 }
@@ -176,6 +179,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (gate) throw new Error(gate);
     const parentPolicy = d.chats.agentPolicy(parent.id);
     // everything is checked before any chat starts: one bad part refuses the whole call
+    await d.creditFresh?.();
     const plans = raw.map((value, i) => {
       const t = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
       if (!t) throw new Error(`tasks[${i}]: object required.`);
@@ -246,7 +250,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       // the preset the chat really started on (its run's record), else the guards'
       const presetOf = (i: number, c: ChatSummary) => c.run?.presetChoice?.preset ?? plans[i]!.cap?.preset;
       const children = settled.map((s, i) => s.status === 'fulfilled'
-        ? { role: plans[i]!.role, title: s.value.title, chatId: s.value.id, cwd: s.value.cwd, harness: s.value.harness, model: s.value.model, ...(presetOf(i, s.value) ? { preset: presetOf(i, s.value) } : {}), state: s.value.queued ? 'queued' : s.value.state, ...warnings(i, s.value.id) }
+        ? { role: plans[i]!.role, title: s.value.title, chatId: s.value.id, cwd: s.value.cwd, harness: s.value.harness, model: s.value.model, ...(presetOf(i, s.value) ? { preset: presetOf(i, s.value) } : {}), ...(s.value.pick ? { pick: pickLines(s.value.pick, Date.now()) } : {}), state: s.value.queued ? 'queued' : s.value.state, ...warnings(i, s.value.id) }
         : { role: plans[i]!.role, title: plans[i]!.title, error: s.reason instanceof Error ? s.reason.message : String(s.reason) });
       // each step of the plan with its started children: the strip shows it under way
       const steps = new Map<number, string[]>();
@@ -484,8 +488,11 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       ...((qs => qs.length ? { questions: qs.map(q => ({ id: q.id, asks: q.asks, level: q.level, holder: q.holder ?? null, since: q.levelAt })) } : {})(openQuestions(c.questions))),
       ...(c.run ? { costUsd: runs.find(r => r.runId === c.run!.runId)?.costUsd ?? null } : {}),
       ...((m => m === null ? {} : { stalled: true, quietMin: m })(quiet(c))),
-      // out of credits (ADR 0346): it waits for its role's card, the user's move
-      ...(c.creditWait && !c.closedAt ? { waitsOn: 'credits', creditWait: { model: c.creditWait.model, since: c.creditWait.at } } : {}),
+      // how its model was picked (ADR 0354): the models of its level passed over, each with why
+      ...(c.pick ? { pick: pickLines(c.pick, now) } : {}),
+      ...(c.creditMoved ? { moved: `da ${c.creditMoved.from} a ${c.creditMoved.to}, livello ${c.creditMoved.level}: ${c.creditMoved.why}` } : {}),
+      // out of credits (ADR 0346, 0354): it moves by itself to the next model of its level with room, or waits for one
+      ...(c.creditWait && !c.closedAt ? { waitsOn: 'credits', creditWait: { model: c.creditWait.model, since: c.creditWait.at, ...(c.creditWait.waiting ? { allOut: c.creditWait.waiting.out, firstBack: c.creditWait.waiting.first } : {}), ...(c.creditWait.next ? { movesAt: c.creditWait.next.at, to: c.creditWait.next.card } : {}) } } : {}),
     })) };
   }
 
@@ -648,7 +655,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: async (a, ctx) => JSON.stringify(await closeChild(a, callerOf(ctx.params))),
   }, {
     name: 'agent_children',
-    description: 'The chats you delegated (agent_delegate): role, title, state, goal, their result once reported, open requests and cost. endCause on a closed child says why its task ended before it was completed: user (the user closed it), auto (the app archived it), parent (closed with the chat above it), no-report (it ended with no agent_report). stalled: true (with quietMin) = a working child silent for longer than the user\'s "Ferma dopo" limit: nudge it with a message or close it. waitsOn: "credits" = its model ran out of credits: it is not failed and goes on by itself, from where it was, when the user changes the model on its role\'s card; do not delegate its part again, do not ask another preset for it and do not close it: go on with what does not depend on it, and say in your report that it waits for the user\'s card.',
+    description: 'The chats you delegated (agent_delegate): role, title, state, goal, their result once reported, open requests and cost. endCause on a closed child says why its task ended before it was completed: user (the user closed it), auto (the app archived it), parent (closed with the chat above it), no-report (it ended with no agent_report). stalled: true (with quietMin) = a working child silent for longer than the user\'s "Ferma dopo" limit: nudge it with a message or close it. waitsOn: "credits" = its model ran out of credits: it is not failed; the app moves it by itself, from where it was, to the first model with room of the same level (creditWait.movesAt/to), or, when the whole level is out (creditWait.allOut), waits and moves as soon as one is free (firstBack); do not delegate its part again, do not ask another preset for it and do not close it: go on with what does not depend on it. pick = the models of its level passed over at its start and why; moved = its last move.',
     inputSchema: { type: 'object', additionalProperties: false, properties: {} },
     annotations: { readOnlyHint: true, openWorldHint: false },
     run: (_a, ctx) => JSON.stringify(children(callerOf(ctx.params))),

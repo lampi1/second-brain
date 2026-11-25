@@ -726,6 +726,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
         chatId: r.s.id, sessionId: r.s.sessionId, harness: r.s.harness, model: r.s.model, effort: r.s.effort,
         ...(first ? { firstPrompt: first } : {}),
         costUsd: item.costUsd, durationMs: item.durationMs, turns: item.turns, isError: item.isError,
+        startedAt: turnAt ?? item.at - (item.durationMs || 0),
         reply: turnReply(r.items), ...(fromPhone ? { fromPhone: true } : {}), ...(outcomeDelivery ? { outcomeDelivery: true } : {}),
       };
       const errorText = turnErrors(r.items);

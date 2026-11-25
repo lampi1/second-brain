@@ -64,6 +64,7 @@ import { splitMode } from '../../shared/newchat';
 import { recallWarning } from '../search/hybrid/recall';
 import type { SubmissionReceipt, Rec } from './manager-types';
 import { sysItem, MODES, RESEARCH_TITLE, RESEARCH_FRAME, FOLLOW_UP_WINDOW_MS, USER_NOTES_LABEL, EFFORTS, MODEL_ID, startTags, repoOf } from './manager-helpers';
+import { pickLines } from '../../shared/model-levels';
 import { ManagerRemote } from './manager-remote';
 export { RESUME_TEXT, turnReply, workBehind, WAITING_REASON, lastAnswer, RESEARCH_TITLE, RUN_SAVE_MS, USER_NOTES_LABEL, userNoteLine, restoredOwner, startTags, repoOf } from './manager-helpers';
 export type { ChatManagerOptions, HandoffOptions, TurnEndInfo, CleanReportNote, UserWroteNote } from './manager-types';
@@ -172,7 +173,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
 
   /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
   /** by: who asks; 'app' = one of the app's own jobs (the sampled Sentinel reviews, agents/judge-sample.ts): like an agent, its run says startedBy 'app' */
-  override async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { boundByOrchestrator?: boolean; intake?: IntakeSource; resumePlan?: StrategyPlan; workMap?: string; continuation?: boolean; continuationOf?: string } = {}): Promise<ChatSummary> {
+  override async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { boundByOrchestrator?: boolean; intake?: IntakeSource; resumePlan?: StrategyPlan; workMap?: string; continuation?: boolean; continuationOf?: string; sameWorktree?: boolean } = {}): Promise<ChatSummary> {
     const createdT0 = Date.now();
     this.deliveryPolicy(req.deliveryPolicy, !!req.parentId);
     if (req.doneWhen && (req.doneWhen.length > 12 || req.doneWhen.some(x => typeof x !== 'string' || !x.trim() || x.length > 300))) throw new Error('Invalid task criteria.');
@@ -219,7 +220,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     let bindDelegation: ((childId: string) => void) | undefined;
     if (delegator && this.opts.prepareDelegation) {
       const parentPermissions = JSON.stringify({ policy: delegator.policy, mode: this.modeFor(delegator) });
-      const prepared = await this.opts.prepareDelegation(structuredClone(delegator.s), req, policy, opts.continuationOf);
+      const prepared = await this.opts.prepareDelegation(structuredClone(delegator.s), req, policy, opts.continuationOf, opts.sameWorktree === true);
       if (delegator.s.closedAt || this.closedByUser(delegator) || this.chats.get(delegator.s.id) !== delegator || delegator.s.run?.endedAt !== undefined || delegator.s.run?.report?.via === 'agent_report' || delegator.s.delegation?.result || delegator.s.run?.runId !== prepared.parentRunId || delegator.s.run?.taskVersion !== prepared.parentTaskVersion) throw new Error('Parent assignment changed while preparing isolation.');
       if (parentPermissions !== JSON.stringify({ policy: delegator.policy, mode: this.modeFor(delegator) })) throw new Error('Parent permissions changed while preparing isolation.');
       req = { ...req, cwd: prepared.cwd };
@@ -334,6 +335,10 @@ export class ChatManager extends ManagerRemote implements ChatService {
     bindDelegation?.(id);
     if (agent.owner.source === 'catalog' && !req.orchestrator) this.startRun(r, { agentId: agent.owner.id, version: agent.owner.version ?? 1, goal: req.goal ?? prompt ?? title, startedBy: delegator ? 'parent' : by === 'app' ? 'app' : by === 'agent' ? 'orchestrator' : 'user', costKnown: caps.cost, ...links,
       tags: { ...asked, repo: repoOf(cwd) }, ...(agent.tier ? { tier: agent.tier } : {}), model: req.model ?? null, ...(agent.presetChoice ? { presetChoice: runPresetOf(agent.presetChoice) } : {}) });
+    // the user's own model for this work, recorded (ADR 0354 point 7); how its model was picked, said in the chat
+    if (req.userModel && !delegator) r.s.userModel = { ...req.userModel };
+    const pc = agent.presetChoice;
+    if (pc && (pc.skipped?.length || pc.allOut)) r.s.pick = { at: now, chosen: `${req.model ?? 'predefinito'} (${req.harness})`, skipped: pc.skipped ?? [], ...(pc.allOut ? { allOut: true as const } : {}) };
     if (r.s.run) { r.s.run.taskContract = { ...(by === 'app' && req.doneWhen !== undefined ? { reportExpected: true } : {}), goal: r.s.run.goal, doneWhen: req.doneWhen ?? req.delegation?.doneWhen ?? [], deliveryPolicy: this.deliveryPolicy(req.deliveryPolicy, !!delegator), ...(req.contractFields?.length ? { fields: req.contractFields } : {}) }; this.runSave(); }
     if (r.s.run?.startedBy === 'app' && r.s.run.reviewOf && r.s.run.taskContract?.reportExpected && !r.s.work) r.s.work = { status: 'assigned', updatedAt: now };
     // the Orchestrator opened it while answering the user's own message: the user waits for what it finds (#123)
@@ -341,6 +346,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     // checked again where the chat joins the list: chats created at once (agent_delegate's children) awaited in between
     if (uniqueOk) r.s.title = this.uniqueTitle(r.s.title);
     this.chats.set(id, r);
+    if (r.s.pick) this.addItem(r, sysItem('modelSkipped', { lines: pickLines(r.s.pick, Date.now()) }, r.s.pick.allOut ? 'warn' : 'info'), false);
     if (plan && opts.intake) delete this.need(opts.intake.chatId).intakeKey;
     if (r.s.isOrchestrator) { this.restoreRootNotices(); this.resumeRootSyntheses(); for (const worker of this.chats.values()) if (worker.heldResult && !this.midTurn(worker)) this.releaseResult(worker); }
     if (old) {

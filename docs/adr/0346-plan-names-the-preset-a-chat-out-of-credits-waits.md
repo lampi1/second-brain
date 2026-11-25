@@ -2,7 +2,7 @@
 
 Date: 2026-11-24 · Status: accepted (owner, issue #462: «voglio poter cambiare spesso il ruolo degli agenti, nel piano
 voglio vedere solo se è stato scelto massimo minimo base non anche il modello, perché potrei finire i crediti e dover
-cambiare il modello») · Amends: ADR 0336 (presets), ADR 0343 (the plan's boxes), ADR 0218 (a limit error), ADR 0031
+cambiare il modello»); partly superseded by [ADR 0354](0354-engine-limits-follow-real-data.md) (a waiting chat moves within its level by itself) · Amends: ADR 0336 (presets), ADR 0343 (the plan's boxes), ADR 0218 (a limit error), ADR 0031
 («Riprendi»), the step line of 2026-11-23 («role · model · preset») · Amended by: ADR 0347 (the card a waiting chat follows
 is its level's pick), ADR 0348 (the app moves it by itself, with 8 s to cancel)
 
