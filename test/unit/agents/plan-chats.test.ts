@@ -611,3 +611,26 @@ describe('what a plan guarantees (ADR 0361)', () => {
     expect(g.maps().get(id)!.owner!.chatId).toBe(s.id);
   });
 });
+
+describe('a new chat for a job keeps its steps as they were (review of ADR 0363)', () => {
+  it('«Riprendi» when the chat is gone: blocked, partly done and cancelled steps stay what they are, and the Strategist revises with keep', async () => {
+    const f = fixture(), s = await f.root();
+    await f.enough(s.id);
+    await f.call('plan_propose', s.id, { steps: [{ title: 'Uno', role: 'artisan', after: [] }, { title: 'Due', role: 'artisan', after: [] }, { title: 'Tre', role: 'artisan', after: [] }, { title: 'Quattro', role: 'artisan', after: [] }] });
+    await act(f, s.id, 'approve');
+    await f.call('plan_update', s.id, { step: 1, state: 'done', proof: 'visto' });
+    await f.call('plan_update', s.id, { step: 2, state: 'blocked' });
+    await f.call('plan_update', s.id, { step: 3, state: 'partial', proof: 'a metà' });
+    const id = f.mapOf(s.id).id, want = ['done', 'blocked', 'partial', 'todo'];
+    expect(f.mapOf(s.id).plan!.steps.map(x => x.state)).toEqual(want);
+    await f.m.archive(s.id);
+    await f.m.close(s.id);
+    const back = await f.maps().act(id, 'resume');
+    expect(back.plan!.steps.map(x => x.state)).toEqual(want);
+    expect(back.plan!.steps[0]!.proof).toBeDefined();
+    const chat = back.owner!.chatId;
+    await f.enough(chat);
+    await f.call('plan_propose', chat, { revise: true, steps: [{ keep: 1 }, { keep: 2 }, { keep: 3 }, { title: 'Quattro bis', role: 'artisan', after: [] }] });
+    expect(f.maps().get(id)!.plan!.steps.map(x => x.state)).toEqual(want);
+  });
+});

@@ -28,14 +28,14 @@ function planFrom(m: Plan, c: ChatSummary): StrategyPlan | undefined {
   if (!c.plan) return m.plan ? structuredClone(m.plan) : undefined;
   const plan = structuredClone(c.plan);
   if (plan.steps.length || plan.phase === 'done' || !m.past?.length || !m.plan?.steps.length) return plan;
-  return { ...plan, steps: m.plan.steps.map(({ drop: _d, ...s }) => ({ ...structuredClone(s), state: s.state === 'done' ? 'done' as const : 'todo' as const })) };
+  return { ...plan, steps: m.plan.steps.map(({ drop: _d, ...s }) => structuredClone(s)) };
 }
 
 /** The map as its owner chat makes it now. `now` dates what is new; dead = the chat's engine died and did not come back. */
 export function follow(m: Plan, c: ChatSummary, now: number, dead = false): Plan {
   const { stopped: was, finishedAt, seenAt, archivedAt, plan: _p, ...rest } = m;
   const plan = planFrom(m, c);
-  const base = { ...rest, title: titleOf(c), ...(plan ? { plan } : {}) };
+  const base = { ...rest, title: m.titled ? m.title : titleOf(c), ...(plan ? { plan } : {}) };
   // finished stays finished whatever happens to its chat; a job that went on again is open again
   if (over(c)) return settle({ ...base, finishedAt: finishedAt ?? now, ...(seenAt !== undefined ? { seenAt } : {}), ...(archivedAt !== undefined ? { archivedAt } : {}) });
   // the app closes a chat only once its turn is over and nothing waits: with no plan the job ended there

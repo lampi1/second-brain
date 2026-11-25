@@ -37,6 +37,8 @@ export interface Plan {
   id: string;
   version: number;
   title: string;
+  /** the title was chosen by the user or an agent: the chat's own title no longer replaces it */
+  titled?: true;
   /** the idea or the request in words (absent when only the title says it) */
   idea?: string;
   /** what it is for, and why now: in the user's words */
@@ -340,7 +342,7 @@ export function readPlanRecord(v: unknown, id: string): Plan | null {
   const past = strs(m.past, PLAN_LIMITS.past, 80), constraints = strs(m.constraints, PLAN_LIMITS.constraints, PLAN_LIMITS.constraint), from = strs(m.from, PLAN_LIMITS.from, 160);
   const links = (Array.isArray(m.links) ? m.links : []).flatMap((l: Record<string, unknown>) => l && ['file', 'link', 'plan', 'chat'].includes(String(l.kind)) && str(l.ref, 500) ? [{ kind: l.kind as PlanLink['kind'], ref: l.ref, ...(str(l.label, 160) ? { label: l.label } : {}) }] : []).slice(0, PLAN_LIMITS.links);
   const out: Omit<Plan, 'state'> = {
-    id, version: m.version as number, title: m.title, ...(str(m.idea, PLAN_LIMITS.idea) ? { idea: m.idea } : {}), ...(str(m.goal, PLAN_LIMITS.goal) ? { goal: m.goal } : {}), ...(str(m.why, PLAN_LIMITS.why) ? { why: m.why } : {}), ...(str(m.project, PLAN_LIMITS.project) ? { project: m.project } : {}),
+    id, version: m.version as number, title: m.title, ...(m.titled === true ? { titled: true as const } : {}), ...(str(m.idea, PLAN_LIMITS.idea) ? { idea: m.idea } : {}), ...(str(m.goal, PLAN_LIMITS.goal) ? { goal: m.goal } : {}), ...(str(m.why, PLAN_LIMITS.why) ? { why: m.why } : {}), ...(str(m.project, PLAN_LIMITS.project) ? { project: m.project } : {}),
     constraints, links, ...(from.length ? { from } : {}), ...(num(m.deletedAt) ? { deletedAt: m.deletedAt } : {}), ...(owner ? { owner } : {}), ...(past.length ? { past } : {}), ...(plan ? { plan } : {}), ...(stopped ? { stopped } : {}),
     ...(num(m.finishedAt) ? { finishedAt: m.finishedAt } : {}), ...(num(m.seenAt) ? { seenAt: m.seenAt } : {}), ...(num(m.archivedAt) ? { archivedAt: m.archivedAt } : {}),
     createdAt: m.createdAt, updatedAt: num(m.updatedAt) ? m.updatedAt : m.createdAt, by: str(m.by, PLAN_LIMITS.by) ? m.by : 'app', summary: str(m.summary, PLAN_LIMITS.summary) ? m.summary : '',

@@ -128,7 +128,7 @@ export function PlanView({ id, onBack }: { id: string; onBack: () => void }) {
   const view = useView(id, version), now = useNow(15_000);
   const owner = view?.info.ownerChatId, chat = useApp(s => (owner ? s.chats[owner]?.title : undefined));
   const { run } = usePlanAction();
-  const [edit, setEdit] = useState(false), [ops, setOps] = useState<StepOp[]>([]), [draft, setDraft] = useState<Draft | null>(null);
+  const [edit, setEdit] = useState(false), [ops, setOps] = useState<StepOp[]>([]), [draft, setDraft] = useState<Draft | null>(null), [base, setBase] = useState<Draft | null>(null);
   // seen: once, at the first reading of a finished plan, or at the user's first move on one that finished meanwhile
   const first = useRef(true), said = useRef(false), [justSeen, setJustSeen] = useState(false);
   const unseen = version === null && !!view?.info.can.includes('seen');
@@ -139,10 +139,14 @@ export function PlanView({ id, onBack }: { id: string; onBack: () => void }) {
   const { info, history } = view, note = version === null ? (justSeen && info.state === 'archived' ? t('plans.note.finished') : noteOf(info)) : null;
   const live = () => { if (unseen) see(); };
   const d = draft ?? draftOf(view), canEdit = version === null && !info.deleted;
-  const start = () => { setDraft(draftOf(view)); setOps([]); setEdit(true); };
-  const stop = () => { setEdit(false); setDraft(null); setOps([]); };
+  const start = () => { const b = draftOf(view); setBase(b); setDraft(b); setOps([]); setEdit(true); };
+  const stop = () => { setEdit(false); setDraft(null); setBase(null); setOps([]); };
   const save = async () => {
-    const was = draftOf(view), set: Record<string, unknown> = {}, add: Record<string, unknown> = {}, remove: Record<string, unknown> = {};
+    // what the user started from, not what the plan is now: a change an agent made meanwhile is never undone by this save
+    const was = base ?? draftOf(view), set: Record<string, unknown> = {}, add: Record<string, unknown> = {}, remove: Record<string, unknown> = {};
+    // a line typed and not yet confirmed with Enter is kept too
+    if (d.newConstraint.trim() && !d.constraints.includes(d.newConstraint.trim())) d.constraints = [...d.constraints, d.newConstraint.trim()];
+    if (d.newLink.trim() && !d.links.some(l => l.ref === d.newLink.trim())) d.links = [...d.links, { kind: /^https?:\/\//.test(d.newLink) ? 'link' : 'file', ref: d.newLink.trim() }];
     for (const k of ['title', 'goal', 'why', 'project'] as const) if (d[k] !== was[k]) set[k] = d[k].trim() === '' && k !== 'title' ? null : d[k].trim();
     const gone = was.constraints.filter(c => !d.constraints.includes(c)), more = d.constraints.filter(c => !was.constraints.includes(c));
     if (more.length) add.constraints = more;

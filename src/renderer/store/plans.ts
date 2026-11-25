@@ -11,8 +11,8 @@ const listeners = new Set<() => void>();
 const tell = (): void => { for (const l of listeners) l(); };
 
 async function fetchAll(): Promise<PlanInfo[]> {
-  const [open, put] = await Promise.all([window.sb.invoke('plans:list', {}), window.sb.invoke('plans:list', { archived: true })]);
-  return [...open, ...put];
+  const [open, put, trash] = await Promise.all([window.sb.invoke('plans:list', {}), window.sb.invoke('plans:list', { archived: true }), window.sb.invoke('plans:list', { trash: true })]);
+  return [...open, ...put, ...trash];
 }
 /** Reads the list; a change that comes while it reads makes it read again. A failure keeps the rows it had. */
 async function read(): Promise<void> {

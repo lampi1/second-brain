@@ -39,6 +39,8 @@ export interface MigrationReport {
   after: { plans: number; merged: number; steps: number; check: number; doubts: number; versions: number };
   /** what each plan came from, by name */
   plans: { id: string; title: string; from: string[]; steps: number; check: number }[];
+  /** every old record this run moved, whole (a plan's `from` is capped): a plan deleted for good never comes back from them */
+  tokens?: string[];
 }
 export interface MigrationResult { ran: boolean; report?: MigrationReport; error?: string; skipped?: string[] }
 
@@ -162,6 +164,8 @@ export function migratePlans(d: MigrationDeps): MigrationResult {
     // what the plans already say they came from: never made twice
     const taken = new Set<string>();
     for (const store of [new PlanStore(dest)]) for (const p of store.load()) for (const f of p.from ?? []) taken.add(f);
+    const earlier = read(path.join(dest, '.migration.json'));
+    if (Array.isArray(earlier)) for (const r of earlier) if (obj(r) && Array.isArray(r.tokens)) for (const t of r.tokens) if (typeof t === 'string') taken.add(t);
     const fresh = found.filter(s => !taken.has(s.token));
     if (!fresh.length) return { ran: false, skipped: found.map(s => s.token) };
     const ids = new Set<string>(); try { for (const n of fs.readdirSync(dest)) ids.add(n); } catch { /* none yet */ }
@@ -201,6 +205,7 @@ export function migratePlans(d: MigrationDeps): MigrationResult {
     const report: MigrationReport = {
       at: now, before: { jobs: fresh.filter(s => s.kind === 'wm').length, projects: fresh.filter(s => s.kind === 'pm').length, folders: fresh.filter(s => s.kind === 'fo').length },
       after: { plans: made.plans.length, merged: fresh.length - made.plans.length, steps, check, doubts: made.plans.reduce((n, m) => n + (m.rec.plan?.doubts?.length ?? 0), 0), versions: made.plans.reduce((n, m) => n + m.versions.length + 1, 0) },
+      tokens: fresh.map(s => s.token),
       plans: made.plans.map(m => ({ id: m.rec.id, title: m.rec.title, from: m.rec.from ?? [], steps: m.rec.plan?.steps.length ?? 0, check: m.rec.plan?.steps.filter(s => s.state === 'check').length ?? 0 })),
     };
     const file = path.join(dest, '.migration.json'), before = read(file), runs = Array.isArray(before) ? before : [];

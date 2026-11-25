@@ -91,6 +91,7 @@ export async function planAction(plans: Plans, who: PlanCaller, a: Record<string
   const own = who.kind === 'strategist' && plans.get(id)?.owner?.chatId === who.chatId;
   if (who.kind === 'strategist') {
     if (['approve', 'keep', 'start', 'stop', 'resume', 'archive', 'delete', 'restore'].includes(action)) throw new Error(`${action}: the user decides that, through the Orchestrator.`);
+    if (action === 'merge' && plans.get(planOf(plans, a.other))?.owner?.chatId !== who.chatId) throw new Error('merge: the other plan is not yours either: the merge sends it to the trash. Say to the Orchestrator what you would merge.');
     if (!own) throw new Error('This plan is not yours: you only read it. Say what you would change to the Orchestrator (send_to_chat), which edits it.');
   }
   if (action === 'edit' || action === 'project') {

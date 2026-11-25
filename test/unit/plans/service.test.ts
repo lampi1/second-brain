@@ -88,7 +88,7 @@ describe('which map a chat has', () => {
     const w = maps(), m = saw(w, chat('a', { plan: plan('running', 100, steps('done', 'now', 'todo')) }));
     const next = saw(w, chat('b', { continuedFrom: { id: 'a', title: 'Lavoro a' } as unknown as ChatSummary['continuedFrom'], plan: plan('asking', 200, []) }));
     expect(next).toMatchObject({ id: m.id, owner: { chatId: 'b' }, past: ['a'] });
-    expect(next.plan!.steps.map(s => s.state)).toEqual(['done', 'todo', 'todo']);
+    expect(next.plan!.steps.map(s => s.state)).toEqual(['done', 'now', 'todo']);
     // the old chat's later events do not take it back
     saw(w, { ...chats.find(c => c.id === 'a')!, title: 'Vecchia' });
     expect(w.get(m.id)!.owner!.chatId).toBe('b');
@@ -243,7 +243,7 @@ describe('the owner chat', () => {
     w.observe('chat:removed', { chatId: 'a' });
     expect(w.get(m.id)).toMatchObject({ state: 'stopped', stopped: { by: 'gone' }, plan: { phase: 'running' } });
     expect(await w.act(m.id, 'resume')).toMatchObject({ id: m.id, owner: { chatId: 'n' }, past: ['a'], state: 'idea' });
-    expect(w.get(m.id)!.plan!.steps.map(s => s.state)).toEqual(['done', 'todo']);
+    expect(w.get(m.id)!.plan!.steps.map(s => s.state)).toEqual(['done', 'now']);
     expect(started).toEqual([[m.id, undefined]]);
   });
 
@@ -430,5 +430,42 @@ describe('a partial save deletes nothing (ADR 0361)', () => {
     expect(whole()).toBe(text);
     // every save above is a version, in order
     expect(w.view(m.id)!.history.map(h => h.version)).toEqual(Array.from({ length: w.get(m.id)!.version }, (_, i) => i + 1));
+  });
+});
+
+describe('what the two reviews found (ADR 0363)', () => {
+  it('a title the user chose stays, whatever the chat is called and whatever is done to the plan', async () => {
+    const w = maps(), m = saw(w, chat('a', { plan: plan('running', 100, steps('now', 'todo')) }));
+    await w.change(m.id, { set: { title: 'Sconti a fasce' } });
+    await w.act(m.id, 'stop');
+    w.observe('chat:updated', change('a', { title: 'Altro nome della chat' }));
+    expect(w.get(m.id)!.title).toBe('Sconti a fasce');
+  });
+  it('«set» never replaces the whole list of constraints or links: they are changed by name', async () => {
+    const w = maps(), m = w.idea({ title: 'X', constraints: ['uno', 'due'] });
+    await expect(w.change(m.id, { set: { constraints: ['tre'] } })).rejects.toThrow(/per nome/);
+    await expect(w.change(m.id, { set: { links: [{ kind: 'link', ref: 'https://example.org' }] } })).rejects.toThrow(/per nome/);
+    expect(w.get(m.id)!.constraints).toEqual(['uno', 'due']);
+  });
+  it('a refused step change leaves the words as they were: nothing is half saved', async () => {
+    const w = maps(), m = saw(w, chat('a', { plan: plan('running', 100, steps('now', 'todo')) }));
+    const v = w.get(m.id)!.version;
+    await expect(w.change(m.id, { set: { goal: 'Nuovo' }, steps: [{ op: 'remove', step: 1 }] as never })).rejects.toThrow();
+    expect(w.get(m.id)!.version).toBe(v);
+    expect(w.get(m.id)!.goal).toBeUndefined();
+  });
+  it('a Strategist merges only plans that are its own: the merge sends the other to the trash', async () => {
+    const w = maps(), mine = saw(w, chat('a', { plan: plan('running', 100, steps('now')) })), other = w.idea({ title: 'Di un altro' });
+    await expect(planAction(w, { kind: 'strategist', chatId: 'a' }, { action: 'merge', plan: mine.id, other: other.id })).rejects.toThrow(/not yours/);
+    expect(w.get(other.id)!.deletedAt).toBeUndefined();
+  });
+  it('a merge into a plan that has a chat goes through the chat, so the steps are still there at its next event', async () => {
+    const w = maps(), a = saw(w, chat('a', { state: 'idle', plan: plan('running', 100, steps('now')) })), b = w.idea({ title: 'B' });
+    await w.change(b.id, { steps: [{ op: 'add', title: 'Passo di B', after: [] }] as never });
+    const edits: unknown[] = [];
+    (w as unknown as { d: { chats: { planEdit?: unknown } } }).d.chats.planEdit = (_id: string, ops: unknown) => { edits.push(ops); };
+    await w.merge(a.id, b.id);
+    expect(edits).toHaveLength(1);
+    expect(w.get(b.id)!.deletedAt).toBeDefined();
   });
 });

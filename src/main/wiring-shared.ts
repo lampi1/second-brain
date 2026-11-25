@@ -169,7 +169,7 @@ export function attachPlans(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: ChatS
   if (moved.error) brain.publish([{ kind: 'plans-migration', title: 'Piani: la migrazione non è riuscita', detail: `${moved.error}. I dati vecchi sono intatti e riprovo al prossimo avvio.` }]);
   else if (moved.report) brain.publish([{ kind: 'plans-migration', title: `Piani: ${moved.report.before.jobs + moved.report.before.projects + moved.report.before.folders} record diventano ${moved.report.after.plans} piani`, detail: `${moved.report.after.steps} passi, ${moved.report.after.check} da verificare (nessuna prova leggibile), ${moved.report.after.versions} versioni. Copia di sicurezza con impronte in backups/. I dati vecchi non sono toccati.` }]);
   const orchestrator = (): ChatSummary | undefined => chats.list().find(c => c.isOrchestrator && !c.closedAt);
-  const maps = new Plans({ store: new PlanStore(path.join(ctx.userData, 'plans')), chats, emit: id => ctx.emitter.emit('plans:changed', { id }),
+  const maps = new Plans({ store: new PlanStore(path.join(ctx.userData, 'plans')), chats, emit: id => ctx.emitter.emit('plans:changed', { id }), show: chatId => ctx.emitter.emit('ui:command', { action: 'plan', value: chatId }),
     startStrategist: strategistStarter({ chats, harness: () => brain.settings().orchestratorChats.harness,
       folderOf: m => [m.owner?.chatId, ...(m.past ?? []).slice().reverse()].map(id => id && chats.list().find(c => c.id === id)?.cwd).find(f => f && fs.existsSync(f)) ?? orchestrator()?.cwd ?? brain.info().brainRoot }), ...(now ? { now } : {}) });
   const send = ctx.emitter.emit.bind(ctx.emitter);

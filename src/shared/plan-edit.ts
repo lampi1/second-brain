@@ -113,5 +113,6 @@ export function applySteps(plan: StrategyPlan, ops: readonly StepOp[], now: numb
   if (clash) throw new Error(`I passi ${clash.a} e ${clash.b} possono andare insieme e toccano entrambi «${clash.on}»: uno aspetta l’altro (after), o dividi quello che scrivono.`);
   // a plan that was over has work again; one that was waiting for the user's ok waits for it again
   const over = steps.length > 0 && steps.every(ended);
+  if (plan.phase === 'proposed' || plan.phase === 'approved') return { ...plan, steps, at: Math.max(now, plan.at + 1) };
   return { ...plan, steps, ...(plan.phase === 'done' && !over ? { phase: 'running' as const, at: now } : plan.phase === 'running' && over ? { phase: 'done' as const, at: now } : {}) };
 }

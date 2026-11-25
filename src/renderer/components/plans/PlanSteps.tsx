@@ -21,7 +21,7 @@ function ChatButtons({ s }: { s: PlanStepView }) {
   return <>{chatsOf(s).map(id => <button key={id} type="button" className="pl-boxchat" onClick={() => openChatRef(id)} title={titles[id]?.title ?? id} data-testid={`pl-step-chat-${s.n}-${id}`}><IconChat size={11} /><span>{titles[id]?.title ?? id}</span></button>)}</>;
 }
 
-export function StepRow({ s, now, edit, last, onOp }: { s: PlanStepView; now: number; edit: boolean; last: number; onOp: (op: StepOp) => void }) {
+export function StepRow({ s, now, edit, last, queued = false, onOp }: { s: PlanStepView; now: number; edit: boolean; last: number; /** edits are waiting to be saved: the numbers on screen are not those they will meet */ queued?: boolean; onOp: (op: StepOp) => void }) {
   const list = (ns: readonly number[]) => ns.join(', ');
   const [title, setTitle] = useState(s.title);
   return <li className="pl-step" data-s={STEP_TONE[s.state]} data-drop={s.drop ? '' : undefined} data-added={s.added ? '' : undefined} data-testid={`pl-step-${s.n}`}>
@@ -50,8 +50,8 @@ export function StepRow({ s, now, edit, last, onOp }: { s: PlanStepView; now: nu
       <div className="pl-step-chats"><ChatButtons s={s} /></div>
       {edit && !s.drop && <div className="pl-step-tools">
         {s.state === 'todo' && <>
-          <button type="button" className="btn btn-ghost btn-s" disabled={s.n === 1} aria-label={t('plans.step.up')} onClick={() => onOp({ op: 'move', step: s.id, to: s.n - 1 })} data-testid={`pl-step-up-${s.n}`}>↑</button>
-          <button type="button" className="btn btn-ghost btn-s" disabled={s.n === last} aria-label={t('plans.step.down')} onClick={() => onOp({ op: 'move', step: s.id, to: s.n + 1 })} data-testid={`pl-step-down-${s.n}`}>↓</button>
+          <button type="button" className="btn btn-ghost btn-s" disabled={s.n === 1 || queued} aria-label={t('plans.step.up')} onClick={() => onOp({ op: 'move', step: s.id, to: s.n - 1 })} data-testid={`pl-step-up-${s.n}`}>↑</button>
+          <button type="button" className="btn btn-ghost btn-s" disabled={s.n === last || queued} aria-label={t('plans.step.down')} onClick={() => onOp({ op: 'move', step: s.id, to: s.n + 1 })} data-testid={`pl-step-down-${s.n}`}>↓</button>
           <button type="button" className="btn btn-ghost btn-s" onClick={() => onOp({ op: 'remove', step: s.id })} data-testid={`pl-step-remove-${s.n}`}>{t('plans.step.removeIt')}</button>
         </>}
         {s.state !== 'done' && s.state !== 'partial' && s.state !== 'cancelled' && <button type="button" className="btn btn-ghost btn-s" onClick={() => onOp({ op: 'cancel', step: s.id })} data-testid={`pl-step-cancel-${s.n}`}>{t('plans.step.cancel')}</button>}
@@ -68,10 +68,10 @@ export function PlanSteps({ view, now, edit, ops, onOp }: { view: PlanFull; now:
   return <div className="pl-steps" data-testid="pl-steps" aria-label={t('plans.steps.label')}>
     {turns.map(g => <section key={g.turn} className="pl-turn2" data-together={g.together ? '' : undefined} data-testid={`pl-turn-${g.turn}`}>
       <h4>{turnLabel(g)}</h4>
-      <ol>{g.steps.map(s => <StepRow key={s.id} s={s} now={now} edit={edit} last={last} onOp={onOp} />)}</ol>
+      <ol>{g.steps.map(s => <StepRow key={`${s.id}-${s.title}-${edit}`} s={s} now={now} edit={edit} last={last} queued={ops.length > 0} onOp={onOp} />)}</ol>
     </section>)}
     {dropped.length > 0 && <section className="pl-turn2" data-drop="" data-testid="pl-dropped"><h4>{t('plans.step.dropped')}</h4><ol>{dropped.map(s => <StepRow key={s.id} s={s} now={now} edit={false} last={last} onOp={onOp} />)}</ol></section>}
-    {edit && <div className="pl-step-add"><input value={fresh} maxLength={160} placeholder={t('plans.step.add')} aria-label={t('plans.step.add')} onChange={e => setFresh(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} data-testid="pl-step-new" />
+    {edit && <div className="pl-step-add"><input value={fresh} maxLength={160} placeholder={t('plans.step.add')} aria-label={t('plans.step.add')} onChange={e => setFresh(e.target.value)} onBlur={add} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} data-testid="pl-step-new" />
       <button type="button" className="btn btn-ghost btn-s" disabled={!fresh.trim()} onClick={add} data-testid="pl-step-new-add">{t('plans.step.add')}</button>{ops.length > 0 && <small>{ops.length}</small>}</div>}
   </div>;
 }

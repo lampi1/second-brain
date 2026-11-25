@@ -63,6 +63,8 @@ export interface PlansDeps {
   emit(id: string): void;
   /** opens a Strategist for a map (an idea, or a job whose chat is gone); the chat carries the map's id */
   startStrategist?(map: Plan, change: string | undefined, by: string, cwd?: string): Promise<ChatSummary>;
+  /** a plan just came to wait for the user's ok: its page opens (the chat that owns it) */
+  show?(chatId: string): void;
   now?: () => number;
   newId?: () => string;
 }
@@ -301,6 +303,7 @@ export class Plans {
     // one event for the version and for what it changes of the live status
     this.pictures.set(saved.id, this.picture(saved));
     this.d.emit(saved.id);
+    if (prev && prev.state !== 'toApprove' && saved.state === 'toApprove' && saved.owner) { try { this.d.show?.(saved.owner.chatId); } catch { /* the page is a courtesy */ } }
     return saved;
   }
 
@@ -365,13 +368,14 @@ export class Plans {
       return { ...cur, [key]: one(v, max, key) };
     };
     let out = m;
-    if (c.set?.title !== undefined) out = { ...out, title: one(c.set.title, PLAN_LIMITS.title, 'title') };
+    if (c.set?.title !== undefined) out = { ...out, title: one(c.set.title, PLAN_LIMITS.title, 'title'), titled: true };
     out = text('idea', PLAN_LIMITS.idea, out); out = text('goal', PLAN_LIMITS.goal, out); out = text('why', PLAN_LIMITS.why, out); out = text('project', PLAN_LIMITS.project, out);
-    let constraints = c.set?.constraints ? c.set.constraints.map(x => one(x, PLAN_LIMITS.constraint, 'constraints')) : out.constraints;
+    if (c.set?.constraints || c.set?.links) throw new Error('Vincoli e link si cambiano per nome: add e remove. «set» li sostituirebbe tutti e cancellerebbe quello che non nomini.');
+    let constraints = out.constraints;
     constraints = [...new Set([...constraints, ...(c.add?.constraints ?? []).map(x => one(x, PLAN_LIMITS.constraint, 'constraints'))])].filter(x => !(c.remove?.constraints ?? []).includes(x));
     if (constraints.length > PLAN_LIMITS.constraints) throw new Error(`constraints: al massimo ${PLAN_LIMITS.constraints}.`);
     const link = (l: PlanLink): PlanLink => ({ kind: (['file', 'link', 'plan', 'chat'] as const).includes(l.kind) ? l.kind : 'link', ref: one(l.ref, 500, 'links'), ...(l.label ? { label: one(l.label, 160, 'links') } : {}) });
-    let links = c.set?.links ? c.set.links.map(link) : out.links;
+    let links = out.links;
     for (const l of (c.add?.links ?? []).map(link)) if (!links.some(x => x.ref === l.ref)) links = [...links, l];
     links = links.filter(l => !(c.remove?.links ?? []).includes(l.ref));
     if (links.length > PLAN_LIMITS.links) throw new Error(`links: al massimo ${PLAN_LIMITS.links}.`);
@@ -390,10 +394,10 @@ export class Plans {
       // a live chat carries the plan: the steps change there, and the plan follows it
       if (chat && this.d.chats.planEdit) {
         applySteps(m.plan ?? { phase: 'asking', clarified: [], steps: [], at: 0 }, c.steps, this.now(), by === 'user' ? 'user' : 'strategist');
-        if (words !== m) this.put(words, by);
         this.d.chats.planEdit(chat.id, c.steps, by === 'user' ? 'user' : 'strategist');
         this.sync(id, by);
-        return this.clone(this.maps.get(id)!);
+        const now = this.maps.get(id)!;
+        return this.clone(c.set || c.add || c.remove ? this.put(this.withWords(now, c), by) : now);
       }
       const plan = applySteps(m.plan ?? { phase: 'asking', clarified: [], steps: [], at: this.now() }, c.steps, this.now(), by === 'user' ? 'user' : 'strategist');
       return this.clone(this.put(settle({ ...words, plan }), by));
@@ -408,12 +412,19 @@ export class Plans {
     if (!a || !b || baseId === otherId) throw new Error('Servono due piani diversi.');
     if (a.deletedAt !== undefined || b.deletedAt !== undefined) throw new Error('Un piano nel cestino non si unisce: ripristinalo prima.');
     for (const p of [a, b]) if (this.busyChat(p)) throw new Error(`«${p.title}» ha una chat al lavoro: fermala o aspetta che finisca, poi unisci.`);
-    const steps = b.plan?.steps ?? [];
-    const plan = a.plan ?? { phase: 'asking' as const, clarified: [], steps: [], at: this.now() };
-    const merged = steps.length ? applySteps(plan, [{ op: 'import', steps }], this.now()) : plan;
-    const clarified = [...merged.clarified, ...(b.plan?.clarified ?? []).filter(x => !merged.clarified.some(y => y.q === x.q))].slice(0, 8);
-    const doubts = [...(merged.doubts ?? []), ...(b.plan?.doubts ?? []).filter(x => !(merged.doubts ?? []).some(y => y.text === x.text))];
-    const next = this.withWords(settle({ ...a, plan: { ...merged, clarified, ...(doubts.length ? { doubts } : {}) }, from: [...new Set([...(a.from ?? []), `${b.title} (${b.id})`, ...(b.from ?? [])])].slice(0, PLAN_LIMITS.from) }), { add: { constraints: b.constraints, links: b.links } });
+    const steps = b.plan?.steps ?? [], chat = this.ownerChat(a);
+    let cur = a;
+    if (steps.length) {
+      const ops = [{ op: 'import' as const, steps }], start = a.plan ?? { phase: 'asking' as const, clarified: [], steps: [], at: this.now() };
+      applySteps(start, ops, this.now());
+      // a live chat carries the plan: the steps come in there, or its next event would put its own plan back
+      if (chat && this.d.chats.planEdit) { this.d.chats.planEdit(chat.id, ops, by === 'user' ? 'user' : 'strategist'); this.sync(a.id, by); cur = this.maps.get(a.id)!; }
+      else cur = settle({ ...a, plan: applySteps(start, ops, this.now()) });
+    }
+    const merged = cur.plan ?? { phase: 'asking' as const, clarified: [], steps: [], at: this.now() };
+    const clarified = chat ? merged.clarified : [...merged.clarified, ...(b.plan?.clarified ?? []).filter(x => !merged.clarified.some(y => y.q === x.q))].slice(0, 8);
+    const doubts = chat ? (merged.doubts ?? []) : [...(merged.doubts ?? []), ...(b.plan?.doubts ?? []).filter(x => !(merged.doubts ?? []).some(y => y.text === x.text))];
+    const next = this.withWords(settle({ ...cur, plan: { ...merged, clarified, ...(doubts.length ? { doubts } : {}) }, from: [...new Set([...(a.from ?? []), `${b.title} (${b.id})`, ...(b.from ?? [])])].slice(0, PLAN_LIMITS.from) }), { add: { constraints: b.constraints, links: b.links } });
     const done = this.put(next, by);
     this.put(settle({ ...b, deletedAt: this.now() }), by);
     return this.clone(done);

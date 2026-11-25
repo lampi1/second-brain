@@ -47,6 +47,9 @@
 .pl-turn2[data-together] h4 { color: var(--pl-par); }
 .pl-turn2[data-drop] { opacity: .75; border-style: dashed; }
 .pl-turn2 ol { display: flex; flex-direction: column; gap: 6px; }
+/* steps that run together sit side by side, and wrap when the room is short */
+.pl-turn2[data-together] ol { flex-direction: row; flex-wrap: wrap; align-items: stretch; }
+.pl-turn2[data-together] .pl-step { flex: 1 1 260px; min-width: 0; }
 .pl-step { display: flex; gap: 10px; padding: 9px 10px; border: 1px solid var(--border-2); border-radius: var(--r-m); background: var(--surface); min-width: 0; }
 .pl-step[data-s=now] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
 .pl-step[data-s=ok] { border-color: var(--green); }
@@ -90,7 +93,7 @@
 @container (max-width: 640px) { .pl-idea { grid-template-columns: 1fr; } .pl-row2 { flex-direction: column; align-items: stretch; } .pl-row-actions { justify-content: flex-start; padding: 0 10px 8px; } .pl-bar-track { max-width: 55vw; } }
 @media (max-width: 480px) { .pl-step { flex-direction: column; gap: 6px; } .pl-bigbar .pl-bar-track { width: 100%; max-width: 100%; } }
 
-   the dashed frame of parallel steps, arrows) and the side panel. Used by components/plans/*; .pl-dots and .pl-chip
+/* The plans' page: the list, a plan's words, its steps by turn (the dashed frame of parallel steps, arrows) and the side panel. Used by components/plans/*; .pl-dots and .pl-chip
    also by plans/PlanSteps.tsx. */
 .pl { display: flex; flex-direction: column; gap: 12px; min-height: 0; min-width: 0; container-type: inline-size; --pl-par: #e58ad6; --pl-par-bg: rgba(229, 138, 214, .06); }
 :root[data-theme=light] .pl { --pl-par: #b03d98; --pl-par-bg: rgba(176, 61, 152, .06); }

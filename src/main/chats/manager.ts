@@ -294,7 +294,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     const strategist = by === 'agent' && agent.owner.source === 'catalog' && agent.owner.id === 'strategist' && !delegator && !req.orchestrator;
     const asking = strategist && given ? askingPlan(now, opts.intake && this.planIntake(opts.intake)) : undefined, resume = opts.resumePlan;
     // a plan's job goes on in a new chat (ADR 0342): the answers the user already gave are kept
-    const plan = asking && resume ? { ...asking, clarified: resume.clarified, ...(resume.pcOnly ? { pcOnly: true as const } : {}), ...(resume.asked ? { asked: resume.asked } : {}), ...(resume.enough ? { enough: true as const } : {}) } : asking;
+    const plan = asking && resume ? { ...asking, clarified: resume.clarified, ...(resume.steps.length ? { steps: structuredClone(resume.steps) } : {}), ...(resume.pcOnly ? { pcOnly: true as const } : {}), ...(resume.asked ? { asked: resume.asked } : {}), ...(resume.enough ? { enough: true as const } : {}) } : asking;
     const continued = opts.continuationOf ? this.chats.get(opts.continuationOf) : undefined;
     const told = given && folderNotes.length ? `${given}\n\nCartella di lavoro (dall’app):\n${folderNotes.map(n => `- ${n}`).join('\n')}` : given;
     const prompt = told && pack ? `${told}\n\n${pack}` : told && plan ? `${told}\n\n${strategyPrompt(plan)}` : told;
