@@ -7,6 +7,7 @@ import path from 'node:path';
 import type { EngineKind, PermissionMode } from '../../shared/contract';
 import type { CodexExecutionPolicy } from '../brain/adapters/codex-policy';
 import { PERMISSION_CEILINGS, TOOL_CLASSES, type AgentToolPolicy, type PermissionCeiling, type ToolClass } from '../../shared/agents';
+import { commandSteps, shellOfTool, type CommandShell } from './command-steps';
 
 export interface AgentPolicy { tools: AgentToolPolicy | null; ceiling: PermissionCeiling | null }
 /** Used when a stored policy is unreadable: the narrowest run, never an unrestricted one. */
@@ -177,26 +178,37 @@ export function shellWithin(p: AgentPolicy | null | undefined, tool: string, inp
   if (!allowsClass(p, 'shell')) return false;
   if (!commandsReadOnly(p)) return true;
   if (OUTPUT_TOOLS.includes(tool)) return true;
-  return COMMAND_TOOLS.includes(tool) && readOnlyCommand((input as { command?: unknown } | null)?.command, scripts);
+  return COMMAND_TOOLS.includes(tool) && readOnlyCommand((input as { command?: unknown } | null)?.command, scripts, shellOfTool(tool));
 }
 
 /** The brain's declared read-only tools (agents/read-tools.ts, issue #93): `node <script> [args]` reads when <script>,
  *  resolved from `cwd` with its links, is exactly one of `paths` (real paths). Anything else run by node stays refused. */
 export interface ReadScripts { cwd: string; paths: readonly string[] }
+/** Git Bash's `/c/Users/…` is `c:/Users/…` on Windows. */
+const gitBashPath = (p: string): string => process.platform === 'win32' ? p.replace(/^\/([a-z])(?=\/|$)/i, '$1:') : p;
 const samePath = (a: string, b: string): boolean => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
 /** `node <declared script> [args]`: no node option before the script (`-e`, `--require`, `--import` run other code), a
  *  plain path (no glob), and its real path one of the declared ones. */
 function declaredScript(words: Word[], scripts: ReadScripts | undefined): boolean {
   const script = words[1];
-  if (!scripts || !script || script.glob || !script.text || script.text.startsWith('-') || !path.isAbsolute(scripts.cwd)) return false;
+  // a relative path needs a known folder (an absolute one is the same from anywhere)
+  if (!scripts || !script || script.glob || !script.text || script.text.startsWith('-') || (!path.isAbsolute(gitBashPath(script.text)) && !path.isAbsolute(scripts.cwd))) return false;
   let real: string;
-  try { real = fs.realpathSync.native(path.resolve(scripts.cwd, script.text)); } catch { return false; }
+  try { real = fs.realpathSync.native(path.resolve(scripts.cwd, gitBashPath(script.text))); } catch { return false; }
   return scripts.paths.some(p => samePath(p, real));
 }
 
 // sort and uniq are not here: they read stdin only (STDIN_ONLY), their operands are files they may write
 const READ_COMMANDS = new Set(['ls', 'dir', 'cat', 'type', 'head', 'tail', 'grep', 'rg', 'findstr', 'wc', 'pwd', 'stat', 'file', 'tree', 'du', 'df', 'which', 'whoami',
-  'cut', 'get-childitem', 'gci', 'get-content', 'gc', 'select-string', 'sls', 'get-item', 'get-location', 'test-path', 'resolve-path', 'measure-object']);
+  'cut', 'get-childitem', 'gci', 'get-content', 'gc', 'select-string', 'sls', 'get-item', 'get-location', 'test-path', 'resolve-path', 'measure-object',
+  'echo', 'basename', 'dirname', 'realpath',
+  // PowerShell's own readers and the cmdlets that only shape what a pipe carries (none takes a file to write; a script
+  // block, a variable or a subexpression is still refused above, so Where-Object only in its plain form). Full names
+  // only: a short alias (gm, ft, gps) may be another program under bash
+  'select-object', 'where-object', 'sort-object', 'group-object', 'get-unique', 'format-table', 'format-list', 'format-wide', 'out-string',
+  'out-null', 'convertfrom-json', 'convertto-json', 'convertfrom-csv', 'convertto-csv', 'get-member', 'write-output', 'write-host', 'get-date',
+  'get-command', 'get-help', 'split-path', 'join-path', 'get-itemproperty', 'get-filehash', 'get-process', 'get-service', 'get-ciminstance',
+  'get-psdrive', 'get-alias', 'get-history']);
 const READ_GIT = new Set(['status', 'log', 'diff', 'show', 'rev-parse', 'ls-files', 'blame', 'describe', 'shortlog', 'grep']);
 /** `git branch`, `git tag`, `git remote` only list with these flags; any other argument creates, moves or deletes. */
 const GIT_LISTS: Record<string, ReadonlySet<string>> = {
@@ -267,21 +279,51 @@ function stdinOnly(rule: StdinRule, args: string[]): boolean {
   return true;
 }
 
-/** One read-only command: a known reader, `git` reading or listing, `find` without actions, `sort`/`uniq` on stdin,
- *  `node` running one of the brain's declared read-only tools (`scripts`, issue #93);
- *  no chaining, redirection, substitution, subexpression or script block, and a pipe only into another reader. Anything
- *  else is not read-only (refused under shell-read). Both shells count: bash and PowerShell (`(`, `@(`, `{`, `&`). */
-export function readOnlyCommand(raw: unknown, scripts?: ReadScripts): boolean {
+/** A command line that only reads: each of its steps (command-steps.ts: a chain, a bash loop over plain values, a bash
+ *  function called on the line, a `cd`, output thrown away) is one read-only command: a known reader, `git` reading or
+ *  listing, `find` without actions, `sort`/`uniq` on stdin, `node` running one of the brain's declared read-only tools
+ *  (`scripts`, issue #93); no other redirection, no substitution, subexpression or script block, and a pipe only into
+ *  another reader. Anything else is not read-only (refused under shell-read). shell: the tool's own (shellOfTool); null
+ *  = it may be bash, PowerShell or cmd, so only what all three read alike. */
+export function readOnlyCommand(raw: unknown, scripts?: ReadScripts, shell: CommandShell = null): boolean {
   if (typeof raw !== 'string' || !raw.trim() || raw.length > 2000) return false;
+  // an escaped quote: bash keeps \" inside a double-quoted word, PowerShell ends it there; the two would split the line
+  // differently, so neither reading is trusted
+  if (/\\["']/.test(raw)) return false;
+  // PowerShell's typographic quotes (‘ ’ ‚ ‛ “ ” „) end its strings where this reader sees none
+  if (/[‘-„]/.test(raw)) return false;
+  // cmd (a tool that does not say its shell): `^` escapes and `'` is no quote, so `|`, `&`, `<`, `>` in single quotes run
+  // and `%NAME%` expands before cmd reads quotes (`%CMDCMDLINE:~-1%` is a `"`)
+  if (shell === null && (/\^["'&|<>]/.test(raw) || /'[^']*[|&<>][^']*'/.test(raw) || /%[^%\s]+%/.test(raw))) return false;
+  // the plain steps of a chain, a loop or a function called on the line (command-steps.ts, issue #485), each checked
+  // alone; a `cd` moves where a declared script is looked for (a move that may have failed: only absolute ones then)
+  const steps = commandSteps(raw, shell);
+  if (!steps?.length) return false;
+  let at = scripts;
+  for (const step of steps) {
+    if ('cd' in step) {
+      if (!at) continue;
+      const to = gitBashPath(/^~(?=$|[\\/])/.test(step.cd) ? path.join(os.homedir(), step.cd.slice(1)) : step.cd);
+      // a bare relative name may be found through CDPATH: only an absolute folder or one from here (./, ../) is known
+      const next = path.isAbsolute(to) ? to : path.isAbsolute(at.cwd) && /^\.\.?(?:[\\/]|$)/.test(to) ? path.resolve(at.cwd, to) : '';
+      // `cd x; …`: had the move failed the line would go on where it was, so the folder is not known
+      // cmd's `cd D:\x` without /d leaves the drive where it was: a tool that may run cmd moves drives uncertainly
+      at = { ...at, cwd: step.certain && !(shell === null && /^[a-z]:/i.test(to)) ? next : '' };
+      continue;
+    }
+    if (!oneReadOnly(step.text, at)) return false;
+  }
+  return true;
+}
+
+/** One command, a pipe of readers at most. */
+function oneReadOnly(raw: string, scripts?: ReadScripts): boolean {
   // chaining, redirection, substitution (bash $( ${ backtick <( >(, PowerShell $( @( ( { and its ` escape), quoted or
   // not; a reflog ref (HEAD@{1}, @{u}) is the only brace kept: PowerShell cannot run anything in it. Any other `$` is
   // refused too: an unquoted $IFS splits `find .$IFS-delete` into a writing option after this check, and a variable
   // ($HOME, PowerShell's $env:x) or bash's $'…' quoting would make the words differ from what is checked here
   const plain = raw.replace(/@\{[A-Za-z0-9_.:/-]*\}/g, '');
   if (/[;&<>`(){}$\r\n]/.test(plain)) return false;
-  // an escaped quote: bash keeps \" inside a double-quoted word, PowerShell ends it there; the two would split the line
-  // differently, so neither reading is trusted
-  if (/\\["']/.test(raw)) return false;
   const parts = stages(raw);
   if (!parts) return false;
   return parts.every((words, stage) => {

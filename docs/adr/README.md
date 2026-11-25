@@ -340,6 +340,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0361](0361-one-order-of-the-engines.md) One order of the engines, a threshold each, the reason on every chat, and changes that are never lost — accepted
 - [0362](0362-whoever-opens-a-chat-chooses-its-folder.md) Whoever opens a chat chooses its folder, in place by default — accepted
 - [0363](0363-one-concept-the-plan.md) One concept, the Plan: it replaces the project maps and the work maps — accepted
+- [0364](0364-safe-reads-are-read-whole-lines.md) Safe reads are read as whole lines: loops, functions, chains, PowerShell pipes, a script's own folder — accepted
 
 ## Replaced
 
