@@ -11,6 +11,7 @@
 // catalog's proposals (AcpCatalogSettings.tsx, ADR 0221).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Select } from './Select';
+import { EngineOrderSettings } from './EngineOrder';
 import type { CliStatus, EngineInfo, SecretsStatus } from '@shared/contract';
 import { isLang, LANGS } from '@shared/contract';
 import { IconBell, IconBranch, IconEdit, IconFolder, IconLink, IconMic, IconMoon, IconPhone, IconRefresh, IconSearch, IconSettings, IconShield, IconTerminal, IconUser, IconX } from './Icons';
@@ -152,7 +153,7 @@ export function SettingsPage() {
     { ...meta.profile, icon: <IconUser size={16} />, body: <ProfileSettings /> },
     { ...meta.update, icon: <IconRefresh size={16} />, body: <AppUpdateSettings /> },
     { ...meta.connectors, icon: <IconLink size={16} />, body: <ConnectorsHub /> },
-    { ...meta.accounts, icon: <IconTerminal size={16} />, body: <>{engines.map(engine => <ToolConnection key={engine.id} engine={engine} />)}<AcpCatalogSettings /></> },
+    { ...meta.accounts, icon: <IconTerminal size={16} />, body: <><EngineOrderSettings />{engines.map(engine => <ToolConnection key={engine.id} engine={engine} />)}<AcpCatalogSettings /></> },
     { ...meta.roles, icon: <IconBranch size={16} />, body: <><AwaySettings /><DelegationSettings /></> },
     { ...meta.space, icon: <IconFolder size={16} />, body: <>
       <WorkProfilePreferences />

@@ -57,6 +57,7 @@ import { aliveIt } from './areas/alive.it';
 import { modelPickerIt } from './areas/model-picker.it';
 import { awayIt } from './areas/away.it';
 import { queueSettingsIt } from './areas/queue-settings.it';
+import { engineOrderIt } from './areas/engine-order.it';
 import { remoteIt } from './areas/remote.it';
 import { learningIt } from './areas/learning.it';
 import { andamentoIt } from './areas/andamento.it';
@@ -86,7 +87,7 @@ export const it = {
   ...aliveIt,
   ...modelPickerIt,
   ...awayIt,
-  ...queueSettingsIt,
+  ...queueSettingsIt, ...engineOrderIt,
   ...remoteIt,
   ...learningIt,
   ...andamentoIt,

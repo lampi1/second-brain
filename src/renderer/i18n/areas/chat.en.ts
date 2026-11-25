@@ -122,6 +122,7 @@ export const chatEn: typeof chatIt = {
   'chat.menu.permissionLabel': 'Permission prompts',
   'chat.menu.handoffLabel': (p: { tokens?: string }) => `Handoff${p.tokens ? ` · ${p.tokens}` : ''}`,
   'chat.menu.handoffTokens': (p: { amount: string }) => `${p.amount} tokens used`,
+  'chat.menu.resumeElsewhere': 'Resume in another folder…',
   'chat.menu.handoffRead': 'Read or write a note for whoever continues…',
   'chat.menu.undoTurn': 'Undo the last turn (files as before)',
   'chat.menu.undoTurnTitle': 'Undo the last turn?',
