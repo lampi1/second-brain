@@ -96,7 +96,7 @@ describe('the service that has the lines of the day written', () => {
     for (const role of QUIP_ROLES) for (const kind of QUIP_KINDS) expect(got.lines[role]?.[kind], `${role} ${kind}`).toHaveLength(dailyCount(kind));
     expect(calls.map(asked)).toEqual(DAILY_BATCHES);
     for (const c of calls) {
-      expect(c).toMatchObject({ purpose: 'phrases', light: true, agentId: 'herald' });
+      expect(c).toMatchObject({ purpose: 'phrases', light: true, agentId: 'artisan' });
       expect(c.system).toBe(DAILY_SYSTEM('it'));
       expect(c.system).toContain('Italian');
       expect(c.maxOutputTokens).toBeLessThanOrEqual(2400);
