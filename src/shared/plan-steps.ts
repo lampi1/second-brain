@@ -6,7 +6,7 @@
 // shared/plan.ts, main (chats, delegation, plans) and the renderer; pinned by test/unit/shared/plan-steps.test.ts.
 import type { DelegationOutcome } from './delegation';
 import { isPresetId, type PresetId } from './model-presets';
-import { isWorkRole, type WorkRoleId } from './roles';
+import { currentRoleId, isWorkRole, type WorkRoleId } from './roles';
 
 /** todo = da fare · now = in corso · blocked = bloccato · partial = fatto in parte · done = fatto (with its proof) ·
  *  cancelled = annullato · check = da verificare: it was called done, and nothing readable proves it */
@@ -213,11 +213,17 @@ export function readProof(v: unknown): StepProof | null {
   return { at: p.at, by: p.by as StepProof['by'], text: p.text, ...(typeof p.chatId === 'string' && CHAT.test(p.chatId) ? { chatId: p.chatId } : {}) };
 }
 
+const stepRole = (v: unknown): WorkRoleId | null => {
+  if (typeof v !== 'string') return null;
+  const role = currentRoleId(v);
+  return isWorkRole(role) ? role : null;
+};
+
 /** Saved steps, checked; null = not a list of steps (nothing is guessed). What is not understood inside one is left out. */
 export function readSteps(v: unknown): PlanStep[] | null {
   if (!Array.isArray(v) || v.length > STEPS_ALL_MAX) return null;
   const raw = v as Record<string, unknown>[];
-  if (!raw.every(s => s && typeof s === 'object' && text(s.title, STEP_TITLE_MAX) && (s.detail === undefined || text(s.detail, STEP_DETAIL_MAX)) && (s.role === undefined || isWorkRole(s.role)) && (s.chatIds === undefined || (Array.isArray(s.chatIds) && s.chatIds.every(x => typeof x === 'string' && CHAT.test(x)))) && STEP_STATES.includes(s.state as StepState))) return null;
+  if (!raw.every(s => s && typeof s === 'object' && text(s.title, STEP_TITLE_MAX) && (s.detail === undefined || text(s.detail, STEP_DETAIL_MAX)) && (s.role === undefined || stepRole(s.role) !== null) && (s.chatIds === undefined || (Array.isArray(s.chatIds) && s.chatIds.every(x => typeof x === 'string' && CHAT.test(x)))) && STEP_STATES.includes(s.state as StepState))) return null;
   const out: PlanStep[] = [];
   let turn: string[] = [], before: string[] = [];
   for (const [i, s] of raw.entries()) {
@@ -229,7 +235,8 @@ export function readSteps(v: unknown): PlanStep[] | null {
     if (state === 'done' && s.outcome === 'partial') state = 'partial';
     else if (state === 'done' && s.outcome === 'blocked') state = 'blocked';
     else if (state === 'done' && !proof) state = 'check';
-    out.push({ id, title: (s.title as string).trim(), ...(text(s.detail, STEP_DETAIL_MAX) ? { detail: s.detail } : {}), ...(isWorkRole(s.role) ? { role: s.role } : {}), state, ...(proof ? { proof } : {}),
+    const role = stepRole(s.role);
+    out.push({ id, title: (s.title as string).trim(), ...(text(s.detail, STEP_DETAIL_MAX) ? { detail: s.detail } : {}), ...(role ? { role } : {}), state, ...(proof ? { proof } : {}),
       ...(Array.isArray(s.chatIds) && s.chatIds.length ? { chatIds: s.chatIds.filter((x): x is string => typeof x === 'string' && CHAT.test(x)).slice(-STEP_CHATS_MAX) } : {}),
       ...(time(s.startedAt) ? { startedAt: s.startedAt } : {}), ...(time(s.endedAt) ? { endedAt: s.endedAt } : {}), ...(after.length ? { after } : {}),
       ...(Array.isArray(s.touches) && s.touches.length ? { touches: s.touches.filter((x): x is string => text(x, TOUCH_LEN)).slice(0, TOUCHES_MAX) } : {}),

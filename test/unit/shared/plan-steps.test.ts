@@ -102,6 +102,17 @@ describe('a saved plan\'s steps, read', () => {
     expect(readSteps('x')).toBeNull();
     expect(readSteps(Array.from({ length: 401 }, (_, i) => ({ title: `t${i}`, state: 'todo' })))).toBeNull();
   });
+  it('saved steps with retired work roles (herald, scribe, judge) resolve to their successor instead of dropping the plan', () => {
+    const out = readSteps([
+      { id: 's1', title: 'draft updates', role: 'herald', state: 'todo' },
+      { id: 's2', title: 'write doc', role: 'scribe', state: 'todo' },
+      { id: 's3', title: 'review', role: 'judge', state: 'todo' },
+    ])!;
+    expect(out.map(x => x.role)).toEqual(['artisan', 'artisan', 'sentinel']);
+    // retired orchestrator alias or unknown role still rejected
+    expect(readSteps([{ id: 's1', title: 'a', role: 'router', state: 'todo' }])).toBeNull();
+    expect(readSteps([{ id: 's1', title: 'a', role: 'unknown', state: 'todo' }])).toBeNull();
+  });
   it('a step saved before ids: its id is made, `par` becomes the dependency it meant, a done step with no proof is «da verificare»', () => {
     const out = readSteps([{ title: 'a', state: 'done' }, { title: 'b', state: 'todo', par: true }, { title: 'c', state: 'todo' }, { title: 'd', state: 'done', outcome: 'partial' }, { title: 'e', state: 'done', outcome: 'blocked' }])!;
     expect(out.map(x => x.id)).toEqual(['s1', 's2', 's3', 's4', 's5']);
