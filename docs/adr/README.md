@@ -341,6 +341,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0362](0362-whoever-opens-a-chat-chooses-its-folder.md) Whoever opens a chat chooses its folder, in place by default — accepted
 - [0363](0363-one-concept-the-plan.md) One concept, the Plan: it replaces the project maps and the work maps — accepted
 - [0364](0364-safe-reads-are-read-whole-lines.md) Safe reads are read as whole lines: loops, functions, chains, PowerShell pipes, a script's own folder — accepted
+- [0365](0365-nested-arguments-as-json-text.md) A nested argument may come as its JSON text; a null where a value was wanted is named in the error — accepted
 
 ## Replaced
 
