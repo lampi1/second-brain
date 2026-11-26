@@ -23,8 +23,8 @@
 
 ## The idea
 
-You talk to **one** chat: the **Orchestrator**. It plans, splits the job and sends each piece to a crew of five, every
-one on the engine and model you chose for it. You watch them work side by side, and you only step in for what really
+You talk to **one** chat: the **Orchestrator**. It plans, splits the job and sends each piece to a crew of four specialists, every
+one on the engine and model you chose for it. You watch them work side by side in the **Grindhouse**, and you only step in for what really
 needs you.
 
 ```text
@@ -33,7 +33,7 @@ needs you.
             ┌──────▼───────┐
             │ Orchestrator │   plans, delegates, answers the crew, tells you what waits
             └──────┬───────┘
-   Strategist · Scout · Artisan · Sentinel · Herald        the crew, each on its own engine
+       Strategist · Scout · Artisan · Sentinel             the crew, each on its own engine
                    │
    Claude Code · Codex · Cursor · OpenCode · ACP agents    your CLIs, your logins
                    │
@@ -44,9 +44,9 @@ needs you.
 
 ## Meet the crew
 
-<p align="center"><img src="docs/screenshots/crew.webp" alt="The six roles: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald" width="544"></p>
+<p align="center"><img src="docs/screenshots/crew.webp" alt="The animated crew characters: Orchestrator, Strategist, Scout, Artisan, Sentinel, plus Herald in Chess" width="544"></p>
 
-Each one has a vice for the quiet moments:
+Each character has a vice for the quiet moments (all six also play in **Chess**):
 
 <p align="center">
   <img src="docs/vices/orchestrator.webp" alt="The Orchestrator at rest: a long pipe and smoke rings" width="128">
@@ -59,34 +59,24 @@ Each one has a vice for the quiet moments:
 
 | Role | Does |
 |------|------|
-| **Orchestrator** | Your single entry. Routes the work, answers the crew's questions, asks you only what is yours. |
+| **Orchestrator** | Your single entry. Routes work, manages plans, answers the crew's questions, asks you only what is yours. |
 | **Strategist** | Turns a big job into a plan on a map of its own, waits for your OK, launches the steps and their reviews. |
-| **Scout** | Finds things: code, logs, docs. Reads, never writes. |
-| **Artisan** | Makes the change and proves it works. |
-| **Sentinel** | Reviews the diff with fresh eyes. Trusts nothing. |
-| **Herald** | Drafts messages for people and outside services. Nothing is sent without your OK. |
+| **Scout** | Finds things: code, logs, docs, browser state. Reads, never writes. |
+| **Artisan** | Builds the change, writes docs or brain notes, drafts external messages (sent only with your OK), and proves it works. |
+| **Sentinel** | Reviews the diff and runs checks with fresh eyes. Trusts nothing. |
 
 ## What you get
 
-- **Every engine, per role.** Claude Code on one role, Codex on another, Cursor on a third. Each role card holds its
-  model presets (Minimo, Base, Massimo) and its code mode.
-- **Plans you can see.** Every job has its own map: you approve, start, change or stop it there, and its boxes turn
-  green as the crew finishes, saying who works, who waits for whom and what failed. **Map** opens on all of them by
-  status, what waits for you on top; an idea alone is a map too.
-- **Only the questions nobody else can answer.** A worker's question goes to its Strategist, then to the Orchestrator,
-  then to you; the map says who answered and why. One open doubt and the plan cannot be approved.
-- **No collisions.** Every writing agent gets its own git worktree.
-- **No leftovers.** A number beside Grindhouse counts the agents at work; when one ends, what it started ends with it,
-  except the shared environments held by a lease.
-- **Your rules.** A `permissions.json` in your brain decides what waits for your click. Production, databases and the
-  cloud always wait for your own yes.
+- **Orchestrator-first cockpit.** A chat-focused sidebar with role mini-icons keeps up to 20 parallel chats in sight, while secondary views live in a quiet hamburger menu (**Work**, **Leisure**, **System**). In the Orchestrator column: `Ctrl+F` search, `[Topic]` thread filters, hover quote/reply, and an instant red **Stop** button right in the composer.
+- **Every engine, per role.** Claude Code on one role, Codex on another, Cursor or Antigravity/ACP on a third. Manage **Agents** with per-role model presets (`Minimo`, `Base`, `Massimo`), **Model tiers**, code mode, and zero-token RPG levels (`Lv N` + Pat/Whack).
+- **Plans you can see.** Every job has its own clean map managed through the Orchestrator: you approve, start, adjust or stop it there, with tolerant remaining-time estimates (parallel and sequential) and boxes that turn green as the crew finishes.
+- **Only the questions nobody else can answer.** A worker's question goes to its Strategist, then to the Orchestrator, then to you; one open doubt and the plan cannot be approved. Commands state what they do in one clear line with explicit **Run**, **Already done**, and **Skip** choices.
+- **No collisions, no freezes, no leftovers.** Every writing agent gets its own git worktree, lifecycle scans run in `O(N)` with indexed SQLite assignments and 60fps CSS-composited sprites, and when a chat ends, what it started ends with it (except leased shared environments).
+- **Your rules.** A `permissions.json` in your brain decides what waits for your click. Production, databases and the cloud always wait for your own yes.
 - **A real browser.** QA agents drive your test environment in a tab next to their chat and bring back screenshots.
-- **A brain that learns.** Skills, journal and artifacts in plain Markdown. **Maintenance** reads the past work and
-  proposes only the skill changes that matter, each with a reason and an Undo.
-- **Voice and phone.** Dictation, voice conversation, call transcripts, Telegram. All speech runs on your PC.
-- **Also on board.** The **Tasks** page for your work items, **Trends** and the **Log**, **Memory** with the brain
-  **Map**, **Scripts**, **Recordings**, lessons in **Learn**, a searchable **Settings** page, and **Chess** against
-  your agents.
+- **A brain that learns.** **Memory**, **Skills**, **Scripts**, journal and artifacts in plain Markdown. **Maintenance** reads past work and proposes only the skill changes that matter, each with a reason and an Undo.
+- **Voice, phone and Remote Mode.** Local dictation, voice conversation, call **Recordings**, and **Remote Mode** on both Claude (`claude.ai/code`) and Antigravity/ACP engines through the **Telegram** phone bridge.
+- **Also on board.** **Tasks**, **Trends**, **Log**, the 2D brain **Map**, searchable **Settings**, and **Leisure** with a curated multi-edition **News** reader and **Chess** against your animated crew.
 
 <p align="center"><img src="docs/screenshots/plan.webp" alt="A Strategist's plan on its own map: a box per step with role and model, Approve and start above the drawing" width="720"></p>
 

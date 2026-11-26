@@ -195,8 +195,8 @@ export function goTarget(target: string): void {
   if (p) go(p); else toast(t('appText.actions.unknownPage', { page: target }), 'warn');
 }
 
-/** Old page names (app-control docs, links made before; the agents' workspace page is the Grindhouse since SPEC 19) → today's ids; the deleted Idee and Regole (2026-11-23) open Memoria. */
-const ALIAS: Record<string, string> = { oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', fatto: 'log', diario: 'log', workspace: 'home', grid: 'home', chat: 'home', chats: 'home', map: 'mappa', idee: 'memoria', spunti: 'memoria', regole: 'memoria', miglioramento: 'memoria', esplora: 'file', procedure: 'skill', procedura: 'skill', dashboard: 'memoria', confronto: 'qualita' };
+/** Old page names (app-control docs, links made before; the agents' workspace page is the Grindhouse since SPEC 19) → today's ids; the deleted Idee, Regole and 3D Mappa open their clean replacements. */
+const ALIAS: Record<string, string> = { oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', fatto: 'log', diario: 'log', workspace: 'home', grid: 'home', chat: 'home', chats: 'home', map: 'collegamenti', mappa: 'collegamenti', idee: 'memoria', spunti: 'memoria', regole: 'memoria', miglioramento: 'memoria', esplora: 'file', procedure: 'skill', procedura: 'skill', dashboard: 'memoria', confronto: 'qualita' };
 
 /** Go to a place: a brain page (the Grindhouse holds the agents) or the map; `element` is highlighted for 1.5 s on arrival. */
 export function go(place: Place, opts: { push?: boolean } = {}): void {

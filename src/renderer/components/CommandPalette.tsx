@@ -85,7 +85,7 @@ function buildCommands(): Cmd[] {
   const to = orchestrator && otherEngine(orchestrator.harness);
   const actions: Omit<Cmd, 'group'>[] = [
     { id: 'plans', title: auditText('plans.title'), sub: auditText('plans.lead'), shortcut: 'Ctrl+Shift+S', icon: <IconTicket />, run: () => openPlans(), text: 'piani piano lavori idee passi plans' },
-    { id: 'stato', title: auditText('cmp.palette.status'), sub: auditText('cmp.palette.statusSub'), icon: <IconList />, run: () => openModal('stato'), text: 'stato come siamo messi a che punto siamo pr' },
+    { id: 'stato', title: auditText('cmp.palette.status'), sub: auditText('cmp.palette.statusSub'), icon: <IconList />, run: () => openPlans(), text: 'stato come siamo messi a che punto siamo pr' },
     { id: 'next', title: auditText('cmp.palette.next'), shortcut: 'Ctrl+J', icon: <IconBolt />, run: () => nextThing() },
     { id: 'new', title: auditText('cmp.palette.newChat'), shortcut: 'Ctrl+N', icon: <IconPlus />, run: () => newRequest() },
     { id: 'new-browser', title: t('ui.newBrowser'), sub: t('ui.browserMine'), icon: <IconGlobe />, run: () => { void newBrowser(); }, text: 'browser tab scheda web' },

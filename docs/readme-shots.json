@@ -127,8 +127,7 @@
       "test": "README showcase: the Strategist's plan to approve on its map",
       "sources": [
         "src/renderer/components/plans/PlanView.tsx",
-        "src/renderer/components/plans/WorkDrawing.tsx",
-        "src/renderer/components/plans/WorkSide.tsx",
+        "src/renderer/components/plans/PlanSteps.tsx",
         "src/renderer/components/plans/PlanBits.tsx",
         "src/renderer/components/plans/LiveBits.tsx",
         "src/renderer/components/plans/PlanDoubts.tsx",
@@ -220,7 +219,7 @@
       "test": "README showcase: voice, Log, recordings, quality, learn, news, costs, trends, the maintenance notice",
       "sources": [
         "src/renderer/components/impara/news/",
-        "src/renderer/components/impara/ImparaTabs.tsx",
+        "src/renderer/components/impara/ImparaPage.tsx",
         "src/renderer/styles/news.css",
         "src/main/news/demo.ts"
       ]
@@ -248,6 +247,9 @@
     ],
     "agenti": [
       "Agents"
+    ],
+    "piani": [
+      "Plans"
     ],
     "task": [
       "Tasks",
@@ -279,7 +281,7 @@
       "Recordings"
     ],
     "impara": [
-      "Learn"
+      "News"
     ],
     "scacchi": [
       "Chess"

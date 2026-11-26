@@ -41,7 +41,7 @@ export const newsIt = {
   'news.saved': 'Salvata',
   'news.why': 'Perché conta per te',
   'news.noSummary': 'Il riassunto AI arriva al prossimo aggiornamento. Qui sopra le parole della fonte.',
-  'news.explain': 'Impara',
+  'news.explain': 'Approfondisci',
   'news.openLesson': 'Apri la lezione',
   'news.save': 'Salva per dopo',
   'news.savedOn': 'Salvata',

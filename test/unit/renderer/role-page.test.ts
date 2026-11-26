@@ -36,7 +36,7 @@ const [orchestrator, scout, artisan] = profiles as [AgentProfile, AgentProfile, 
 describe('the levels on a role\'s page (ADR 0347)', () => {
   it('a work role: Minimo, Base and Massimo as model chips, with what it would start on now', () => {
     const html = levelsOf(page(scout));
-    expect(html).toContain('Modelli per livello');
+    expect(html).toContain('Tier modelli');
     for (const id of ['min', 'base', 'max']) {
       expect(html).toContain(`data-testid="role-level-${id}"`);
       // Minimo follows Base here: no chip of its own

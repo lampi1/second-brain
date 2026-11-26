@@ -41,7 +41,7 @@ export const newsDe = {
   'news.saved': 'Gespeichert',
   'news.why': 'Warum es für dich zählt',
   'news.noSummary': 'Die KI-Zusammenfassung kommt mit der nächsten Aktualisierung. Oben die Worte der Quelle.',
-  'news.explain': 'Lernen',
+  'news.explain': 'Vertiefen',
   'news.openLesson': 'Lektion öffnen',
   'news.save': 'Für später speichern',
   'news.savedOn': 'Gespeichert',

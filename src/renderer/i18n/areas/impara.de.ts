@@ -1,8 +1,8 @@
 // Impara (ADR 0185): die Seite, die Tafel, die Fragen, das Ende mit «Erklär es selbst».
 import type { imparaIt } from './impara.it';
 export const imparaDe: typeof imparaIt = {
-  'brainPages.nav.impara': 'Lernen',
-  'brainPages.impara.subtitle': 'Lektionen Stück für Stück, auf diesem PC gespeichert: ein PR des Benutzers (GitHub-Link oder ein PR der Task-Seite), ein technisches Konzept oder ein eingefügter Text; das Mermaid-Schema wächst Stück für Stück, die Stimme der App liest vor, der Benutzer antwortet per Stimme oder Tasten («Weiter», «Erklär es besser», «Gib mir ein Beispiel», «Zeig mir den Code», eine Frage), Fragen nach einigen Stücken und «Erklär es selbst» am Ende. Ein eingeschalteter Motor schreibt die Lektion nur lesend. Der Orchestrator öffnet die Seite (app_ui page impara), startet aber keine Lektionen: die wählt der Benutzer.',
+  'brainPages.nav.impara': 'Zeitung',
+  'brainPages.impara.subtitle': 'Kuratierte Multi-Ausgaben-Zeitung mit Quellen, Themenfiltern und direkter Vertiefung über den Orchestrator.',
   'impara.kicker': 'LERNEN',
   'impara.hero': 'Was willst du heute wirklich verstehen?',
   'impara.lead': 'Einen deiner PRs, ein Konzept, deine Arbeit, dein Brain oder die App. Zuerst suche und prüfe ich die Quellen, dann erkläre ich es Stück für Stück mit einem Schema, das sich bewegt, auf Wunsch mit Stimme, und frage, ob du es verstanden hast. Jede Lektion bleibt gespeichert.',

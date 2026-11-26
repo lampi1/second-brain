@@ -41,7 +41,7 @@ export const newsEn = {
   'news.saved': 'Saved',
   'news.why': 'Why it matters to you',
   'news.noSummary': 'The AI summary comes with the next refresh. Above, the source\'s own words.',
-  'news.explain': 'Learn',
+  'news.explain': 'Ask Orchestrator',
   'news.openLesson': 'Open the lesson',
   'news.save': 'Save for later',
   'news.savedOn': 'Saved',

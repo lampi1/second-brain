@@ -1,8 +1,8 @@
 // Impara (ADR 0185): the page, the blackboard player, the checks, the end with «Explain it yourself».
 import type { imparaIt } from './impara.it';
 export const imparaEn: typeof imparaIt = {
-  'brainPages.nav.impara': 'Learn',
-  'brainPages.impara.subtitle': 'Lessons piece by piece, saved on this PC: one of the user\'s PRs (a GitHub link or a Task page PR), a technical concept or a pasted text; the mermaid diagram grows piece by piece, the app\'s voice reads, the user answers by voice or keys («Next», «Explain it better», «Give me an example», «Show me the code», a question), checks after some pieces and «Explain it yourself» at the end. An engine that is on writes the lesson read-only. The Orchestrator opens the page (app_ui page impara) but does not start lessons: the user picks them.',
+  'brainPages.nav.impara': 'News',
+  'brainPages.impara.subtitle': 'Curated multi-edition newspaper with sources, topic filters and direct deep-dive via the Orchestrator.',
   'impara.kicker': 'LEARN',
   'impara.hero': 'What do you really want to understand today?',
   'impara.lead': 'One of your PRs, a concept, your work, your brain or the app. First I search and check the sources, then I explain it piece by piece with a diagram that moves, out loud if you like, and I check you got it. Every lesson stays saved.',

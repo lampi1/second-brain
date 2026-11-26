@@ -7,16 +7,15 @@
 // tells the browser-view reporter when something covers everything. Mounted by main.tsx.
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react';
 import{t}from'./i18n';
-import { BRAIN_PAGES, BrainMap, BrainPage, GO_ALIASES } from './brain';
+import { BRAIN_PAGES, BrainPage, GO_ALIASES } from './brain';
 import { relayToasts } from './brain/components/ui';
 import { goSequence, resolveShortcut } from './lib/keys';
 import { schedule, setBlocked, setKnownTabs } from './lib/viewports';
-import { liveSource } from './lib/liveSource';
 import { sameList } from './store/state';
 import { useApp } from './store/store';
-import { openModal, closeModal, pageLabel, setFullOrch, setMap, setPrefs, toast, ui } from './store/ui';
+import { openModal, closeModal, pageLabel, setFullOrch, setPrefs, toast, ui } from './store/ui';
 import {
-  back, brainBridge, closeViewer, escapeOne, toggleViewerFull, viewerStep, focusChat, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, closeFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleOrchestrator, askRenewOrchestrator, newRequest,
+  back, brainBridge, closeViewer, escapeOne, toggleViewerFull, viewerStep, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, closeFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleOrchestrator, askRenewOrchestrator, newRequest,
   openPlans } from './actions';
 import { TopBar } from './components/TopBar';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -37,7 +36,6 @@ import { OrchestratorRenewDialog } from './components/OrchestratorRenewDialog';
 import { ConfirmDialog, ShortcutsDialog, Toasts } from './components/Overlays';
 import { HandoffDialog } from './components/HandoffDialog';
 import { CredentialsDialog } from './components/LoginsDialog';
-import { StatoDialog } from './components/StatoDialog';
 import { IconArrowLeft } from './components/Icons';
 import { Keys, TooltipLayer } from './components/ui';
 import { SettingsPage } from './components/SettingsPage';
@@ -120,7 +118,7 @@ function onKey(e: KeyboardEvent): void {
     case 'center': toggleCenter(); break;
     case 'orchestrator': toggleOrchestrator(); break;
     case 'orchestratorRenew': askRenewOrchestrator(); break;
-    case 'map': if (u.map) setMap(false); else go({ page: 'mappa' }); break;
+    case 'map': go({ page: 'collegamenti' }); break;
     case 'settings': go({ page: 'impostazioni' }); break;
     case 'voice': if (!e.repeat) shortcutVoice(); break;
     case 'talk': if (!e.repeat) shortcutTalk(); break;
@@ -228,8 +226,6 @@ export function App() {
   const focusMode = ui.use(s => s.focusMode);
   const fullOrch = ui.use(s => s.fullOrch);
   const page = ui.use(s => s.page);
-  const map = ui.use(s => s.map);
-  const mapArg = ui.use(s => s.mapArg);
   const center = ui.use(s => s.center);
   const modal = ui.use(s => s.modal);
   const focused = ui.use(s => s.focused);
@@ -245,21 +241,21 @@ export function App() {
   }, [theme, density,appearance]);
   const qShown = ui.use(s => s.qwin.shown);
   const viewerOpen = ui.use(s => s.viewer.open);
-  useEffect(() => { setBlocked(modal !== null || map || qShown); }, [modal, map, qShown]);
+  useEffect(() => { setBlocked(modal !== null || qShown); }, [modal, qShown]);
   useEffect(() => { setKnownTabs(tabIds); }, [tabIds]);
   useEffect(() => { schedule(420); }, [maximized, focusMode, fullOrch, page, density, center, dock.right, dock.bottom]);
   useEffect(() => { if (focused) setPrefs({ lastFocus: focused }); }, [focused]);
   useEffect(() => { if (!focusChatExists) ui.set(s => ({ ...s, focusMode: null })); }, [focusChatExists]);
 
   // full screen (ADR 0287): one chat's window, or a browser tab without a strip, over the whole app window
-  const fullChat = !!focusMode && page === 'home' && !map ? focusMode : null;
-  const fullTab = !fullChat && maximized?.startsWith('browser:') && page === 'home' && !map && tabIds.includes(maximized.slice(8)) ? maximized.slice(8) : null;
+  const fullChat = !!focusMode && page === 'home' ? focusMode : null;
+  const fullTab = !fullChat && maximized?.startsWith('browser:') && page === 'home' && tabIds.includes(maximized.slice(8)) ? maximized.slice(8) : null;
   const full = !!fullChat || !!fullTab;
   // the column beside a full screen belongs to that full screen: however it ended (a closed chat or tab, a page), the next one starts without it
   useEffect(() => { if (!full && fullOrch) setFullOrch(false); }, [full, fullOrch]);
   useEffect(() => { if (maximized && !fullTab && !fullChat) ui.set(s => (s.maximized ? { ...s, maximized: null } : s)); }, [maximized, fullTab, fullChat]);
   return (
-    // the Orchestrator column's room: the workspace, the map and the questions window leave it free (shell.css)
+    // the Orchestrator column's room: the workspace and the questions window leave it free (shell.css)
     <div className={`app${full ? ' is-full' : ''}${full && fullOrch ? ' full-orch' : ''}`} data-testid="app" style={{ '--orchestrator-r': `${dock.right}px`, '--orchestrator-b': `${dock.bottom}px`,'--orchestrator-t':`${dock.top??0}px` } as CSSProperties}>
       <TopBar />
       <Toasts />
@@ -276,15 +272,7 @@ export function App() {
           </main>
         </div>
       </div>
-      {map && (
-        <div className="map-layer" data-testid="map-layer">
-          <ErrorBoundary where="map"><BrainMap onClose={() => setMap(false)} full={mapArg === 'tutto'} mode={mapArg === 'flat' ? 'flat' : undefined}
-            focus={mapArg && mapArg !== 'tutto' && mapArg !== 'flat' ? mapArg : undefined}
-            onNavigate={t => { setMap(false); goTarget(t); }}
-            live={liveSource} onOpenChat={id => { setMap(false); focusChat(id); }} /></ErrorBoundary>
-        </div>
-      )}
-      <OrchestratorOverlay />{/* always: every page and the 3D map sit beside it, never over it */}
+      <OrchestratorOverlay />{/* always: every page sits beside it, never over it */}
       {center && <NotificationCenter />}
       <RunWatch />
       <LiveRegion />
@@ -299,7 +287,6 @@ export function App() {
       {modal === 'orchestratorRenew' && <OrchestratorRenewDialog />}
       {modal === 'handoff' && <HandoffDialog />}
       {modal === 'credentials' && <CredentialsDialog />}
-      {modal === 'stato' && <StatoDialog />}
     </div>
   );
 }
