@@ -137,40 +137,39 @@
 .pause-panel .request-panel, .pause-panel > :nth-child(2) { background: transparent; border: 0; box-shadow: none; }
 .pause-foot { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-3); }
 
-/* ---------------------------------------------------------------- the sidebar tree */
-.side-tree { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 6px; }
+/* ---------------------------------------------------------------- the sidebar tree (compact 1-line rows with role mini-icons) */
+.side-tree { display: flex; flex-direction: column; gap: 1px; margin: 4px 0 6px; }
 .tn-list { display: flex; flex-direction: column; gap: 1px; margin: 0; padding: 0; list-style: none; }
-.tn { position: relative; display: grid; grid-template-columns: 14px minmax(0, 1fr); column-gap: 6px; padding: 4px 8px 4px calc(6px + var(--d, 0) * 16px); border-radius: var(--r-s); }
+.tn { position: relative; display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; column-gap: 4px; padding: 3px 4px 3px calc(4px + var(--d, 0) * 14px); border-radius: var(--r-s); transition: background-color var(--dur-fast); }
+.tn:hover { background: var(--surface-2); }
 .tn.on { background: var(--surface-3); }
-.tn.on::before { content: ""; position: absolute; left: -6px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
+.tn.on::before { content: ""; position: absolute; left: -6px; top: 6px; bottom: 6px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
 :root[data-theme="light"] .tn.on { background: var(--surface); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgba(20, 24, 33, .05); }
-.tn-guide { position: absolute; top: -1px; bottom: -1px; left: calc(13px + var(--g) * 16px); width: 1px; background: var(--border-3); }
-.tn-chev { grid-column: 1; align-self: start; display: grid; place-items: center; width: 14px; height: 18px; padding: 0; border: 0; border-radius: var(--r-s); background: none; color: var(--text-4); cursor: pointer; }
-.tn-chev:hover { color: var(--text); background: var(--surface-2); }
+.tn-guide { position: absolute; top: -1px; bottom: -1px; left: calc(11px + var(--g) * 14px); width: 1px; background: var(--border-3); }
+.tn-chev { grid-column: 1; align-self: center; display: grid; place-items: center; width: 14px; height: 22px; padding: 0; border: 0; border-radius: var(--r-s); background: none; color: var(--text-4); cursor: pointer; }
+.tn-chev:hover { color: var(--text); background: var(--surface-3); }
 .tn-chev.is-leaf { cursor: default; }
 .tn-chev.is-leaf:hover { background: none; }
-.tn-main { grid-column: 2; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 6px; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.tn-main { grid-column: 2; display: flex; align-items: center; gap: 6px; min-width: 0; height: 24px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .tn-main:focus-visible, .tn-chev:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.tn-task { min-width: 0; font-size: 12.5px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 18px; }
+.tn-avatar { flex: none; display: inline-flex; align-items: center; }
+.tn-task { flex: 1 1 0; min-width: 0; font-size: 12.5px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 20px; }
 .tn.ended .tn-task { color: var(--text-3); font-weight: 400; }
-.tn-main:hover .tn-task { color: var(--text); text-decoration: underline; text-decoration-color: var(--border-3); text-underline-offset: 2px; }
-.tn-dot { align-self: center; width: 7px; height: 7px; border-radius: 50%; background: var(--text-4); }
-.tn-dot.dot-run { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
-.tn-dot.dot-wait { background: var(--amber); box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 22%, transparent); }
+.tn-main:hover .tn-task { color: var(--text); }
+.tn-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--text-4); }
+.tn-dot.dot-run { background: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent); }
+.tn-dot.dot-wait { background: var(--amber); box-shadow: 0 0 0 2px color-mix(in srgb, var(--amber) 24%, transparent); }
 .tn-dot.dot-done { background: var(--green); }
 .tn-dot.dot-err { background: var(--red); }
 .tn-dot.dot-stall { background: transparent; box-shadow: inset 0 0 0 1.5px var(--amber); }
-.tn-who { grid-column: 1 / -1; display: flex; align-items: center; gap: 5px; margin-top: 1px; font-size: 11px; line-height: 16px; color: var(--text-3); white-space: nowrap; min-width: 0; }
-.tn-role { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.tn-x { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-4); font-variant-numeric: tabular-nums; }
-.tn-w { margin-left: auto; color: var(--amber); font-weight: 600; }
-/* close from the sidebar (owner, 2026-10-21): the ✕ takes the dot's place on hover or keyboard focus */
-.tn-close { position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: var(--r-s); background: var(--surface-2); color: var(--text-3); cursor: pointer; opacity: 0; transition: opacity .12s, background .12s, color .12s; }
+.tn-x { flex: none; font-size: 10.5px; color: var(--text-4); font-variant-numeric: tabular-nums; }
+.tn-w { flex: none; font-size: 10.5px; color: var(--amber); font-weight: 600; }
+/* close button sits cleanly beside the live dot without hiding it */
+.tn-close { grid-column: 3; display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: var(--r-s); background: none; color: var(--text-3); cursor: pointer; opacity: 0; transition: opacity .12s, background .12s, color .12s; }
 .tn:hover .tn-close, .tn:focus-within .tn-close { opacity: 1; }
-.tn:hover .tn-dot, .tn:focus-within .tn-dot { opacity: 0; }
-.tn-close:hover { background: color-mix(in srgb, var(--red) 18%, var(--surface-2)); color: var(--red); }
+.tn-close:hover { background: color-mix(in srgb, var(--red) 18%, var(--surface-3)); color: var(--red); }
 .tn-close:focus-visible { opacity: 1; outline: 2px solid var(--focus); outline-offset: 1px; }
-.tn-kids { grid-column: 2; display: flex; align-items: center; gap: 6px; padding: 4px 0 2px; font-size: 11px; color: var(--text-3); }
+.tn-kids { grid-column: 2 / -1; display: flex; align-items: center; gap: 6px; padding: 2px 0 2px 24px; font-size: 11px; color: var(--text-3); }
 .tn-kids b { color: var(--text-2); font-weight: 600; }
 .tn-kids .kids-stack > * { box-shadow: 0 0 0 2px var(--bg-2); }
 

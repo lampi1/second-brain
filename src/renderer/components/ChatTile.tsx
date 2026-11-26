@@ -248,19 +248,23 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
       {strip && !expanded ? <header className="tile-head bench-head">
         <div className={`bench-stage t-${spriteIdOf(chat.agent?.avatar)}`}>
           <span className="bench-state">{stateEl}</span>
+          {chat.agent?.id === 'strategist' && (busyShown || chat.plan?.phase === 'proposed') && (
+            <div className="bench-bubble" data-testid={`bench-bubble-${chatId}`}>
+              {busyShown ? <StripActivity chatId={chatId} /> : t('tree.plan.ready')}
+            </div>
+          )}
           <StripFace chatId={chatId} avatar={chat.agent?.avatar} name={name} size={64} height={134} tone={first ? 'wait' : st.tone}
             waitsUser={!!first || userWait || st.tone === 'wait'} error={st.tone === 'err'} busy={busyShown} done={st.tone === 'done'} pending={st.tone === 'run'} />
           <BenchHelpers chatId={chatId} />
           {actions}
         </div>
         <div className="bench-plate">
-          <div className="bench-prow"><span className="bench-area">{areaOf(chat) || t('product.noArea')}</span>{longContext && <ContextMeter chat={chat} warn={warn} />}</div>
+          <div className="bench-prow"><span className="bench-area">{areaOf(chat) || t('product.noArea')}</span><SkillChips chat={chat} />{longContext && <ContextMeter chat={chat} warn={warn} />}</div>
           <h3 className="th-title" title={(chat.agent?.purpose&&rolePurpose(chat.agent.id,chat.agent.purpose))||chat.title}>
             {renaming ? <TitleInput chat={chat} onDone={()=>setRenaming(false)}/> : <button ref={expansionButton} type="button" className="strip-name" aria-expanded={false} aria-controls={`chat-work-${chatId}`} data-tip={t('product.expand')} onClick={()=>setChatExpanded(chatId,true)} data-testid={`chat-expand-${chatId}`}>{topic || name}</button>}
           </h3>
           <span className="bench-now">{topic && <span className="bench-role" data-testid={`chat-topic-${chatId}`}>{name}</span>}<span className="chat-strip-line">{busyShown?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.plan?.phase==='proposed'?t('tree.plan.ready'):chat.lastText.slice(0,140)}</span></span>
           <div className="bench-meta"><StripMeta chat={chat} workMs={work} /></div>
-          <SkillChips chat={chat} />
         </div>
       </header> : !embedded && <header className="tile-head">
         <div className="th-row">
@@ -311,15 +315,17 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
       {embedded && viewSwitch}
       <div ref={body} className={`aw-body view-${shownView}`} data-view={shownView} {...(expanded && shownView !== 'chat' ? { 'data-testid': `strip-pair-${chatId}` } : {})}>
       <div className={`chat-work${expanded?' expanded':''}`} id={`chat-work-${chatId}`} inert={!expanded} aria-hidden={!expanded} style={expanded && shownView === 'split' ? { flexGrow: share } : undefined}><div className="chat-work-inner">
-      {!compact && <ChatLinks chat={chat} />}
-      {expanded && <TaskContext chat={chat} onContinue={() => reveal(true)} />}
-      {!compact && chat.handoffBusy && <ContextNotice chat={chat} />}
-      {/* no Esegui in a work chat: its commands wait in the Orchestrator (ADR 0269) */}
-      <RunHereCtx.Provider value={false}><ChatTranscript key={chatId} chatId={chatId} busy={showsWork(chat)} expanded={expanded} /></RunHereCtx.Provider>
-      {/* every chat keeps its input (the owner, 2026-11-10: «permettimi anche di scrivere ad ogni agente … voglio
-          comunque avere la possibilità»); the Orchestrator stays the usual way to talk to delegated work */}
-      <ChatInput ref={input} chat={chat} testid={`chat-input-${chatId}`} />
-      {expanded && chat.run && <RunOutcomeControl key={`${chat.run.runId}:${chat.run.counters.reopened}`} run={chat.run} disabled={busy || reqs.length > 0 || chat.state === 'waiting' || !!chat.queued} />}
+      {expanded && <>
+        {!compact && <ChatLinks chat={chat} />}
+        <TaskContext chat={chat} onContinue={() => reveal(true)} />
+        {!compact && chat.handoffBusy && <ContextNotice chat={chat} />}
+        {/* no Esegui in a work chat: its commands wait in the Orchestrator (ADR 0269) */}
+        <RunHereCtx.Provider value={false}><ChatTranscript key={chatId} chatId={chatId} busy={showsWork(chat)} expanded={expanded} /></RunHereCtx.Provider>
+        {/* every chat keeps its input (the owner, 2026-11-10: «permettimi anche di scrivere ad ogni agente … voglio
+            comunque avere la possibilità»); the Orchestrator stays the usual way to talk to delegated work */}
+        <ChatInput ref={input} chat={chat} testid={`chat-input-${chatId}`} />
+        {chat.run && <RunOutcomeControl key={`${chat.run.runId}:${chat.run.counters.reopened}`} run={chat.run} disabled={busy || reqs.length > 0 || chat.state === 'waiting' || !!chat.queued} />}
+      </>}
       </div></div>
       {expanded && shownView === 'split' && <div className="aw-divider" role="separator" aria-orientation="vertical" aria-label={t('aw.resizer')} tabIndex={0} aria-valuemin={25} aria-valuemax={75} aria-valuenow={Math.round(share * 100)} data-testid={`chat-divider-${chatId}`}
         onPointerDown={drag} onDoubleClick={() => setAgentSplit(chatId, DEFAULT_SPLIT)}

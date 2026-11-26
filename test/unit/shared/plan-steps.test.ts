@@ -78,10 +78,16 @@ describe('how far it is', () => {
     expect(progressOf(almost).percent).toBe(99);
     expect(progressOf([s('s1', 'done'), s('s2', 'partial')]).percent).toBe(75);
   });
-  it('the time, one after the other and in parallel; none when a step has no estimate', () => {
+  it('the time, one after the other and in parallel; tolerant of missing estimates and computes remaining time', () => {
     const steps = [s('s1', 'todo', { minutes: 10 }), s('s2', 'todo', { minutes: 20 }), s('s3', 'todo', { minutes: 5, after: ['s1', 's2'] })];
     expect(timeOf(steps)).toEqual({ row: 35, parallel: 25 });
-    expect(timeOf([...steps, s('s4')])).toBeNull();
+    // missing estimate on one step no longer wipes out the plan's time estimate
+    expect(timeOf([...steps, s('s4')])).toEqual({ row: 35, parallel: 25, unknown: 1 });
+    // completed steps still count in total row/parallel, while remaining tracks only unfinished work
+    const half = [s('s1', 'done', { minutes: 10 }), s('s2', 'todo', { minutes: 20 }), s('s3', 'todo', { minutes: 5, after: ['s1', 's2'] })];
+    expect(timeOf(half)).toEqual({ row: 35, parallel: 25, remainingRow: 25, remainingParallel: 25 });
+    // when no step has an estimate at all, return null
+    expect(timeOf([s('s1'), s('s2')])).toBeNull();
     expect(timeOf([])).toBeNull();
   });
 });

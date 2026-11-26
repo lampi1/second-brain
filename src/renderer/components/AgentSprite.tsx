@@ -10,7 +10,7 @@
 // record it as a nudge on the run. Only where it is asked to `talk` (chess and the role cards, ADR 0312) it also
 // speaks (ADR 0303): two words in a small bubble that goes away by itself, at a click and, with a `mood`, now and then
 // by itself (lib/quips.ts; the lines are in shared/agent-quips.ts). In the Grindhouse it never speaks.
-import { createContext, useEffect, useInsertionEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactElement } from 'react';
+import { createContext, useEffect, useInsertionEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactElement } from 'react';
 import type { AgentAvatar as Avatar } from '@shared/agents';
 import { REACTION_S, isSpriteId, reactionScene, restlessScene, spriteScene, type SpriteActivity, type SpriteId, type SpriteReaction, type SpriteState } from '../lib/agent-sprites';
 import { VIEW, jointStyle, keyframeRules, type Node } from '../lib/sprite-rig';
@@ -55,6 +55,21 @@ function draw(n: Node, key: number): ReactElement {
  *  tests, a search, a page, a hand-off): at work the person plays that scene instead of its role's own (ADR 0305).
  *  `talk`: it speaks (chess, the role cards); elsewhere it is silent (ADR 0312). `restless`: at rest it plays its vice
  *  again and again, without the long pause of the workshop (the role cards, ADR 0312). */
+// One shared IntersectionObserver for all sprites on the page (avoids 20+ separate observers).
+const spriteVis = new WeakMap<Element, (away: boolean) => void>();
+let sharedSpriteIo: IntersectionObserver | null = null;
+function observeSprite(el: Element, cb: (away: boolean) => void): () => void {
+  if (typeof IntersectionObserver === 'undefined') return () => {};
+  if (!sharedSpriteIo) {
+    sharedSpriteIo = new IntersectionObserver(entries => {
+      for (const e of entries) spriteVis.get(e.target)?.(!e.isIntersecting);
+    });
+  }
+  spriteVis.set(el, cb);
+  sharedSpriteIo.observe(el);
+  return () => { spriteVis.delete(el); sharedSpriteIo?.unobserve(el); };
+}
+
 export function AgentSprite({ id, state, activity, height = 32, label, still, onTouch, tip, mood, talk = false, restless = false }: { id: SpriteId; state: SpriteState; activity?: SpriteActivity | null; height?: number; label?: string; still?: boolean; onTouch?: (sign: 1 | -1) => void; tip?: string; mood?: () => QuipMoment | null; talk?: boolean; restless?: boolean }) {
   // `n` counts the clicks: each one starts its reaction from the top
   const [react, setReact] = useState<{ kind: SpriteReaction; n: number } | null>(null);
@@ -70,22 +85,13 @@ export function AgentSprite({ id, state, activity, height = 32, label, still, on
   useInsertionEffect(() => writeKeyframes(key, scene.nodes), [key, scene]);
   const body = useMemo(() => scene.nodes.map(draw), [scene]);
   const quip = useQuip(id, talk ? mood : undefined, state === 'work' || state === 'think');
-  // out of sight it stands still (a long Grindhouse scrolled away costs nothing), and two people of the same scene never
-  // move in step: each starts its loops at its own moment (one offset for the whole picture keeps its parts together)
+  // out of sight it stands still; phase staggered once via CSS negative delay (zero layout-forcing getAnimations()).
   const box = useRef<HTMLSpanElement>(null), [away, setAway] = useState(false);
+  const phase = useMemo(() => `-${(Math.random() * 3.6).toFixed(2)}s`, []);
   useEffect(() => {
     const el = box.current;
-    if (!el || typeof IntersectionObserver === 'undefined') return;
-    const io = new IntersectionObserver(es => setAway(!es[es.length - 1]!.isIntersecting)); // the latest entry counts
-    io.observe(el);
-    return () => io.disconnect();
+    return el ? observeSprite(el, setAway) : undefined;
   }, []);
-  useLayoutEffect(() => {
-    const svg = box.current?.querySelector('svg');
-    if (react || !svg?.getAnimations) return;
-    const at = Math.random() * 4000;
-    for (const a of svg.getAnimations({ subtree: true })) if (a.effect?.getTiming().iterations === Infinity) a.currentTime = ((a.currentTime as number | null) ?? 0) + at; // loops only: a one-off (the finish) plays whole
-  }, [key, react]);
   const touch = (sign: 1 | -1) => (e: MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
     setReact(r => ({ kind: sign > 0 ? 'pat' : 'whack', n: (r?.n ?? 0) + 1 }));
@@ -94,7 +100,7 @@ export function AgentSprite({ id, state, activity, height = 32, label, still, on
     if (talk) quip.say(kind, undefined, { delay: QUIP_REACTION_AT[kind] });
     onTouch?.(sign);
   };
-  return <span ref={box} className={`agent-sprite${still && !react ? ' is-still' : ''}${height > 64 ? ' is-big' : ''}`} data-away={away || undefined} data-sprite={id} data-sprite-state={state} data-sprite-activity={act ?? undefined} data-react={react?.kind} title={tip}
+  return <span ref={box} className={`agent-sprite${still && !react ? ' is-still' : ''}${height > 64 ? ' is-big' : ''}`} style={{ '--sp-delay': react ? '0s' : phase } as CSSProperties} data-away={away || undefined} data-sprite={id} data-sprite-state={state} data-sprite-activity={act ?? undefined} data-react={react?.kind} title={tip}
     onClick={touch(1)} onContextMenu={touch(-1)} {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })}>
     {/* the key restarts the movements when the state changes, and at every click */}
     <svg key={react ? `${key}:${react.n}` : key} viewBox={`${VIEW.x} ${VIEW.y} ${VIEW.w} ${VIEW.h}`} width={height * VIEW.w / VIEW.h} height={height} aria-hidden="true">{body}</svg>

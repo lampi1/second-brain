@@ -52,6 +52,7 @@ import { ThoughtText } from './CorrectThought';
 import { correctedThoughts, parseCorrection } from '../lib/correction';
 import { agents } from '../store/agents';
 import { guideChatId, visibleGuideItems } from '../../modules/ai-first/presentation';
+import { quoteInDraft } from './ChatInput';
 
 type Tool = Extract<ChatItem, { kind: 'tool' }>;
 
@@ -117,6 +118,21 @@ export const TranscriptLiveCtx = createContext(true);
 const FENCE = /^\s{0,3}(`{3,}|~{3,})/m;
 type Group = { kind: 'md'; parts: { key: string; html: string }[] } | { kind: 'code'; key: string; part: Extract<MdPart, { kind: 'code' }> };
 
+/** One already-rendered HTML piece inside a fenced message: memoized by its HTML so streaming never touches finished DOM nodes. */
+const MdHtmlBlock = memo(function MdHtmlBlock({ html }: { html: string }) {
+  return <div className="md-b" dangerouslySetInnerHTML={{ __html: html }} />;
+});
+
+/** Extracts an optional leading `[Topic]` prefix from a multi-topic message (`[second-brain] ...`). */
+export function topicOfText(text: string): { topic: string; body: string } | null {
+  const m = text.match(/^\s*\[([^\][\n]{2,36})\]\s*([\s\S]*)$/);
+  if (!m) return null;
+  const tag = m[1]!.trim();
+  // ignore system/app tags like [evento app ...] or [Messaggio ...]
+  if (/^(evento|messaggio|system|nota)\b/i.test(tag)) return null;
+  return { topic: tag, body: m[2] ?? '' };
+}
+
 /** An assistant message: markdown and its fenced code blocks with their toolbar (CodeBlock.tsx), in order. While it
  *  streams, only its last block is re-parsed each frame (splitBlocks: the finished blocks hit the caches and their DOM is
  *  never touched again); the markdown between two code blocks lays out as one .md, its pieces as .md-b. */
@@ -143,7 +159,7 @@ const Message = memo(function Message({ id, text, streaming }: { id: string; tex
       {groups.map((g, i) => {
         const tail = !!streaming && i === groups.length - 1;
         return g.kind === 'md'
-          ? <div key={i} className={`md ${tail ? 'streaming' : ''}`}>{g.parts.map(x => <div key={x.key} className="md-b" dangerouslySetInnerHTML={{ __html: x.html }} />)}</div>
+          ? <div key={i} className={`md ${tail ? 'streaming' : ''}`}>{g.parts.map(x => <MdHtmlBlock key={x.key} html={x.html} />)}</div>
           : isVisualLang(g.part.lang) ? <VisualBlock key={i} chatId={readOnly ? null : chatId} itemId={id} lang={g.part.lang} code={g.part.code} streaming={tail} />
           : <CodeBlock key={i} chatId={readOnly ? null : chatId} itemId={id} lang={g.part.lang} code={g.part.code} streaming={tail} />;
       })}
@@ -335,6 +351,19 @@ function CorrectionBubble({ quote, fix }: { quote: string; fix: string }) {
   );
 }
 
+function ReplyButton({ text }: { text: string }) {
+  const chatId = useContext(ChatIdCtx);
+  const readOnly = useContext(ReadOnlyCtx);
+  if (readOnly || !chatId || !text.trim()) return null;
+  const excerpt = text.replace(/\s+/g, ' ').trim().slice(0, 180);
+  return (
+    <button type="button" className="msg-reply-btn" onClick={() => { quoteInDraft(chatId, excerpt); }}
+      aria-label="Rispondi a questo messaggio" data-tip="Rispondi citando questo messaggio" data-testid="msg-reply">
+      ↩ Rispondi
+    </button>
+  );
+}
+
 export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction }: { item: ChatItem; beforeAsk?: boolean; refs?: readonly string[]; marks?: readonly string[]; reaction?: string }) {
   switch (item.kind) {
     case 'user': {
@@ -347,6 +376,8 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
       const own = item.from ? { text: withoutLabel(item.text), notes: [] } : splitNotes(nc?.text ?? item.text);
       const text = own.text;
       const fix = item.from ? null : parseCorrection(text);
+      const tagged = !fix ? topicOfText(text) : null;
+      const bodyText = tagged ? tagged.body : text;
       return (
       <div className={`msg-user ${item.id.startsWith('local:') ? 'optimistic' : ''}`} data-testid={`item-${item.id}`} data-mode={nc?.mode ?? undefined}>
         {item.thumbs?.length ? <ImageStrip images={item.thumbs.map(thumb => ({ thumb }))} testid={`item-${item.id}-images`} /> : item.images ? <span className="msg-images-count">{t('chat.items.userImages', { n: item.images })}</span> : null}
@@ -354,15 +385,27 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
         {/* sent from the paired phone (phone bridge): 📱, 🎙️ 📱 for a voice note */}
         {item.via === 'phone' && <div className="msg-phone" data-testid={`item-${item.id}-phone`} data-voice={item.voice ? '' : undefined}>{item.voice ? '🎙️ 📱' : '📱'} {t(item.voice ? 'chat.items.fromPhoneVoice' : 'chat.items.fromPhone')}</div>}
         {nc?.mode && <div className="msg-newchat" data-testid={`item-${item.id}-mode`} data-tip={t(`chat.items.modeTip.${nc.mode}`)}>{nc.mode === 'plan' ? <IconBranch size={11} /> : nc.mode === 'fast' ? <IconBolt size={11} /> : <IconPlus size={11} />}{t(`chat.mode.${nc.mode}`)}</div>}
-        {fix ? <CorrectionBubble quote={fix.quote} fix={fix.fix} /> : text && <div className="bubble">{text}</div>}
+        {tagged && <span className="msg-topic" data-testid={`item-${item.id}-topic`}>{tagged.topic}</span>}
+        {fix ? <CorrectionBubble quote={fix.quote} fix={fix.fix} /> : bodyText && <div className="bubble">{bodyText}</div>}
+        {!fix && bodyText && <ReplyButton text={text} />}
         {reaction && <div className="msg-react" data-testid={`item-${item.id}-reaction`} data-reaction="">{reaction}</div>}
         {own.notes.length > 0 && <div className="msg-notes" data-testid={`item-${item.id}-notes`} title={own.notes.join('\n')}><IconCheck size={11} /> {own.notes.join(' · ')}</div>}
       </div>
       );
     }
     // a reply of one or two emoji only that chatView did not stick to the user's message: a big emoji, no bubble
-    case 'assistant': return !item.streaming && isReaction(item.text) ? <div className="msg-reaction" data-testid={`item-${item.id}`} data-reaction="">{item.text.trim()}</div>
-      : <div className="msg-assistant" data-testid={`item-${item.id}`}><Message id={item.id} text={item.text} streaming={item.streaming} />{refs?.length ? <NamedChatRefs ids={refs} /> : null}</div>;
+    case 'assistant': {
+      if (!item.streaming && isReaction(item.text)) return <div className="msg-reaction" data-testid={`item-${item.id}`} data-reaction="">{item.text.trim()}</div>;
+      const tagged = topicOfText(item.text);
+      return (
+        <div className="msg-assistant" data-testid={`item-${item.id}`}>
+          {tagged && <span className="msg-topic" data-testid={`item-${item.id}-topic`}>{tagged.topic}</span>}
+          <Message id={item.id} text={tagged ? tagged.body : item.text} streaming={item.streaming} />
+          {!item.streaming && <ReplyButton text={item.text} />}
+          {refs?.length ? <NamedChatRefs ids={refs} /> : null}
+        </div>
+      );
+    }
     case 'thinking': return <Thinking text={item.text} beforeAsk={beforeAsk} marks={marks} />;
     case 'tool': return <ToolItem item={item} />;
     case 'system': {
@@ -445,13 +488,23 @@ export function turnActivity(items: readonly ChatItem[] | undefined): 'scrive' |
   return 'pensa';
 }
 
-type ItemListProps={items:readonly ChatItem[];empty?:string;footer?:ReactNode;chatId?:string|null;readOnly?:boolean};
+function itemMatches(item: ChatItem, q: string, topic: string): boolean {
+  const txt = 'text' in item && typeof item.text === 'string' ? item.text : item.kind === 'tool' ? `${item.name} ${item.summary}` : '';
+  if (topic) {
+    const tag = 'text' in item && typeof item.text === 'string' ? topicOfText(item.text)?.topic : null;
+    if (!tag || tag.toLowerCase() !== topic.toLowerCase()) return false;
+  }
+  if (!q) return true;
+  return txt.toLowerCase().includes(q);
+}
+
+type ItemListProps={items:readonly ChatItem[];empty?:string;footer?:ReactNode;chatId?:string|null;readOnly?:boolean;searchQuery?:string;topicFilter?:string};
 export function ItemList(props:ItemListProps){
   const guideId=agents.use(s=>guideChatId(s.setup));
   const items=useMemo(()=>visibleGuideItems(props.items,props.chatId??null,guideId),[props.items,props.chatId,guideId]);
   return <ItemListFor key={props.chatId??'unowned'} {...props} items={items}/>;
 }
-function ItemListFor({ items, empty, footer, chatId = null, readOnly = false }: ItemListProps) {
+function ItemListFor({ items, empty, footer, chatId = null, readOnly = false, searchQuery = '', topicFilter = '' }: ItemListProps) {
   const ref = useRef<HTMLDivElement>(null);
   const peek = useLinkPeek(chatId);
   const content=useRef<HTMLDivElement>(null);
@@ -465,15 +518,18 @@ function ItemListFor({ items, empty, footer, chatId = null, readOnly = false }: 
     keepPlace.current = null;
     if (el && d !== null) el.scrollTop = el.scrollHeight - d;
   }, [limit]);
+  const q = searchQuery.trim().toLowerCase(), topic = topicFilter.trim();
+  const filtering = !!q || !!topic;
   // a cold continuation (ADR 0031): what came before the last divider is the previous session, folded
   const cut = useMemo(() => { for (let i = items.length - 1; i >= 0; i--) { const x = items[i]; if (x?.kind === 'system' && x.continued) return i; } return -1; }, [items]);
-  const session = useMemo(() => (cut > 0 && !pastOpen ? items.slice(cut) : items), [items, cut, pastOpen]);
+  const session = useMemo(() => (cut > 0 && !pastOpen && !filtering ? items.slice(cut) : items), [items, cut, pastOpen, filtering]);
+  const matched = useMemo(() => (filtering ? session.filter(x => itemMatches(x, q, topic)) : session), [session, filtering, q, topic]);
   // the window slides with new rows only while the user follows the bottom: reading higher up (or after «Mostra
   // precedenti») it stays pinned to its first row, so nothing unmounts under the reader
   const pin = useRef<string | null>(null);
-  const tail = tailStart(session, limit), pinAt = pin.current ? session.findIndex(x => x.id === pin.current) : -1;
+  const tail = filtering ? 0 : tailStart(matched, limit), pinAt = !filtering && pin.current ? matched.findIndex(x => x.id === pin.current) : -1;
   const start = pinAt >= 0 ? Math.min(tail, pinAt) : tail;
-  const shown = useMemo(() => (start > 0 ? session.slice(start) : session), [session, start]);
+  const shown = useMemo(() => (start > 0 ? matched.slice(start) : matched), [matched, start]);
   const asking = useApp(s => !!chatId && s.pending.some(p => p.chatId === chatId && p.type === 'question'));
   // the reasoning before a question, among the rows drawn (a walk back stops at the turn's start, so the tail suffices)
   const open = useMemo(() => thinkingBeforeAsk(shown, asking), [shown, asking]);
@@ -494,16 +550,18 @@ function ItemListFor({ items, empty, footer, chatId = null, readOnly = false }: 
     <div className="items-wrap">
       <div className="items" ref={ref} data-chat-log={chatId??undefined} tabIndex={0} aria-label={auditText('audit.ChatItems.messages')} onClick={peek.onClick} onWheel={peek.onWheel} role="log" aria-live="off">
         <div ref={content} className="items-content">
-        {cut > 0 && !pastOpen && start === 0 && <FoldedPast count={cut} onOpen={() => { setPastOpen(true); setLimit(Infinity); }} />}
+        {cut > 0 && !pastOpen && !filtering && start === 0 && <FoldedPast count={cut} onOpen={() => { setPastOpen(true); setLimit(Infinity); }} />}
         {start > 0 && <ShowEarlier count={start} onOpen={() => { const el = ref.current; keepPlace.current = el ? el.scrollHeight - el.scrollTop : null; setLimit(l => l + TAIL_ITEMS); }} />}
-        {items.length === 0 && empty && !footer ? <div className="items-empty">{empty}</div> : view.map(v => v.kind === 'process'
-          ? <ProcessGroup key={v.id} id={v.id} items={v.items} open={open} marks={fixed} />
-          : <Item key={v.item.id} item={v.item} beforeAsk={open.has(v.item.id)} refs={refs.get(v.item.id)} marks={fixed.get(v.item.id)} reaction={v.reaction} />)}
-        {footer}
+        {filtering && matched.length === 0 ? <div className="items-empty" data-testid="items-filter-empty">Nessun messaggio trovato per questo filtro.</div>
+          : items.length === 0 && empty && !footer ? <div className="items-empty">{empty}</div>
+          : view.map(v => v.kind === 'process'
+            ? <ProcessGroup key={v.id} id={v.id} items={v.items} open={open} marks={fixed} />
+            : <Item key={v.item.id} item={v.item} beforeAsk={open.has(v.item.id)} refs={refs.get(v.item.id)} marks={fixed.get(v.item.id)} reaction={v.reaction} />)}
+        {!filtering && footer}
         </div>
       </div>
       {peek.popover}
-      {!follow.following && (
+      {!follow.following && !filtering && (
         <button type="button" className="unseen" data-testid="unseen" onClick={follow.jump}>
           <IconArrowDown size={13} /> {follow.unseen ? auditText('auditExpression.ChatItems.text16') : auditText('auditExpression.ChatItems.text17')}
         </button>

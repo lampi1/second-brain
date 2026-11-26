@@ -159,21 +159,45 @@ export function progressOf(steps: readonly PlanStep[]): { done: number; total: n
   // 100 only when everything is done
   return { done, total: all.length, percent: done === all.length && all.length ? 100 : Math.min(99, Math.floor(share * 100)) };
 }
-/** The estimated minutes, one step after the other and in parallel; null = some step has no estimate. */
-export function timeOf(steps: readonly PlanStep[]): { row: number; parallel: number } | null {
+export interface PlanTimeEstimate {
+  /** Total estimated minutes sequentially and in parallel across steps with estimates. */
+  row: number;
+  parallel: number;
+  /** Remaining estimated minutes (non-ended steps), present when some steps have already ended. */
+  remainingRow?: number;
+  remainingParallel?: number;
+  /** Count of remaining (or total if none remaining) steps missing an estimate. */
+  unknown?: number;
+}
+/** Estimated minutes sequentially and in parallel; tolerant of steps without `minutes` (returns null only if no step has an estimate). */
+export function timeOf(steps: readonly PlanStep[]): PlanTimeEstimate | null {
   const all = counted(steps);
-  if (!all.length || all.some(s => !s.minutes)) return null;
-  const ids = new Set(all.map(s => s.id)), by = new Map(all.map(s => [s.id, s])), end = new Map<string, number>();
-  const endOf = (id: string, seen: ReadonlySet<string>): number => {
-    const known = end.get(id);
-    if (known !== undefined) return known;
-    if (seen.has(id)) return 0;
-    const next = new Set(seen).add(id);
-    const t = by.get(id)!.minutes! + Math.max(0, ...waits(by.get(id)!, ids).map(w => endOf(w, next)));
-    end.set(id, t);
-    return t;
+  if (!all.length || !all.some(s => (s.minutes ?? 0) > 0)) return null;
+  const compute = (list: readonly PlanStep[]): { row: number; parallel: number } => {
+    const ids = new Set(list.map(s => s.id)), by = new Map(list.map(s => [s.id, s])), end = new Map<string, number>();
+    const endOf = (id: string, seen: ReadonlySet<string>): number => {
+      const known = end.get(id);
+      if (known !== undefined) return known;
+      if (seen.has(id)) return 0;
+      const next = new Set(seen).add(id);
+      const t = (by.get(id)?.minutes ?? 0) + Math.max(0, ...waits(by.get(id)!, ids).map(w => endOf(w, next)));
+      end.set(id, t);
+      return t;
+    };
+    const row = list.reduce((n, s) => n + (s.minutes ?? 0), 0);
+    const parallel = list.length ? Math.max(...list.map(s => endOf(s.id, new Set()))) : 0;
+    return { row, parallel };
   };
-  return { row: all.reduce((n, s) => n + s.minutes!, 0), parallel: Math.max(...all.map(s => endOf(s.id, new Set()))) };
+  const total = compute(all);
+  const open = all.filter(s => !ended(s));
+  const hasEnded = open.length < all.length;
+  const unknown = (open.length ? open : all).filter(s => !s.minutes).length;
+  const rem = hasEnded ? compute(open) : null;
+  return {
+    ...total,
+    ...(rem ? { remainingRow: rem.row, remainingParallel: rem.parallel } : {}),
+    ...(unknown > 0 ? { unknown } : {}),
+  };
 }
 
 // ---- reading a saved step, the one of before ADR 0359 included: `par` (it shares the turn of the step before it) becomes the

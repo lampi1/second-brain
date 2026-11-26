@@ -23,10 +23,14 @@ export function skillChipsOf(chat: Pick<ChatSummary, 'harness' | 'run' | 'loaded
 export function SkillChips({ chat }: { chat: ChatSummary }) {
   const c = skillChipsOf(chat);
   if (!c) return null;
-  const tip = c.untracked ? `${t('skills.untrackedTip')}${chat.loadedSkills?.length ? `: ${chat.loadedSkills.join(', ')}` : ''}` : [...(chat.run?.tags?.skills ?? [])].join(', ');
-  return <div className="bench-skills" data-testid={`skill-chips-${chat.id}`} data-tip={tip}>
-    {c.names.map(n => <span key={n} className={c.untracked ? 'skill-chip untracked' : 'skill-chip'}>{n}</span>)}
-    {c.more > 0 && <span className="skill-chip more">+{c.more}</span>}
-    {c.untracked && <span className="skill-chip untracked">{t('skills.untracked')}</span>}
-  </div>;
+  const all = c.untracked ? (chat.loadedSkills ?? []) : (chat.run?.tags?.skills ?? []);
+  const count = all.length;
+  const tip = c.untracked
+    ? `${t('skills.untrackedTip')}${count ? `: ${all.join(', ')}` : ''}`
+    : all.join(', ');
+  return (
+    <span className={`bench-skills-badge${c.untracked ? ' untracked' : ''}`} data-testid={`skill-chips-${chat.id}`} data-tip={tip} aria-label={tip}>
+      ⚡ {count > 0 ? count : '·'}
+    </span>
+  );
 }

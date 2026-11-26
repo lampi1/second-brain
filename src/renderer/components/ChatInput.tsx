@@ -29,14 +29,14 @@ import { IMAGES_MAX_TOTAL, type ChatCommand, type ChatSummary, type ImageAttachm
 import { applyCommand, filterCommands, slashQuery } from '../lib/slash';
 import { fullSrc, imageFiles, pasteKind, roomFor, toAttachment } from '../lib/images';
 import { isBusy, type QueuedMsg } from '../store/state';
-import { answer, app, onChatRemoved, planDecide, send, sendQueuedNow, unqueue, useApp } from '../store/store';
+import { answer, app, onChatRemoved, planDecide, send, sendQueuedNow, stop, unqueue, useApp } from '../store/store';
 import { answerableInWords } from '@shared/answer-in-words';
-import { toast, ui } from '../store/ui';
+import { setOpenCard, toast, ui } from '../store/ui';
 import { reqKey } from '../actions';
 import { fieldRoute, type FieldCard } from '../lib/field-answer';
 import { asksToExplain } from '@shared/ask-once';
 import { planAskOf, planWaits } from '../lib/plan-ask';
-import { IconBolt, IconBranch, IconSend, IconSpinner, IconX } from './Icons';
+import { IconBolt, IconBranch, IconSend, IconSpinner, IconStop, IconX } from './Icons';
 import { ImageStrip } from './ImageStrip';
 import { Kbd } from './ui';
 import { t } from '../i18n';
@@ -51,7 +51,7 @@ import { onDictated, useVoice, type VoiceTarget } from '../lib/voice';
 // per chat, outside the component: a draft, its images and the screenshots still being read outlive a remount (the
 // Orchestrator moving to the dock) and never follow the input to another chat
 // After restart recovery, keep its private durable draft copy current to prevent replaying sent text.
-class CheckpointMap<K,V> extends Map<K,V>{override set(key:K,value:V){super.set(key,value);persistChatRecovery();return this;}override delete(key:K){const result=super.delete(key);persistChatRecovery();return result;}override clear(){super.clear();persistChatRecovery();}}
+class CheckpointMap<K,V> extends Map<K,V>{override set(key:K,value:V){super.set(key,value);scheduleChatRecovery();return this;}override delete(key:K){const result=super.delete(key);scheduleChatRecovery();return result;}override clear(){super.clear();scheduleChatRecovery();}}
 let recoveredDrafts=false,draftStorageProblem=false;
 const drafts = new CheckpointMap<string, string>();
 /** per chat: what to run when the draft set by setDraft is sent, and a piece of it that must still be in the message */
@@ -228,11 +228,18 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
       history: [...new Set([...history.current, ...promptsNow(st.items)])],
     };
   };
-  /** after the text or the caret changed: a local suggestion, or none */
+  /** after the text or the caret changed: a local suggestion, debounced 100ms so fast typing stays silky */
+  const ghostTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearGhostTimer = () => { if (ghostTimer.current !== null) { clearTimeout(ghostTimer.current); ghostTimer.current = null; } };
+  useEffect(() => () => clearGhostTimer(), []);
   const refreshGhost = (v: string, c: number) => {
+    clearGhostTimer();
     if (!suggestOn || !v.trim() || c !== v.length) { setGhost(null); return; }
-    const local = localSuggestion(v, c, sourcesNow());
-    setGhost(local ? { forText: v, suffix: local } : null);
+    ghostTimer.current = setTimeout(() => {
+      ghostTimer.current = null;
+      const local = localSuggestion(v, c, sourcesNow());
+      setGhost(local ? { forText: v, suffix: local } : null);
+    }, 100);
   };
   const ghostText = ghost && suggestOn && focused && !slashOpen && caret === visibleText.length && ghostOff !== visibleText
     ? continueCached(ghost.forText, ghost.suffix, visibleText) : null;
@@ -279,15 +286,24 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
   useLayoutEffect(() => {
     const el = ta.current;
     if (!el) return;
-    const fit = () => { el.style.height = '0px'; el.style.height = `${Math.min(el.scrollHeight, 168)}px`; };
-    fit();
+    el.style.height = '0px';
+    el.style.height = `${Math.min(el.scrollHeight, 168)}px`;
+  }, [text]);
+  useEffect(() => {
+    const el = ta.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
     // its width changes without its text (a strip opening, the agent window's divider, ADR 0287): the lines wrap anew
-    if (typeof ResizeObserver === 'undefined') return;
     let width = el.clientWidth;
-    const observer = new ResizeObserver(() => { if (el.clientWidth !== width) { width = el.clientWidth; fit(); } });
+    const observer = new ResizeObserver(() => {
+      if (el.clientWidth !== width) {
+        width = el.clientWidth;
+        el.style.height = '0px';
+        el.style.height = `${Math.min(el.scrollHeight, 168)}px`;
+      }
+    });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [text]);
+  }, []);
   const setImages = (next: (cur: readonly ImageAttachment[]) => ImageAttachment[]) => {
     const v = next(draftImages.get(chat.id) ?? NO_IMAGES);
     if (v.length) draftImages.set(chat.id, v); else draftImages.delete(chat.id);
@@ -358,7 +374,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
     setText('');
     drafts.delete(chat.id);
     begunUnder.delete(chat.id);
-    if (asked) toast(t('chat.input.askedOrchestrator', { name: asked }), 'info');
+    if (asked) { setOpenCard(null); toast(t('chat.input.askedOrchestrator', { name: asked }), 'info'); }
     const hook = onSentHooks.get(chat.id);
     onSentHooks.delete(chat.id);
     if (hook && text.includes(hook.sig)) hook.fn(); // another message written over the draft: not the draft
@@ -495,6 +511,9 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
               data-tip={mode === m ? t('chat.input.modeTipOff') : t(m === 'fast' ? 'chat.input.fastTip' : 'chat.input.planTip')}
               data-testid={`${testid}-mode-${m}`}>{m === 'fast' ? <IconBolt size={12} /> : <IconBranch size={12} />}<span>{t(`chat.mode.${m}`)}</span></button>
           ))}
+          {busy && (
+            <button type="button" className="composer-stop" onClick={() => void stop(chat.id)} aria-label={t('chat.tile.stop')} data-tip={t('chat.tile.stop')} data-testid={`${testid}-stop`}><IconStop size={12} /></button>
+          )}
           {ready ? (
             <button type="button" className="send" onClick={() => submit()} aria-label={mode ? t(busy ? 'chat.input.queueAsMode' : 'chat.input.sendAsMode', { mode: t(`chat.mode.${mode}`) }) : busy && !toCard ? t('chat.input.queue') : t('chat.input.send')} data-tip={mode ? t(busy ? 'chat.input.queueAsModeTip' : 'chat.input.sendAsModeTip', { mode: t(`chat.mode.${mode}`) }) : busy && !toCard ? t('chat.input.queueShort') : t('chat.input.sendShort')} data-testid={`${testid}-send`}><IconSend size={14} /></button>
           ) : voice ? (
@@ -542,10 +561,18 @@ export function restoreChatDraftCopy(value:unknown):void{
   for(const entry of copy.entries){drafts.set(entry.id,entry.text);if(entry.images.length)draftImages.set(entry.id,entry.images);if(entry.mode==='plan'||entry.mode==='fast')modeOn.set(entry.id,entry.mode);}
   recoveredDrafts=true;persistChatRecovery();
 }
+let recoveryTimer:ReturnType<typeof setTimeout>|null=null;
+function scheduleChatRecovery():void{
+  if(!recoveredDrafts)return;
+  if(recoveryTimer!==null)clearTimeout(recoveryTimer);
+  recoveryTimer=setTimeout(()=>{recoveryTimer=null;persistChatRecovery();},400);
+}
 function persistChatRecovery():void{
+  if(recoveryTimer!==null){clearTimeout(recoveryTimer);recoveryTimer=null;}
   if(!recoveredDrafts)return;
   try{localStorage.setItem(CHAT_RECOVERY_KEY,JSON.stringify(chatDraftCheckpoint()));draftStorageProblem=false;}
   catch{draftStorageProblem=true;}
 }
+if(typeof window!=='undefined')window.addEventListener('beforeunload',()=>{if(recoveryTimer!==null)persistChatRecovery();});
 
 export function enableChatDraftRecovery():void{recoveredDrafts=true;persistChatRecovery();}

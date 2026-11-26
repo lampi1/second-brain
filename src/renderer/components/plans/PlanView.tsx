@@ -8,12 +8,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { PLAN_LIMITS, type PlanInfo, type PlanFull as View, type PlanLink } from '@shared/plan';
 import type { StepOp } from '@shared/plan-edit';
-import { openChatRef } from '../../actions';
+import { brainBridge, openChatRef } from '../../actions';
 import { t } from '../../i18n';
 import { useNow } from '../../lib/clock';
 import { ago } from '../../lib/format';
 import { errText } from '../../lib/ipc-error';
-import { buttonsOf, earlier, HELD_ACTIONS, heldBy, minutesText, type PlanButton } from '../../lib/plans';
+import { buttonsOf, earlier, HELD_ACTIONS, heldBy, planTimeLabel, type PlanButton } from '../../lib/plans';
 import { useApp } from '../../store/store';
 import { toast } from '../../store/ui';
 import { IconArrowLeft, IconChat } from '../Icons';
@@ -167,6 +167,7 @@ export function PlanView({ id, onBack }: { id: string; onBack: () => void }) {
       {version === null && <LiveLine live={info.live} id="plan" now={now} />}
       <span className="sp" />
       {owner && chat !== undefined && <button type="button" className="btn btn-ghost btn-s" onClick={() => openChatRef(owner)} title={chat} data-testid="pl-open-chat"><IconChat size={13} />{t('plans.openChat')}</button>}
+      {canEdit && !edit && <button type="button" className="btn btn-ghost btn-s pl-orch-btn" onClick={() => brainBridge.draftToOrchestrator(`Piano «${info.title}» (${info.id}): `, () => {})} data-testid="pl-edit-orchestrator"><IconChat size={13} />Modifica via Orchestrator</button>}
       {canEdit && !edit && <button type="button" className="btn btn-ghost btn-s" onClick={start} data-testid="pl-edit">{t('plans.edit')}</button>}
       {history.length > 1 && <Select value={version === null ? '' : String(version)} onChange={e => { setVersion(e.target.value ? Number(e.target.value) : null); stop(); }} aria-label={t('plans.version')} data-testid="pl-version">
         <option value="">{t('plans.version.now')}</option>
@@ -176,7 +177,7 @@ export function PlanView({ id, onBack }: { id: string; onBack: () => void }) {
     {info.steps > 0 && <div className="pl-bigbar" data-testid="pl-bigbar"><ProgressBar info={info} testid="pl-progress" />
       {info.next && <span data-testid="pl-next">{t('plans.next', { title: info.next.title })}</span>}
       {info.ready > 1 && <span className="pl-ready">{t('plans.ready', { n: info.ready })}</span>}
-      {info.time && <span>{t('plans.time', { row: minutesText(info.time.row), par: minutesText(info.time.parallel) })}</span>}</div>}
+      {info.time && <span className="pl-time" data-testid="pl-time">{planTimeLabel(info.time)}</span>}</div>}
     {version !== null && <div className="pl-old" role="status" data-testid="pl-old">{t('plans.old', { n: view.record.version })} <button type="button" className="btn btn-ghost btn-s" onClick={() => setVersion(null)} data-testid="pl-old-back">{t('plans.old.back')}</button></div>}
     {version === null && <div className="pl-do" data-s={info.state}>{note && <p data-testid="pl-note">{note}</p>}<PlanButtons key={info.id} info={info} /></div>}
     <Words view={view} edit={edit} draft={d} set={p => setDraft({ ...d, ...p })} />

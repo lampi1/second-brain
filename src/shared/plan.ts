@@ -132,8 +132,8 @@ export interface PlanInfo {
   next?: { n: number; title: string };
   /** how many steps may start now, together */
   ready: number;
-  /** estimated minutes one step after the other and in parallel; absent when a step has no estimate */
-  time?: { row: number; parallel: number };
+  /** estimated minutes sequentially and in parallel (plus remaining/unknown when partial); absent only when no step has an estimate */
+  time?: { row: number; parallel: number; remainingRow?: number; remainingParallel?: number; unknown?: number };
   stopped?: { at: number; by: PlanStopBy };
   createdAt: number; updatedAt: number; finishedAt?: number; seenAt?: number; archivedAt?: number;
   can: PlanAction[];

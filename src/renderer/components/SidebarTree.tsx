@@ -72,6 +72,7 @@ const Row = memo(function Row({ node, folded, on }: { node: TreeNode; folded: bo
   const right = state === 'wait' ? <span className="tn-w">{t('tree.state.wait')}</span>
     : kids.length ? <span className="tn-x">{t('tree.kids', { n: kids.length })}</span>
     : node.depth > 0 || state !== 'done' ? <span className="tn-x" title={t(`tree.state.${state}`)}>{t(`tree.state.${state}`)}</span> : null;
+  const titleTip = [chat.agent?.name, chat.title, state !== 'done' ? t(`tree.state.${state}`) : ''].filter(Boolean).join(' · ');
   const level = node.depth;
   return <li className={`tn${on ? ' on' : ''}${ENDED.has(state) ? ' ended' : ''}`} style={{ '--d': level } as CSSProperties} data-testid={`nav-tree-${node.id}`} data-depth={node.depth}>
     {Array.from({ length: level }, (_, k) => <i key={k} className="tn-guide" style={{ '--g': k } as CSSProperties} aria-hidden="true" />)}
@@ -80,10 +81,11 @@ const Row = memo(function Row({ node, folded, on }: { node: TreeNode; folded: bo
         {folded ? <IconChevronRight size={12} /> : <IconChevronDown size={12} />}
       </button>
       : <span className="tn-chev is-leaf" aria-hidden="true" />}
-    <button type="button" className="tn-main" onClick={() => focusChat(node.id)} aria-label={t('tree.focus', { title: chat.title })} aria-current={on || undefined}>
+    <button type="button" className="tn-main" onClick={() => focusChat(node.id)} aria-label={t('tree.focus', { title: chat.title })} aria-current={on || undefined} title={titleTip}>
+      <span className="tn-avatar"><AgentAvatar avatar={chat.agent?.avatar} name={chat.agent?.name || chat.title} size={18} /></span>
       <span className="tn-task">{chat.title}</span>
+      {right}
       <span className={`tn-dot dot-${DOT[state]}`} aria-hidden="true" />
-      <span className="tn-who"><AgentAvatar avatar={chat.agent?.avatar} name={chat.agent?.name || chat.title} size={16} /><span className="tn-role">{chat.agent?.name ?? ''}</span>{right}</span>
     </button>
     <button type="button" className="tn-close" onClick={e => { if (e.detail <= 1) closeChat(node.id); }} aria-label={t('tree.close', { title: chat.title })} data-tip={t('tree.close', { title: chat.title })} data-testid={`nav-tree-close-${node.id}`}><IconX size={11} /></button>
     {folded && kids.length > 0 && <span className="tn-kids" data-testid={`nav-tree-kids-${node.id}`}>

@@ -91,8 +91,25 @@ export function turnsOf(steps: readonly PlanStepView[]): { turns: PlanTurn[]; dr
 /** The state words of a step, for the list and the tests. */
 export const STEP_TONE: Record<PlanStepView['state'], 'todo' | 'now' | 'ok' | 'part' | 'bad' | 'off' | 'check'> = { todo: 'todo', now: 'now', done: 'ok', partial: 'part', blocked: 'bad', cancelled: 'off', check: 'check' };
 
-/** «12 min» or «1 h 20»; the time one after the other and in parallel, when every step has an estimate. */
+/** «12 min» or «1 h 20»; the time one after the other and in parallel, tolerant of partial estimates. */
 export function minutesText(n: number): string { return n >= 60 ? `${Math.floor(n / 60)} h${n % 60 ? ` ${n % 60}` : ''}` : `${n} min`; }
+
+/** Formats a plan's time estimate: prefers remaining parallel/sequential time when progress has started, plus `+N n.d.` if some steps lack estimates. */
+export function planTimeLabel(time: NonNullable<PlanInfo['time']>): string {
+  const unknown = time.unknown && time.unknown > 0 ? ` (+${time.unknown} n.d.)` : '';
+  const hasRem = time.remainingRow !== undefined && time.remainingParallel !== undefined;
+  if (hasRem && time.remainingRow! < time.row) {
+    if (time.remainingRow === 0) return `0 min residui (tot ${minutesText(time.parallel)})${unknown}`;
+    const rem = time.remainingParallel === time.remainingRow
+      ? `~${minutesText(time.remainingParallel!)} residui`
+      : `~${minutesText(time.remainingParallel!)} par · ${minutesText(time.remainingRow!)} seq residui`;
+    return `${rem} (tot ${minutesText(time.parallel)})${unknown}`;
+  }
+  const base = time.parallel === time.row
+    ? `~${minutesText(time.parallel)}`
+    : t('plans.time', { row: minutesText(time.row), par: minutesText(time.parallel) });
+  return `${base}${unknown}`;
+}
 
 /** Who does a step, on one line: «Artisan · Base», the role and the preset of its card (ADR 0346: never the model, which is the
  *  card's when the step starts). null for a step the Strategist does itself. */

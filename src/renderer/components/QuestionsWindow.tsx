@@ -86,6 +86,8 @@ export function OrchestratorAsks() {
   const shownCard = openKey !== null && ordered.some(p => reqKey(p) === openKey) ? openKey : null;
   useEffect(() => { newCardOpening(); }, [openKey]);
   useEffect(() => { setOpenCard(shownCard); }, [shownCard]);
+  // when another component (e.g., explanation request in ChatInput) clears q.card, collapse the card cleanly
+  useEffect(() => { if (q.card === null && openKey !== null) setOpenKey(null); }, [q.card]);
   useEffect(() => () => setOpenCard(null), []);
   if (!ordered.length) return null;
   const n = now.length;

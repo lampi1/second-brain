@@ -311,12 +311,14 @@ html[data-hidden] .bench-stage::after { animation-play-state:paused; }
 .bench-dot.tone-wait { background:var(--amber); }
 .bench-dot.tone-done { background:var(--green); }
 .bench-dot.tone-err { background:var(--red); }
-/* ── the plate: four lines, always the same ── */
-.bench-plate { flex:none; height:126px; box-sizing:border-box; display:flex; flex-direction:column; gap:2px; padding:10px 12px 8px; min-width:0; overflow:hidden; }
-.bench-prow { display:flex; align-items:center; gap:8px; min-width:0; height:16px; margin-bottom:2px; }
-.bench-skills { display:flex; flex-wrap:wrap; gap:4px; min-width:0; margin-top:3px; max-height:20px; overflow:hidden; }
-.skill-chip { flex:none; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:0 6px; border-radius:9px; background:var(--surface-4); color:var(--text-2); font-size:11px; line-height:16px; }
-.skill-chip.untracked, .skill-chip.more { background:none; border:1px dashed var(--border-2); color:var(--text-3); }
+/* ── the plate: clean fixed height, zero clipping ── */
+.bench-plate { flex:none; height:112px; box-sizing:border-box; display:flex; flex-direction:column; gap:2px; padding:10px 12px 9px; min-width:0; overflow:hidden; }
+.bench-prow { display:flex; align-items:center; gap:6px; min-width:0; height:18px; margin-bottom:2px; }
+.bench-skills-badge { flex:none; display:inline-flex; align-items:center; gap:2px; height:17px; padding:0 6px; border-radius:99px; background:var(--surface-3); border:1px solid var(--border-2); color:var(--text-2); font:600 10.5px var(--mono); line-height:1; cursor:default; }
+.bench-skills-badge.untracked { background:none; border-style:dashed; color:var(--text-3); }
+/* discreet Strategist live status bubble floating inside the stage without adding vertical height */
+.bench-bubble { position:absolute; left:10px; bottom:10px; max-width:calc(100% - 20px); z-index:3; padding:3px 9px; border-radius:var(--r-m); background:color-mix(in srgb, var(--surface) 92%, transparent); border:1px solid var(--border-2); color:var(--text-2); font-size:11px; line-height:1.3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
+.bench-bubble .typing { padding:0; font-size:11px; color:var(--text-2); }
 .bench-area { flex:1; min-width:0; font:600 10.5px var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--text-3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .bench-plate .th-title { flex:none; min-width:0; max-width:100%; height:24px; line-height:24px; font-size:13.5px; font-weight:600; margin:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .bench-plate .th-title > .strip-name { display:block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

@@ -10,7 +10,7 @@
 // lib/orchestrator-tally.ts), and its details; «Manutenzione» is on the top bar (ADR 0287); the plans button is on the top bar and on its head (ADR 0301); on its head the moon of «Modalità notte» with its line while on (AwayToggle.tsx, ADR 0191); the phone of «Controllo remoto» with the claude.ai link while on (RemoteControl.tsx, ADR 0229); the morning block's line while strips are open (no plan panel: the strips carry each estimate, #124) (MorningBlock.tsx, ADR 0102). When it drives a browser, it wears that pair's accent like any chat (lib/pairs.ts). Used by OrchestratorOverlay.tsx.
 import { AwayButton, AwayLine } from './AwayToggle';
 import { RemoteButton, RemoteLine } from './RemoteControl';
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { chatCost, formatCost, modelWithEffort } from '../lib/format';
 import { sameTally, tallyOf } from '../lib/chat-derived';
 import { engineName } from '../lib/engines';
@@ -20,7 +20,7 @@ import { setFocused, ui } from '../store/ui';
 import { t } from '../i18n';
 import { pairHover, usePair } from '../lib/pairs';
 import { awaitingCard, clearOrchestratorNow, go } from '../actions';
-import { ItemList, turnActivity, Typing } from './ChatItems';
+import { ItemList, topicOfText, turnActivity, Typing } from './ChatItems';
 import { SpriteCtx } from './AgentSprite';
 import { useOwnPicture } from '../lib/agent-images';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
@@ -36,7 +36,7 @@ import { useFlash } from './ChatTile';
 import { StrategyPanel } from './StrategyPanel';
 import { planCards } from '../lib/plan-ask';
 import { OrchestratorAsks } from './QuestionsWindow';
-import { HarnessMark, IconEraser, IconMore, IconStop } from './Icons';
+import { HarnessMark, IconEraser, IconMore, IconSearch, IconStop, IconX } from './Icons';
 import { IconButton, StatePill } from './ui';
 import { Select } from './Select';
 import { requestFocus } from '../store/ui';
@@ -92,10 +92,28 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
   const flash = useFlash('orchestrator');
   const pair = usePair(id);
   const input = useRef<ChatInputHandle>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
   const menuBtn = useRef<HTMLButtonElement>(null);
   const [menu, setMenu] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [remoteHidden, setRemoteHidden] = useState(false);
+  const [remoteOpen, setRemoteOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [topicFilter, setTopicFilter] = useState('');
+  // collect distinct [Topic] tags in the Orchestrator transcript (zero tokens)
+  const topics = useMemo(() => {
+    const out: string[] = [], seen = new Set<string>();
+    for (const it of items ?? []) {
+      if ((it.kind === 'user' || it.kind === 'assistant') && typeof it.text === 'string') {
+        const tag = topicOfText(it.text)?.topic;
+        if (tag && !seen.has(tag.toLowerCase())) { seen.add(tag.toLowerCase()); out.push(tag); }
+      }
+    }
+    return out.slice(-8);
+  }, [items]);
+  const openSearch = () => { setSearchOpen(true); requestAnimationFrame(() => searchInput.current?.focus()); };
+  const closeSearch = () => { setSearchOpen(false); setSearchQuery(''); };
   // the Orchestrator's input has the default focus (once the chat exists)
   const focusedOnce = useRef(false);
   useEffect(() => {
@@ -128,15 +146,18 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
   const busy = isBusy(chat);
   return (
     <section className={`tile orchestrator-tile ${isFocused ? 'focused' : ''} ${flash ? 'flash' : ''} ${pair.cls}`} style={pair.style} role="region" aria-label={t('dialogs.orchestrator.tileLabel', { title: chat.title })} data-testid="tile-orchestrator" data-chat-id={chat.id} data-sb-id="orchestrator"
-      onFocus={() => setFocused('orchestrator')} onPointerDown={() => setFocused('orchestrator')} {...pairHover(chat.id)} data-pair={pair.index ?? undefined}>
+      onFocus={() => setFocused('orchestrator')} onPointerDown={() => setFocused('orchestrator')}
+      onKeyDown={e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); openSearch(); } }}
+      {...pairHover(chat.id)} data-pair={pair.index ?? undefined}>
       <header className="tile-head">
         <div className="th-row">
           <AgentAvatar avatar={chat.agent?.avatar} name={chat.agent?.name||chat.title} size={24}/>
           {renaming ? <TitleInput chat={chat} onDone={() => setRenaming(false)} /> : <h3 className="th-title orchestrator-name" onDoubleClick={() => setRenaming(true)}>{chat.agent?.name||chat.title}</h3>}
           <StatePill chat={chat} testid="orchestrator-state" />
           <span className="sp" />
+          <IconButton label="Cerca nei messaggi (Ctrl+F)" aria-pressed={searchOpen} className={searchOpen ? 'on' : ''} onClick={() => (searchOpen ? closeSearch() : openSearch())} testid="orchestrator-search"><IconSearch size={14} /></IconButton>
           <AwayButton />
-          <RemoteButton chat={chat} reveal={() => setRemoteHidden(false)} />
+          <RemoteButton chat={chat} reveal={() => { setRemoteHidden(false); setRemoteOpen(v => !v); }} />
           {/* the plans from the Orchestrator's head too (ADR 0301): they open where the user talks to it */}
           <PlansButton testid="orchestrator-plans" size={14} />
           {busy && <IconButton label={t('dialogs.orchestrator.stopLabel')} shortcut={t('dialogs.orchestrator.stopShortcut')} tone="danger" onClick={() => void stop(chat.id)} testid="orchestrator-stop"><IconStop size={14} /></IconButton>}
@@ -145,8 +166,26 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
         </div>
         {/* one quiet line: its model, what it started today with the cost, its details (ADR 0287: its name is said once) */}
         <div className="orch-meta"><ModelChip chat={chat} profileId={ORCHESTRATOR_ROLE_ID} testid="orchestrator-model" />{chat.title.trim() !== (chat.agent?.name || 'Orchestrator') && chat.title.trim() !== 'Orchestrator' && <span className="chat-topic">{chat.title}</span>}<TallyLine chat={chat} /><AgentIdentity chat={chat}/></div>
+        {searchOpen && (
+          <div className="orch-search-bar" data-testid="orchestrator-search-bar">
+            <IconSearch size={13} />
+            <input ref={searchInput} type="search" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); closeSearch(); } }}
+              placeholder="Cerca in questa chat…" aria-label="Cerca nei messaggi dell'Orchestrator" data-testid="orchestrator-search-input" />
+            {searchQuery && <button type="button" className="orch-search-clear" onClick={() => setSearchQuery('')} aria-label="Pulisci ricerca"><IconX size={11} /></button>}
+            <button type="button" className="orch-search-clear" onClick={closeSearch} aria-label="Chiudi ricerca"><IconX size={12} /></button>
+          </div>
+        )}
+        {topics.length > 1 && (
+          <div className="orch-topics" role="group" aria-label="Filtra per argomento" data-testid="orchestrator-topics">
+            <button type="button" className={`orch-topic-pill${!topicFilter ? ' on' : ''}`} onClick={() => setTopicFilter('')}>Tutti</button>
+            {topics.map(tp => (
+              <button key={tp} type="button" className={`orch-topic-pill${topicFilter === tp ? ' on' : ''}`} onClick={() => setTopicFilter(topicFilter === tp ? '' : tp)}>{tp}</button>
+            ))}
+          </div>
+        )}
         <AwayLine />
-        {!remoteHidden && <RemoteLine chat={chat} dismiss={() => setRemoteHidden(true)} />}
+        {!remoteHidden && <RemoteLine chat={chat} forceOpen={remoteOpen} dismiss={() => { setRemoteHidden(true); setRemoteOpen(false); }} />}
         <div className="th-sub sr-only" data-testid="orchestrator-sub">
           <span className="th-engine" data-tip={t('dialogs.orchestrator.engineTip', { name: engineName(chat.harness) })} aria-label={t('dialogs.orchestrator.engineTip', { name: engineName(chat.harness) })} role="img" data-engine={chat.harness} data-testid="orchestrator-engine"><HarnessMark harness={chat.harness} size={14} /></span>
           <span className="th-sub-text">{[!['Orchestrator', 'Orchestrator'].includes(chat.title.trim()) ? chat.title : '', modelWithEffort(chat), chatCost(chat)].filter(Boolean).join(' · ')}</span>
@@ -158,7 +197,7 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
       <MorningLine />
       {/* a plan to approve is its row below (the same steps twice took the room of the open card and the input) */}
       {planCards(plans, reqs).filter(({ chat: c }) => c.plan?.phase !== 'proposed').map(({ chat: c, question }) => <StrategyPanel key={c.id} chat={c} question={question} />)}
-      <ItemList chatId={chat.id} items={items ?? []} empty={t('dialogs.orchestrator.emptyPrompt')} footer={showsWork(chat) ? <SpriteCtx.Provider value={ownPicture ? null : 'orchestrator'}><Typing what={turnActivity(items)} testid="typing-orchestrator" items={items} /></SpriteCtx.Provider> : null} />
+      <ItemList chatId={chat.id} items={items ?? []} searchQuery={searchQuery} topicFilter={topicFilter} empty={t('dialogs.orchestrator.emptyPrompt')} footer={showsWork(chat) ? <SpriteCtx.Provider value={ownPicture ? null : 'orchestrator'}><Typing what={turnActivity(items)} testid="typing-orchestrator" items={items} /></SpriteCtx.Provider> : null} />
       {/* every chat's questions, permissions, commands and plans: one row each, opened in place (ADR 0269) */}
       <OrchestratorAsks />
       {/* in the place of the old "Novità" feed (#88): what the app holds back for this Orchestrator */}
