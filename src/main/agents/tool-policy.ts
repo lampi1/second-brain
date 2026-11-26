@@ -7,7 +7,7 @@ import path from 'node:path';
 import type { EngineKind, PermissionMode } from '../../shared/contract';
 import type { CodexExecutionPolicy } from '../brain/adapters/codex-policy';
 import { PERMISSION_CEILINGS, TOOL_CLASSES, type AgentToolPolicy, type PermissionCeiling, type ToolClass } from '../../shared/agents';
-import { commandSteps, shellOfTool, type CommandShell } from './command-steps';
+import { commandSteps, literalBashStdin, shellOfTool, type CommandShell } from './command-steps';
 
 export interface AgentPolicy { tools: AgentToolPolicy | null; ceiling: PermissionCeiling | null }
 /** Used when a stored policy is unreadable: the narrowest run, never an unrestricted one. */
@@ -238,17 +238,17 @@ const STDIN_ONLY: Record<string, StdinRule> = {
 interface Word { text: string; glob: boolean }
 /** Splits a command line into pipe stages of words, quotes removed (a quoted `|` or space stays in its word; a
  *  backslash is dropped, so `-e\xec` reads as `-exec`). null = an unterminated quote. */
-function stages(raw: string): Word[][] | null {
+function stages(raw: string, shell: CommandShell): Word[][] | null {
   let stage: Word[] = [];
   const out: Word[][] = [stage];
   let word: Word | null = null, quote: '"' | "'" | null = null;
   const end = () => { if (word) stage.push(word); word = null; };
   for (const ch of raw) {
-    if (quote) { if (ch === quote) quote = null; else if (ch !== '\\') word!.text += ch; continue; }
+    if (quote) { if (ch === quote) quote = null; else if (ch !== '\\' || shell === 'powershell') word!.text += ch; continue; }
     if (ch === '"' || ch === "'") { quote = ch; word ??= { text: '', glob: false }; continue; }
     if (/\s/.test(ch)) { end(); continue; }
     if (ch === '|') { end(); stage = []; out.push(stage); continue; }
-    if (ch === '\\') { word ??= { text: '', glob: false }; continue; }
+    if (ch === '\\' && shell !== 'powershell') { word ??= { text: '', glob: false }; continue; }
     word ??= { text: '', glob: false };
     word.text += ch;
     if (ch === '*' || ch === '?' || ch === '[') word.glob = true;
@@ -292,6 +292,19 @@ export function readOnlyCommand(raw: unknown, scripts?: ReadScripts, shell: Comm
   if (/\\["']/.test(raw)) return false;
   // PowerShell's typographic quotes (‘ ’ ‚ ‛ “ ” „) end its strings where this reader sees none
   if (/[‘-„]/.test(raw)) return false;
+  if (shell === 'powershell') {
+    // A literal Bash stdin program: classify the entire payload, from the same cwd. Interpolating here-strings,
+    // further shell arguments and outer clauses are not covered by this shape.
+    const stdin = literalBashStdin(raw);
+    if (stdin !== undefined) return readOnlyCommand(stdin, scripts, 'bash');
+    // Check both arms of the ordinary native exit-code preservation idiom, without interpreting variables or letting
+    // a working-directory change (or any other state change) in one arm affect the other.
+    const cleanup = /^\s*try\s*\{([^{}]*?);\s*(\$exitCode)\s*=\s*\$LASTEXITCODE\s*;?\s*\}\s*finally\s*\{([^{}]+)\}\s*;?\s*exit\s+\2\s*$/i.exec(raw);
+    if (cleanup) return [cleanup[1]!, cleanup[3]!].every(body => {
+      const steps = commandSteps(body, 'powershell');
+      return !!steps?.length && steps.every(step => 'text' in step && oneReadOnly(step.text, scripts, 'powershell'));
+    });
+  }
   // cmd (a tool that does not say its shell): `^` escapes and `'` is no quote, so `|`, `&`, `<`, `>` in single quotes run
   // and `%NAME%` expands before cmd reads quotes (`%CMDCMDLINE:~-1%` is a `"`)
   if (shell === null && (/\^["'&|<>]/.test(raw) || /'[^']*[|&<>][^']*'/.test(raw) || /%[^%\s]+%/.test(raw))) return false;
@@ -311,20 +324,20 @@ export function readOnlyCommand(raw: unknown, scripts?: ReadScripts, shell: Comm
       at = { ...at, cwd: step.certain && !(shell === null && /^[a-z]:/i.test(to)) ? next : '' };
       continue;
     }
-    if (!oneReadOnly(step.text, at)) return false;
+    if (!oneReadOnly(step.text, at, shell)) return false;
   }
   return true;
 }
 
 /** One command, a pipe of readers at most. */
-function oneReadOnly(raw: string, scripts?: ReadScripts): boolean {
+function oneReadOnly(raw: string, scripts: ReadScripts | undefined, shell: CommandShell): boolean {
   // chaining, redirection, substitution (bash $( ${ backtick <( >(, PowerShell $( @( ( { and its ` escape), quoted or
   // not; a reflog ref (HEAD@{1}, @{u}) is the only brace kept: PowerShell cannot run anything in it. Any other `$` is
   // refused too: an unquoted $IFS splits `find .$IFS-delete` into a writing option after this check, and a variable
   // ($HOME, PowerShell's $env:x) or bash's $'…' quoting would make the words differ from what is checked here
   const plain = raw.replace(/@\{[A-Za-z0-9_.:/-]*\}/g, '');
   if (/[;&<>`(){}$\r\n]/.test(plain)) return false;
-  const parts = stages(raw);
+  const parts = stages(raw, shell);
   if (!parts) return false;
   return parts.every((words, stage) => {
     const cmd = words[0]?.text.toLowerCase().replace(/\.exe$/, '');

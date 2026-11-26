@@ -12,6 +12,12 @@
 export type CommandShell = 'bash' | 'powershell' | null;
 export const shellOfTool = (tool: string): CommandShell => tool === 'Bash' ? 'bash' : tool === 'PowerShell' ? 'powershell' : null;
 
+/** An entire PowerShell command piping a literal here-string into Bash, with no other clauses. */
+export function literalBashStdin(raw: string): string | undefined {
+  const body = /^\s*@'[ \t]*\r?\n([\s\S]*?)\r?\n'@[ \t]*\|[ \t]*bash[ \t]+-s[ \t]*\s*$/i.exec(raw)?.[1];
+  return body !== undefined && !/^'@/m.test(body) ? body : undefined;
+}
+
 /** One step: a command to check, or a move of the folder (`cd`). certain: the next steps run only if the move worked
  *  (`cd x && …`); after an uncertain one the folder is not known. */
 export type Step = { text: string } | { cd: string; certain: boolean };

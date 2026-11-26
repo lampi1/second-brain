@@ -7,6 +7,7 @@
 // script's file; pinned by test/unit/chats/delegated-holds.test.ts and delegated-holds-review.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
+import { literalBashStdin } from '../agents/command-steps';
 import { COMMAND_TOOLS, type ReadScripts } from '../agents/tool-policy';
 import { cliWrite, cloudCommand, cloudWords, httpMethods, httpWrite, PLAIN_READ, PLAIN_SWITCH, positionals, READ, releaseRead, sdkWrite, WRITE } from './cloud-verbs';
 import { toolClass } from './permit-policy';
@@ -58,6 +59,27 @@ const prog = (c: Command): string => base(c.words[progAt(c)] ?? '');
 
 /** What a line or a script runs. raw: as written, only what runs. code: not a shell's, read as one text. */
 interface Run { all: Command[]; kept: Command[]; raw: string; shell: Shell; code?: boolean }
+
+/** A single literal sqlcmd invocation may use -s (separator) and -h (heading interval). They are not host flags.
+ *  Keep the existing host scan for other commands and for SQL fed from a file, pipe or variable. */
+function localSqlcmdWithDisplayOptions(run: Run): boolean {
+  if (run.code || run.all.length !== 1) return false;
+  const c = run.all[0]!;
+  const [name = '', ...args] = c.words;
+  if (!/^sqlcmd$/i.test(base(name)) || c.value || c.nested || c.body || c.inputs.length || /[$`%]/.test(c.raw)) return false;
+  let host: string | undefined, query: string | undefined, display = false;
+  for (let i = 0; i < args.length; i++) {
+    const w = args[i];
+    if (w === '-S' && host === undefined) host = args[++i];
+    else if (w === '-Q' && query === undefined) query = args[++i];
+    else if (w === '-s' && /^[|,;:]$/.test(args[i + 1] ?? '')) { i++; display = true; }
+    else if (w === '-h' && /^-?\d+$/.test(args[i + 1] ?? '')) { i++; display = true; }
+    else if (w === '-d' && /^[\w.-]+$/.test(args[i + 1] ?? '')) i++;
+    else if (!/^(?:-E|-C|-b|-I|-W)$/.test(w ?? '')) return false;
+  }
+  return display && !!host && /^(?:tcp:)?(?:localhost|127\.0\.0\.1|\(localdb\))(?:\\[\w-]+)?(?:,\d+)?$/i.test(host)
+    && !!query && !/(?:^|\n)\s*[:!]|database\.windows\.net|\.rds\.amazonaws/i.test(query);
+}
 
 /** The commands of a text whose quotes cannot be trusted: its stretches, nothing left out. */
 function roughly(text: string): Command[] {
@@ -179,7 +201,7 @@ function dbHold(run: Run, given: readonly string[], ctx: HoldContext): Hold | nu
       }
     }
   }
-  if ((!client && !REACHES.test(code)) || onThisMachine(whole)) return null;
+  if ((!client && !REACHES.test(code)) || onThisMachine(whole) || localSqlcmdWithDisplayOptions(run)) return null;
   if (statements.some(statementWrites) || loose.some(looseWrite)) return { kind: 'db-write', why: 'l’istruzione modifica un database' };
   if (unknown) return { kind: 'db-write', why: 'non riconosco tutte le istruzioni al database come letture' };
   return null;
@@ -323,6 +345,13 @@ function lineHold(line: string, tool: string, ctx: HoldContext): Hold | null {
   const raw = line.replace(/\r\n/g, '\n');
   const shells: Shell[] = /powershell/i.test(tool) ? ['powershell'] : /^(?:bash|monitor)$/i.test(tool) ? ['bash'] : ['bash', 'powershell'];
   const joined = (s: Shell): string => raw.replace(s === 'bash' ? /\\\n/g : /`\n/g, ' ');
+  // PowerShell makes the whole body a string; Bash stdin executes it. Check the executable payload as well as the
+  // outer command, so a read-only classification of the wrapper never takes the place of the hold checks.
+  const stdin = shells.includes('powershell') ? literalBashStdin(raw) : undefined;
+  if (stdin !== undefined) {
+    const h = judge(runOf(stdin.replace(/\\\n/g, ' '), 'bash'), ctx);
+    if (h) return h;
+  }
   const sound = shells.filter(s => readCommands(joined(s), s) !== null);
   for (const s of sound.length ? sound : shells.slice(0, 1)) { const h = judge(runOf(joined(s), s), ctx); if (h) return h; }
   return null;

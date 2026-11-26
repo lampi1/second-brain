@@ -178,6 +178,29 @@ describe('autoPermit: where a rule could hold the tool, the rules must read what
 });
 
 describe('autoPermit: the user\'s own role limits', () => {
+  it('checks the full programs in supported PowerShell wrappers and keeps the brain rules first', () => {
+    const ceiling = ctx({ ceiling: 'default' });
+    const stdin = (body: string) => `@'\n${body}\n'@ | bash -s`;
+    const cleanup = (body: string) => `try { git status; $exitCode = $LASTEXITCODE } finally { ${body} }; exit $exitCode`;
+    const verdict = (command: string, context = ceiling) => autoPermit(perm('PowerShell', { command }), context).kind;
+    expect(verdict(stdin('git status\ngit log -1'))).toBe('allow');
+    expect(verdict(cleanup('git diff'))).toBe('allow');
+    expect(verdict(stdin('git status\naz group delete -n g'))).toBe('ask');
+    expect(verdict(cleanup('sqlcmd -S sql.example.com -Q "DELETE FROM t"'))).toBe('ask');
+    expect(verdict(`${stdin('git status')}; Remove-Item x`)).toBe('ask');
+    expect(verdict(stdin('git status'), { ...ceiling, policy: { state: 'ok', rules: [
+      { id: 'deny-example', action: 'never-print', why: 'test', tools: ['command'], match: [/git status/iu], unless: [] },
+    ] } })).toBe('deny');
+  });
+
+  it.runIf(process.platform === 'win32')('recognises an absolute Windows path of a declared script from another cwd', () => {
+    const declared = path.join(root, 'elsewhere', 'devops-me.mjs');
+    fs.writeFileSync(declared, '// test fixture');
+    const context = ctx({ ceiling: 'default', readScripts: { cwd, paths: [declared] } });
+    expect(autoPermit(perm('PowerShell', { command: `node "${declared}" --releases` }), context).kind).toBe('allow');
+    expect(autoPermit(perm('PowerShell', { command: 'node .\\devops-me.mjs --releases' }), context).kind).toBe('ask');
+  });
+
   it('«Chiede conferma» and «Solo piano» are always asked', () => {
     for (const ceiling of ['default', 'plan'] as const) {
       expect(run('git status', { ceiling })).toBe('allow'); // looking never asks (ADR 0278)

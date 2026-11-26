@@ -33,6 +33,24 @@ describe('heldForUser', () => {
     'sqlcmd -S localhost -Q "select 1"; sqlcmd -S srv -Q "drop table t"',
   ])('db write held: %s', command => expect(run(command)).toBe('db-write'));
 
+  it('distinguishes the SQL Server target from the output separator in either shell', () => {
+    for (const tool of ['Bash', 'PowerShell', 'Shell']) {
+      const local = String.raw`sqlcmd -S "localhost\SQLEXPRESS" -s "|" -Q "CREATE TABLE Parity_Test (i int)"`;
+      expect(run(local, tool)).toBeNull();
+      expect(run(local.replace(String.raw`localhost\SQLEXPRESS`, 'sql.example.com'), tool)).toBe('db-write');
+      expect(run(`${local}; sqlcmd -S sql.example.com -Q "DELETE FROM t"`, tool)).toBe('db-write');
+    }
+  });
+
+  it.each([
+    ['sqlcmd -S sql.example.com -Q "DELETE FROM t"', 'db-write'],
+    ['az group delete -n g', 'cloud-write'],
+    ['npm run release:prod', 'prod-release'],
+  ])('holds %s in the PowerShell wrappers regardless of the role ceiling', (command, kind) => {
+    expect(run(`@'\ngit status\n${command}\n'@ | bash -s`, 'PowerShell')).toBe(kind);
+    expect(run(`try { git status; $exitCode = $LASTEXITCODE } finally { ${command} }; exit $exitCode`, 'PowerShell')).toBe(kind);
+  });
+
   it.each([
     'az webapp restart -n x -g y', 'cd a && az group delete -n list', 'for s in a b; do az webapp stop -n $s; done', 'az webapp $ACTION -n x', '"C:/Program Files/Azure/wbin/az.cmd" webapp restart -n x', 'bash -c "az vm start -n x"',
     'az rest --method put --url https://management.azure.com/x --body "{}"', 'az webapp log config --web-server-logging off', 'aws s3 rm s3://b/k', 'aws logs put-retention-policy --x 1', 'kubectl apply -f x.yml', 'kubectl rollout restart deploy/x',
