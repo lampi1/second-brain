@@ -297,7 +297,7 @@ describe('app control tools', () => {
     // the old tier param is gone (2026-11-23): refused with the way to the preset; a value that is not one of the three
     // presets is refused too; nothing created
     await expect(Promise.resolve(t.run({ title: 'Ordini · Fix 2', prompt: 'p', roleId: 'artisan', tier: 'top' }))).rejects.toThrow(/tier: gone/);
-    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'herald', preset: 'huge' }))).rejects.toThrow(/preset/);
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'scout', preset: 'huge' }))).rejects.toThrow(/preset/);
     expect(made).toHaveLength(1);
     // a role on Cursor while «Gli Orchestrator possono usare Cursor» is off: refused, nothing created
     catalog.save({ ...catalog.list().profiles.find(p => p.id === 'scout')!, engine: 'cursor', model: null }, 'scout');
@@ -429,12 +429,12 @@ describe('app control tools', () => {
     const catalog = roleCatalog();
     const skillTools = () => [{ name: 'issue-open', tools: ['Write', 'node scripts/open-issue.mjs'] }];
     const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: req => catalog.resolve(req), skillTools }, 'r').find(x => x.name === 'app_create_chat')!;
-    expect(await t.run({ title: 'Issue · Bozza', prompt: 'apri la issue', roleId: 'herald', skills: ['issue-open'] })).not.toHaveProperty('warnings');
-    const herald = catalog.list().profiles.find(p => p.id === 'herald')!;
-    catalog.save({ ...herald, tools: { allow: ['read', 'web', 'mail-draft'] } }, 'herald');
+    expect(await t.run({ title: 'Issue · Bozza', prompt: 'apri la issue', roleId: 'artisan', skills: ['issue-open'] })).not.toHaveProperty('warnings');
+    const artisan = catalog.list().profiles.find(p => p.id === 'artisan')!;
+    catalog.save({ ...artisan, tools: { allow: ['read', 'web', 'mail-draft'] } }, 'artisan');
     // since ADR 0347 every role may do everything: a narrowing is widened on save, so no warning either
-    expect(catalog.list().profiles.find(p => p.id === 'herald')!.tools?.allow).toEqual(expect.arrayContaining(['edit', 'shell']));
-    expect(await t.run({ title: 'Issue · Bozza 2', prompt: 'apri la issue', roleId: 'herald', skills: ['issue-open'] })).not.toHaveProperty('warnings');
+    expect(catalog.list().profiles.find(p => p.id === 'artisan')!.tools?.allow).toEqual(expect.arrayContaining(['edit', 'shell']));
+    expect(await t.run({ title: 'Issue · Bozza 2', prompt: 'apri la issue', roleId: 'artisan', skills: ['issue-open'] })).not.toHaveProperty('warnings');
   });
 
   it('the Orchestrator\'s own mount has task_estimate, and app_create_chat answers with the estimate from similar tasks (ADR 0087)', async () => {

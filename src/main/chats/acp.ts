@@ -73,7 +73,6 @@ import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, ty
 import { AgentChildrenReporter } from './agent-children';
 import type { ChildObservation } from '../../shared/agents';
 import { recordWire } from './wire-record';
-import { WriteBarrier } from './write-barrier';
 import { isLadderAnswer } from '../../shared/question-ladder';
 import { asYesNo, bareLabel, BRIEF_GRACE_MS, BRIEF_REFUSAL, mappedYesNo, NOT_RAN_NOTE, twoOptionQuestion, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoOf, yesNoShape } from '../../shared/yes-no';
 
@@ -597,13 +596,6 @@ export class AcpSession implements HarnessSession {
   private readyDone!: () => void;
   /** resolves when the session is open (or failed): the manager waits for it before adding a message to a resumed chat */
   readonly ready = new Promise<void>(r => { this.readyDone = r; });
-  /** ADR 0228: overlaps git checkpoints with ACP prompt dispatch, holding write permission requests until snapshot settles. */
-  private readonly writeBarrier = new WriteBarrier();
-  holdWrites(until: Promise<unknown>): boolean {
-    if (this.opts.readOnly || this.exited || !this.open) return false;
-    this.writeBarrier.hold(until);
-    return true;
-  }
 
   /** the folder the engine starts and opens its session in: the chat's, as its long real path with realCwd */
   private readonly cwd: string;
@@ -1473,14 +1465,6 @@ export class AcpSession implements HarnessSession {
       const options: AcpOption[] = arr(p.options).map(x => ({ optionId: s(o(x).optionId), name: s(o(x).name), kind: s(o(x).kind) })).filter(x => x.optionId);
       const known = this.tools.get(s(tc.toolCallId)); // the tool_call that came first carries the input (command, path)
       const kindName = KIND_NAME[s(tc.kind)] ?? known?.name ?? 'Tool';
-      // ADR 0228: wait for the parallel git checkpoint before any write/shell/MCP tool runs
-      if (kindName !== 'Read' && kindName !== 'Search' && kindName !== 'Fetch') {
-        const wait = this.writeBarrier.pass(kindName);
-        if (wait) {
-          await wait;
-          if (this.exited || this.procExited || this.wedged || generation !== this.brokerGeneration) return this.respond(id, { outcome: { outcome: 'cancelled' } });
-        }
-      }
       // the app's own tools (agent_*, its MCP) on its own loopback endpoints are already granted to the chat, as Claude's
       // --allowedTools and Cursor's Mcp(...) rules do: answered once, no panel. OpenCode names an MCP tool <server>_<tool>
       // in the title; Antigravity sends the tool's name apart (name: mcp_<server>_<tool>, title "Run mcp_…", ADR 0332)

@@ -64,7 +64,10 @@ export function jointStyle(n: Group): Record<string, string> {
   if (!n.j) return {};
   const out: Record<string, string> = { transform: pose(n.j, {}, false).slice('transform:'.length) };
   if (fades(n.j, n.track)) out.opacity = n2(n.j.o);
-  if (n.track) out.animation = `${trackName(n.j, n.track)} ${n2(n.track.t)}s linear ${n2(n.track.d ?? 0)}s ${n.track.n ?? 'infinite'} both`;
+  if (n.track) {
+    out.animation = `${trackName(n.j, n.track)} ${n2(n.track.t)}s linear ${n2(n.track.d ?? 0)}s ${n.track.n ?? 'infinite'} both`;
+    if (n.track.n === undefined) out.animationDelay = `calc(${n2(n.track.d ?? 0)}s + var(--sp-delay, 0s))`;
+  }
   return out;
 }
 /** Every @keyframes rule a tree needs, each once, by its name. */

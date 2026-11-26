@@ -99,7 +99,7 @@ describe('the team on the stage', () => {
       chat({ id: 'o', state: 'running', isOrchestrator: true, agent: { id: 'orchestrator', name: 'Orchestrator', purpose: '', engine: 'claude', model: null, revision: 1, source: 'catalog' } }),
       chat({ id: 'p', state: 'running' }),
     ]);
-    expect(all).toEqual({ strategist: 'idle', scout: 'working', artisan: 'idle', sentinel: 'done', herald: 'idle' });
+    expect(all).toEqual({ strategist: 'idle', scout: 'working', artisan: 'idle', sentinel: 'done' });
   });
   it('shows every role ready on a clean install', () => {
     expect(new Set(Object.values(teamStates([])))).toEqual(new Set(['idle']));

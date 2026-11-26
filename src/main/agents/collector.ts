@@ -100,17 +100,21 @@ export class AgentAnalyticsCollector {
   private body(): string {
     return timedStep('agent-analytics.json serialize', () => {
       let json = JSON.stringify({ version: 1, rows: [...this.rows.values()] });
-      // Keep well below local-store.ts's 8_000_000 B cap by evicting oldest rolled-up (then inactive) rows.
+      // Keep well below local-store.ts's 8_000_000 B cap by evicting oldest rolled-up (then inactive) rows in batches.
       if (Buffer.byteLength(json, 'utf8') > 6_000_000) {
-        while (Buffer.byteLength(json, 'utf8') > 5_500_000 && this.evict()) {
+        while (Buffer.byteLength(json, 'utf8') > 5_500_000) {
+          const batch = Math.max(1, Math.ceil(this.rows.size * 0.1));
+          let evicted = 0;
+          for (let i = 0; i < batch && this.evict(); i++) evicted++;
+          if (evicted === 0) break;
           json = JSON.stringify({ version: 1, rows: [...this.rows.values()] });
         }
         while (Buffer.byteLength(json, 'utf8') > 5_500_000) {
-          let dropped = false;
-          for (const key of this.rows.keys()) {
-            if (!this.live.has(key)) { this.rows.delete(key); dropped = true; break; }
-          }
-          if (!dropped) break;
+          const inactive: string[] = [];
+          for (const key of this.rows.keys()) if (!this.live.has(key)) inactive.push(key);
+          if (inactive.length === 0) break;
+          const batch = Math.max(1, Math.ceil(inactive.length * 0.1));
+          for (let i = 0; i < batch; i++) this.rows.delete(inactive[i]!);
           json = JSON.stringify({ version: 1, rows: [...this.rows.values()] });
         }
       }

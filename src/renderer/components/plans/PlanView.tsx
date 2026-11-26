@@ -167,7 +167,7 @@ export function PlanView({ id, onBack }: { id: string; onBack: () => void }) {
       {version === null && <LiveLine live={info.live} id="plan" now={now} />}
       <span className="sp" />
       {owner && chat !== undefined && <button type="button" className="btn btn-ghost btn-s" onClick={() => openChatRef(owner)} title={chat} data-testid="pl-open-chat"><IconChat size={13} />{t('plans.openChat')}</button>}
-      {canEdit && !edit && <button type="button" className="btn btn-ghost btn-s pl-orch-btn" onClick={() => brainBridge.draftToOrchestrator(`Piano «${info.title}» (${info.id}): `, () => {})} data-testid="pl-edit-orchestrator"><IconChat size={13} />Modifica via Orchestrator</button>}
+      {canEdit && !edit && <button type="button" className="btn btn-ghost btn-s pl-orch-btn" onClick={() => { if (!brainBridge.draftToOrchestrator(`Piano «${info.title}» (${info.id}): `, () => {})) toast(t('appText.actions.noOrchestrator'), 'info'); }} data-testid="pl-edit-orchestrator"><IconChat size={13} />Modifica via Orchestrator</button>}
       {canEdit && !edit && <button type="button" className="btn btn-ghost btn-s" onClick={start} data-testid="pl-edit">{t('plans.edit')}</button>}
       {history.length > 1 && <Select value={version === null ? '' : String(version)} onChange={e => { setVersion(e.target.value ? Number(e.target.value) : null); stop(); }} aria-label={t('plans.version')} data-testid="pl-version">
         <option value="">{t('plans.version.now')}</option>

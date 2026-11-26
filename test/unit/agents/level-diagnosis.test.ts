@@ -25,11 +25,11 @@ describe('levels diagnostic', () => {
       run({ endedAt: undefined, endReason: undefined }),                                       // still open
       run({ source: 'oneshot', oneshot: { engine: 'claude', job: 'headline', fallback: false, costBasis: 'reported' } }),
     ];
-    const parent = run({ agentId: 'strategist' }), child = run({ agentId: 'herald', startedBy: 'parent', parentRunId: parent.runId, report });
+    const parent = run({ agentId: 'strategist' }), child = run({ agentId: 'artisan', startedBy: 'parent', parentRunId: parent.runId, report });
     const d = diagnose([...runs, parent, child], [], NOW);
     const scout = d.roles.find(r => r.agentId === 'scout')!;
     expect(scout).toMatchObject({ counted: 5, open: 1, oneshots: 1, wins: { human: 1 }, xp: 1.5, noXp: { 'self-only': 1, 'opinion-only': 1, 'no-verdict': 1, 'not-completed': 1 } });
-    expect(d.roles.find(r => r.agentId === 'herald')!.noXp).toEqual({ 'chain:corrected': 1 }); // corrections never recorded on it
+    expect(d.roles.find(r => r.agentId === 'artisan')!.noXp).toEqual({ 'chain:corrected': 1 }); // corrections never recorded on it
     const o = d.roles[0]!;
     expect(o).toMatchObject({ agentId: 'orchestrator', counted: 6, wins: { human: 1 }, signals: { redelegated: 0, reworked: 0 } });
     const text = formatDiagnosis(d);
@@ -59,6 +59,6 @@ describe('levels diagnostic', () => {
     expect(by.get('orchestrator')!.wins.receipts).toBeGreaterThan(0);  // the receipts under an opinion count now
     expect(by.get('orchestrator')!.signals!.redelegated).toBe(2);
     expect(by.get('scout')!.wins.chain).toBeGreaterThan(0);
-    expect(by.get('herald')!.standing!.performance).toBeNull();
+    expect(by.get('artisan')!.standing!.level).toBeGreaterThan(1);
   });
 });

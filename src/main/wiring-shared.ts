@@ -150,9 +150,9 @@ export function attachCommandAsks(ctx: Pick<Ctx, 'emitter'>, runner: CommandRunn
 /** "Eventi all'Orchestrator" (chats/orchestrator-wake.ts): it watches the same events (the emitter tapped once more) and writes
  *  to the Orchestrator through the chat service. on = the setting orchestratorEvents and, in tests, an explicit SB_ORCHESTRATOR_EVENTS=1
  *  (a test's Orchestrator never gets surprise messages); SB_ORCHESTRATOR_EVENTS_MS shortens the grouping window for e2e. */
-export function attachOrchestratorWake(ctx: Pick<Ctx, 'emitter'> & Partial<Pick<Ctx, 'userData'>>, chats: Pick<ChatService, 'send' | 'list' | 'submissionReceipts'>, on: () => boolean, now?: () => number): OrchestratorWake {
+export function attachOrchestratorWake(ctx: Pick<Ctx, 'emitter'> & Partial<Pick<Ctx, 'userData'>>, chats: Pick<ChatService, 'send' | 'list' | 'submissionReceipts'>, on: () => boolean, now?: () => number, away?: () => boolean): OrchestratorWake {
   const groupMs = Number(process.env.SB_ORCHESTRATOR_EVENTS_MS) || undefined;
-  const wake = new OrchestratorWake({ ...(ctx.userData ? { userData: ctx.userData } : {}), receiptAcknowledgement: chats.submissionReceipts === true, send: (chatId, text, receipt) => chats.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }, receipt ? { beforeSubmit() {}, ...receipt } : undefined), enabled: on, list: () => chats.list(), ...(groupMs ? { groupMs } : {}), ...(now ? { now } : {}) });
+  const wake = new OrchestratorWake({ ...(ctx.userData ? { userData: ctx.userData } : {}), receiptAcknowledgement: chats.submissionReceipts === true, send: (chatId, text, receipt) => chats.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }, receipt ? { beforeSubmit() {}, ...receipt } : undefined), enabled: on, ...(away ? { away } : {}), list: () => chats.list(), ...(groupMs ? { groupMs } : {}), ...(now ? { now } : {}) });
   const send = ctx.emitter.emit.bind(ctx.emitter);
   ctx.emitter.emit = (ch, p) => { send(ch, p); wake.observe(ch, p); };
   return wake;

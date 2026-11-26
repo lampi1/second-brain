@@ -81,7 +81,6 @@ import type { TaskAssignmentOptions } from '../../shared/delegation';
 import { answeredText, lastAnswered, lastTyped, userAsked } from './user-words';
 import { recordingTools, type RecordingsRead } from './recordings';
 import { newsTools, type NewsControl } from './news';
-import { imparaTools, type ImparaControl } from './impara';
 import { childOutputTool } from './child-output';
 import { agentsRecapTool } from './agents-recap';
 import { PLAN_TOOL_PROPS, PLAN_TOOL_TEXT, planAction } from '../plans/tools';
@@ -137,8 +136,6 @@ export interface AppCtlDeps {
   recordings?: RecordingsRead;
   /** the skill library (ADR 0241): app_skills / app_skill_write / app_skill_roles / app_skill_undo on the Orchestrator's own endpoint */
   skillLibrary?: SkillLibrary;
-  /** Impara (ADR 0190): app_learn on the Orchestrator's own endpoint */
-  impara?: ImparaControl;
   /** the «Giornale» (ADR 0280): app_news, app_news_edition, app_news_source, app_news_refresh on the Orchestrator's own endpoint */
   news?: NewsControl;
   /** the configuration the Orchestrator changes for the user (app_config, ADR 0149); settings come from `brain` */
@@ -174,8 +171,6 @@ export const CHAT_TITLE_MAX = 80;
 export const PULL_ASK_MIN = 10;
 /** app_unblock opens the waiting requests only within this many minutes of a message the user wrote to the Orchestrator */
 export const UNBLOCK_ASK_MIN = 10;
-/** app_learn starts a lesson only on a user message from the last minutes (ADR 0190) */
-export const LEARN_ASK_MIN = 10;
 /** app_reopen_chat reopens a chat the user closed with ✕ only within this many minutes of his own message (ADR 0352) */
 export const REOPEN_ASK_MIN = 10;
 /** the first line of a chat the app opened because the old one's engine cannot run now (ADR 0352) */
@@ -278,7 +273,6 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     ...(d.agents ? [toolDef(agentCatalogTool(d.agents, d.skillTools))] : []),
     ...(d.recordings && authed() ? recordingTools(d.recordings, d.emitUi) : []),
     ...(d.plans && authed() ? [{ name: 'plans', description: PLAN_TOOL_TEXT, inputSchema: obj(PLAN_TOOL_PROPS, ['action']), annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false }, run: (a: Record<string, unknown>) => planAction(d.plans!, { kind: 'orchestrator' }, a) } satisfies ToolDef] : []),
-    ...(d.impara && authed() ? imparaTools(d.impara, d.emitUi, () => imparaAsked(callerId!)) : []),
     ...(d.news && authed() ? newsTools(d.news, d.emitUi) : []),
     ...(d.skillLibrary && authed() ? skillTools(d.skillLibrary, () => caller()?.title || 'Orchestrator') : []),
     ...(authed() ? [childOutputTool({ chats: () => d.chats.list(), runs: () => d.runFeedback?.runList() ?? [] }), agentsRecapTool({ chats: () => d.chats.list(), items: id => d.chats.items(id), pending: () => [...d.chats.pending(), ...(d.commandAsks?.() ?? [])], runs: () => d.runFeedback?.runList() ?? [] })] : []),
@@ -900,12 +894,6 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     const last = d.chats.items(orchestratorId).filter(i => i.kind === 'user').at(-1);
     const chat = d.chats.list().find(c => c.id === orchestratorId);
     return userAsked({ typed, answered, lastUserItem: last?.at, lastResult: chat?.lastResult?.at, now: Date.now(), freshMs: CONFIG_ASK_MIN * 60_000, turnMs: CONFIG_TURN_MIN * 60_000 });
-  }
-
-  /** app_learn's proof (ADR 0190): the time of the user's own latest message when this turn is his, else null */
-  function imparaAsked(orchestratorId: string): { who: string; at: number } | null {
-    const last = d.chats.items(orchestratorId).filter(i => i.kind === 'user').at(-1);
-    return last && userTurn(orchestratorId, Date.now() - LEARN_ASK_MIN * 60_000) ? { who: orchestratorId, at: last.at } : null;
   }
 
   /** Fast mode (ADR 0296): the Orchestrator's latest message is a «[fast]» one, so this turn answers alone: no chat is

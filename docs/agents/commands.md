@@ -93,7 +93,6 @@ row and its line here in the same change.
 | `brain_changelog_add` | Orchestrator only | Log a brain change made outside the script tools in the brain's changelog. |
 | `app_recordings` | Orchestrator only | The call recordings and their local transcripts, or the audio files found on the PC. |
 | `app_recording_import` | Orchestrator only | Import an audio or video file from the PC to be transcribed locally. |
-| `app_learn` | Orchestrator only | Start an Impara lesson the user asked for (an explanation or a quiz), or list the lessons. |
 | `app_news` | Orchestrator only | The user's newspaper by editions: the editions, or one edition's front page, sections and sources with their last reading. |
 | `app_news_edition` | Orchestrator only | Create, change or delete an edition of the newspaper: name, what the user wants from it, sections, key words. |
 | `app_news_source` | Orchestrator only | Try a link at zero tokens, then add, remove, pause or resume a source of an edition. |

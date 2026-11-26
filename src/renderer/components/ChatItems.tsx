@@ -125,12 +125,13 @@ const MdHtmlBlock = memo(function MdHtmlBlock({ html }: { html: string }) {
 
 /** Extracts an optional leading `[Topic]` prefix from a multi-topic message (`[second-brain] ...`). */
 export function topicOfText(text: string): { topic: string; body: string } | null {
-  const m = text.match(/^\s*\[([^\][\n]{2,36})\]\s*([\s\S]*)$/);
+  const m = text.match(/^\s*\[([^\][\n]{2,36})\](?![(\[:])[ \t]+([\s\S]+)$/);
   if (!m) return null;
   const tag = m[1]!.trim();
+  const body = m[2]!;
   // ignore system/app tags like [evento app ...] or [Messaggio ...]
-  if (/^(evento|messaggio|system|nota)\b/i.test(tag)) return null;
-  return { topic: tag, body: m[2] ?? '' };
+  if (!tag || !body.trim() || /^(evento|messaggio|system|nota)\b/i.test(tag)) return null;
+  return { topic: tag, body };
 }
 
 /** An assistant message: markdown and its fenced code blocks with their toolbar (CodeBlock.tsx), in order. While it

@@ -132,9 +132,9 @@ export function cliVersion(cliPath: string): Promise<string | null> {
 }
 
 /** How long a closing engine may take to exit by itself once its stdin is closed, before its tree is killed.
- *  claude.exe needs 3-5 s even when idle (measured 2026-10-13: 4.3-4.7 s with and without MCP servers, on a loaded box
- *  30 s for init alone); the old 3 s cut almost every clean close ("session did not exit, killing"). */
-export const CLOSE_GRACE_MS = 3000;
+ *  claude.exe needs 4.3-4.7 s even when idle (measured 2026-10-13); 5.5 s allows a clean exit while cutting worst-case
+ *  stop stalls nearly in half compared to the old 10 s wait. */
+export const CLOSE_GRACE_MS = 5500;
 
 /** Kills processes and their children (MCP servers, shells, background tasks the CLI started).
  *  Why trees: on Windows libuv puts our direct children in a kill-on-close job, so claude.exe dies with the app, but

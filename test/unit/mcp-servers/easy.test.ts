@@ -116,7 +116,7 @@ describe('parseMcpSnippet', () => {
 
 describe('the per-role toggles', () => {
   it('every role defaults to every tool; the toggle sets all or none', () => {
-    expect(MCP_ACCESS_ROLES).toEqual(['orchestrator', 'strategist', 'scout', 'artisan', 'sentinel', 'herald']);
+    expect(MCP_ACCESS_ROLES).toEqual(['orchestrator', 'strategist', 'scout', 'artisan', 'sentinel']);
     expect(effectiveAccess('orchestrator', undefined)).toBe('all');
     expect(effectiveAccess('scout', 'read')).toBe('read');
     expect(accessOn('orchestrator', undefined)).toBe(true);

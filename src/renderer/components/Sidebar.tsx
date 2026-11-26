@@ -48,7 +48,6 @@ export function Sidebar() {
         !['home', ...WORK_PAGES, ...LEISURE_PAGES, ...SYSTEM_PAGES, ...IN_MEMORIA].includes(id))
     : [];
   const page = ui.use(s => s.page);
-  const map = ui.use(s => s.map);
   const read = ui.use(s => s.read);
   const feed = useApp(s => s.feed);
   const waiting = useApp(s => s.pending.length);
@@ -79,7 +78,7 @@ export function Sidebar() {
     const p = BRAIN_PAGES.find(x => x.id === id);
     if (!p) return null;
     if (id === 'task' && (!tasksOn || !show('task'))) return null;
-    const on = page === p.id && !map;
+    const on = page === p.id;
     const label = labelOf(p.id, p.label);
     const badge = p.id === 'memoria' && proposals
       ? <span className="nav-badge amber nav-badge-pulse" data-testid="nav-badge-proposals" aria-label={t('mh.badge', { n: proposals })}>{proposals > 99 ? '99+' : proposals}</span>
@@ -97,7 +96,7 @@ export function Sidebar() {
   };
 
   const homePage = BRAIN_PAGES.find(x => x.id === 'home')!;
-  const homeOn = page === 'home' && !map;
+  const homeOn = page === 'home';
 
   return (
     <nav className="sidebar" aria-label={t('dialogs.sidebar.label')} data-testid="sidebar">
@@ -120,7 +119,6 @@ export function Sidebar() {
         {menuOpen && (
           <div className="nav-menu-pop" role="menu" aria-label="Menu sezioni" data-testid="nav-menu">
             <div className="nav-title" data-testid="nav-group-work">{t('dialogs.sidebar.work')}</div>
-            {menuItem('home')}
             {WORK_PAGES.map(menuItem)}
             <div className="nav-sep" />
             <div className="nav-title" data-testid="nav-group-leisure">Svago</div>

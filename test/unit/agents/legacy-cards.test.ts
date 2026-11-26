@@ -44,15 +44,15 @@ describe('legacyOf: what config.json still holds', () => {
 describe('migratedCards', () => {
   const profiles = () => new AgentCatalogService({ userData: tmp(), models }).list().profiles;
   it('a card with no model gets its tier\'s model (the old pick, else the registry\'s); a card with a model keeps it', () => {
-    const list = profiles().map(p => p.id === 'herald' ? { ...p, model: 'kept' } : { ...p, model: null }) as AgentProfile[];
+    const list = profiles().map(p => p.id === 'artisan' ? { ...p, model: 'kept' } : { ...p, model: null }) as AgentProfile[];
     const out = migratedCards(list, { modelTiers: { claude: { light: 'haiku' } } }, tierModel);
     const scout = list.find(p => p.id === 'scout')!;
     expect(out.find(p => p.id === 'scout')!.model).toBe(tierModel('claude', scout.tier, { claude: { light: 'haiku' } }));
-    expect(out.find(p => p.id === 'herald')).toBeUndefined();
+    expect(out.find(p => p.id === 'artisan')).toBeUndefined();
   });
   it('Code Mode on goes to every work role, never the Orchestrator', () => {
     const out = migratedCards(profiles(), { codeMode: true }, () => null);
-    expect(out.filter(p => p.codeMode === true).map(p => p.id).sort()).toEqual(['artisan', 'herald', 'scout', 'sentinel', 'strategist']);
+    expect(out.filter(p => p.codeMode === true).map(p => p.id).sort()).toEqual(['artisan', 'scout', 'sentinel', 'strategist']);
     expect(out.find(p => p.id === 'orchestrator')).toBeUndefined();
   });
   it('the Orchestrator\'s settings go to its card: on Cursor its model, reasoning and fast, its old presets left behind', () => {

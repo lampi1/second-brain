@@ -63,7 +63,7 @@ export function RemoteLine({ chat, dismiss, forceOpen }: { chat: ChatSummary; di
       <div className="remote-body">
         <span>{statusText}</span>
       </div>
-      {configured && api && (
+      {configured && api && phone.state !== 'dev-disabled' && (
         <button type="button" className="btn btn-subtle btn-s" disabled={busy} onClick={() => void toggle(!phone.enabled)} data-testid="remote-telegram-toggle">
           {phone.enabled ? t('remote.off') : 'Attiva'}
         </button>

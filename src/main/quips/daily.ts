@@ -154,7 +154,7 @@ export class DailyQuipsService {
     const said = this.pool(s, lang);
     for (const roles of DAILY_BATCHES) {
       if (whole(s.days[day]?.[lang], roles)) continue;
-      const r = await this.d.runOnce({ agentId: 'herald', purpose: 'phrases', light: true, system: DAILY_SYSTEM(lang), prompt: dailyPrompt(roles, lang, at, recentLines(said, lang, roles)), maxOutputTokens: 2400, timeoutMs: 120_000 });
+      const r = await this.d.runOnce({ agentId: 'artisan', purpose: 'phrases', light: true, system: DAILY_SYSTEM(lang), prompt: dailyPrompt(roles, lang, at, recentLines(said, lang, roles)), maxOutputTokens: 2400, timeoutMs: 120_000 });
       if (!r.ok) {
         log.warn('quips', 'lines of the day not written', { cause: r.reason ?? 'unknown', hint: r.noEngine ? 'turn on an engine for agents in Impostazioni → Motori' : 'the fixed lines are said; it tries once more later today' });
         if (r.noEngine) return;

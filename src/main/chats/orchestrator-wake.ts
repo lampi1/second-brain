@@ -63,7 +63,7 @@ export const QUIET: ReadonlySet<WakeKind> = new Set(['done', 'question', 'permis
 const slotOf = (e: Pick<WakeEvent, 'chatId' | 'kind' | 'report' | 'eventId' | 'at' | 'requestId'>): string => e.requestId ? `${e.chatId}#request:${e.requestId}` : e.kind === 'user-message' ? `${e.chatId}#user:${e.eventId ?? e.at}` : e.kind === 'user-closed' ? `${e.chatId}#closed` : e.report ? `${e.chatId}#report` : e.chatId;
 /** the rule's gate for this Orchestrator: Cursor (ACP) takes no message mid-turn */
 const gateOf = (r: Pick<ChatSummary, 'state' | 'pending' | 'handoffBusy' | 'harness'>): OrchestratorGate => orchestratorGate(r, engineOf(r.harness)?.kind !== 'acp');
-const classOf = (e: WakeEvent, stuck = false): DeliveryClass => e.kind === 'user-message' || e.kind === 'user-closed' || e.silent ? 'quiet' : stuck ? 'group' : newsClass(e.kind, e.endsTurn, !!e.report);
+const classOf = (e: WakeEvent, stuck = false, away = false): DeliveryClass => e.kind === 'user-message' || e.kind === 'user-closed' || e.silent ? 'quiet' : stuck ? 'group' : newsClass(e.kind, e.endsTurn, !!e.report, away);
 const BUSY_CHILD: ReadonlySet<ChatState> = new Set(['running', 'waiting', 'starting']);
 
 /** A root Strategist the Orchestrator opened that stopped with nothing to show and nothing to wait for (see the header):
@@ -104,6 +104,8 @@ export interface OrchestratorWakeDeps {
   send(chatId: string, text: string, receipt?: WakeSubmissionReceipt): Promise<void>;
   /** the setting orchestratorEvents */
   enabled(): boolean;
+  /** whether the user is away from the PC (awayMode / remote session) */
+  away?(): boolean;
   /** every chat now: an Orchestrator that has not changed since the app started never passed through observe() */
   list?(): ChatSummary[];
   now?(): number;
@@ -113,7 +115,7 @@ export interface OrchestratorWakeDeps {
   perChatMs?: number;
 }
 
-type Seen = Pick<ChatSummary, 'state' | 'title' | 'harness' | 'isOrchestrator' | 'closedAt' | 'closedBy' | 'handoffBusy' | 'lastText' | 'lastError' | 'lastResult' | 'pending' | 'parentId' | 'agent'> & { turnResultAt: number; reportedTurn: boolean };
+type Seen = Pick<ChatSummary, 'state' | 'title' | 'harness' | 'isOrchestrator' | 'closedAt' | 'closedBy' | 'handoffBusy' | 'lastText' | 'lastError' | 'lastResult' | 'pending' | 'parentId' | 'agent' | 'remoteControl'> & { turnResultAt: number; reportedTurn: boolean };
 const BUSY: ReadonlySet<ChatState> = new Set(['running', 'waiting', 'starting']);
 /** a turn ran: 'starting' alone is an engine booting (a new chat with no prompt, a reopen), and its idle is no turn end */
 const IN_TURN: ReadonlySet<ChatState> = new Set(['running', 'waiting']);
@@ -236,7 +238,12 @@ export class OrchestratorWake {
     const c = all?.find(x => x.id === e.chatId);
     return !!all && !!c && stuckStrategist(c, all, this.openAsks.get(c.id)?.size ?? 0, this.wakeScheduled(c.id));
   }
-  private cls(e: WakeEvent): DeliveryClass { return classOf(e, this.stuck(e)); }
+  private isAway(): boolean {
+    if (this.d.away?.()) return true;
+    const id = this.orchestratorId();
+    return !!(id && this.chats.get(id)?.remoteControl?.on);
+  }
+  private cls(e: WakeEvent): DeliveryClass { return classOf(e, this.stuck(e), this.isAway()); }
   private isLoud(e: WakeEvent): boolean { return this.cls(e) !== 'quiet'; }
 
   /** held-news.ts listens: called when the buffer or the Orchestrator's state may have changed (never twice for "nothing") */
@@ -465,7 +472,7 @@ export class OrchestratorWake {
     // A delayed report supersedes only this turn's generic completion, never errors, requests or user decisions.
     const queued = this.buffer.get(c.id);
     if (reportedTurn && queued?.kind === 'done' && !queued.report && queued.at >= report.at) this.buffer.delete(c.id);
-    this.chats.set(c.id, { state: c.state, title: c.title, harness: c.harness, isOrchestrator: c.isOrchestrator, closedAt: c.closedAt, closedBy: c.closedBy, handoffBusy: c.handoffBusy, lastText: c.lastText, lastError: c.lastError, lastResult: c.lastResult, pending: c.pending, parentId: c.parentId, agent: c.agent, turnResultAt, reportedTurn });
+    this.chats.set(c.id, { state: c.state, title: c.title, harness: c.harness, isOrchestrator: c.isOrchestrator, closedAt: c.closedAt, closedBy: c.closedBy, handoffBusy: c.handoffBusy, lastText: c.lastText, lastError: c.lastError, lastResult: c.lastResult, pending: c.pending, parentId: c.parentId, agent: c.agent, remoteControl: c.remoteControl, turnResultAt, reportedTurn });
   }
 
   /** the Orchestrator, which every work chat's news go to; without the list, the one seen */

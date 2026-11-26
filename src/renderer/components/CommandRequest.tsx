@@ -205,6 +205,10 @@ function WindowCommand({ req, chatTitle, testBase, withContext, prod, armed, bus
         <div className="cmd-box-h">
           <span>{t('chat.command.where', { cwd })}</span>
           <span className="sp" />
+          <button type="button" className="btn btn-ghost btn-s" disabled={busy} onClick={() => onReply(t('chat.command.alreadyDone'))}
+            data-testid={`${testBase}-already-done`} data-tip={t('chat.command.alreadyDoneTip')}>
+            {t('chat.command.alreadyDone')}
+          </button>
           <button type="button" className="btn btn-ghost btn-s" onClick={onCopy} data-testid={`${testBase}-copy`}>
             {copied ? <><IconCheck size={12} /> {t('chat.codeblock.copied')}</> : <><IconCopy size={12} /> {t('chat.command.copy')}</>}
           </button>

@@ -58,7 +58,7 @@ export function PlanList() {
   const trashed = (rows ?? []).filter(i => i.deleted).length;
   const askOrchestrator = () => {
     const prefix = project ? `Crea un piano per il progetto ${project}: ` : 'Crea un nuovo piano: ';
-    brainBridge.draftToOrchestrator(prefix, () => {});
+    if (!brainBridge.draftToOrchestrator(prefix, () => {})) toast(t('appText.actions.noOrchestrator'), 'info');
   };
   return <section className="pl" data-testid="pl-list" aria-label={t('plans.list.label')}>
     <div className="pl-bar">

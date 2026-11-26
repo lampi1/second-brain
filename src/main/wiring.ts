@@ -56,7 +56,7 @@ import { MemoryService } from './rules/memory-service';
 import type { AgentRun } from '../shared/agents';
 import { mountTextTool, TEXT_ENV } from './engines/text-mcp';
 import { agentsMayOpen, engineOn, openRefusal } from './engines/policy';
-import { checkedDelegation } from '../shared/roles';
+import { checkedDelegation, currentRoleId } from '../shared/roles';
 import { createEngines } from './engines/service';
 import { safeStorageCipher } from './engines/secrets';
 import { RecordingStore } from './recordings/store';
@@ -686,7 +686,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // user's first «Pulisci ora» in Settings → Avanzate, cleaned after it (ADR 0227)
   const worktreeCleanup = () => { void worktreePool.autoCleanup().catch(e => log.warn('agents', 'worktree cleanup failed', { cause: errText(e), hint: 'the next run tries again; Settings → Avanzate has «Pulisci ora»' })); };
   const worktreeFirst = prodPollers ? setTimeout(worktreeCleanup, 5 * 60_000) : null, worktreeTimer = prodPollers ? setInterval(worktreeCleanup, 6 * 3600_000) : null;
-  const wake = attachOrchestratorWake(ctx, chats, () => brain.settings().orchestratorEvents !== false && (!process.env.SB_TEST || process.env.SB_ORCHESTRATOR_EVENTS === '1'));
+  const wake = attachOrchestratorWake(ctx, chats, () => brain.settings().orchestratorEvents !== false && (!process.env.SB_TEST || process.env.SB_ORCHESTRATOR_EVENTS === '1'), undefined, awayOn);
   plans.tellTo(wake); // a job stopped by itself (ADR 0342): the Orchestrator takes it up again
   manager.onUserWrote(n => wake.userMessage(n)); // the user typed in a work chat: quiet news (ADR 0083)
   // a root chat's clean result wakes the Orchestrator during an active workflow, or while the user is away (ADR 0191): the
@@ -843,7 +843,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       if (!p) throw new Error(`ruolo sconosciuto: ${c.agentId ?? ''}`);
       agentPacks.learning.save(changedDraft(p, c.key, c.value), p.id, roleReason(c.reason));
     } });
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: (req, o) => resolveStart(req, o), creditOf: (engine, model) => credits.verdict(engine, model), creditFresh: () => credits.freshAll(), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, plans,
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: (req, o) => resolveStart(req, o), creditOf: (engine, model) => credits.verdict(engine, model), creditFresh: () => credits.freshAll(), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, plans,
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       held: pendingConfig,
@@ -898,11 +898,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // the other side's answers and the verdicts: never read by a run, whatever the brain lists
     denyRead: () => { const root = brain.info().brainRoot; return root ? [path.join(root, 'reviews', 'compare')] : []; },
   });
-  const oneShot = new OneShotService({ userData: ctx.userData, profile: id => agents.list().profiles.find(p => p.id === id),
+  const oneShot = new OneShotService({ userData: ctx.userData, profile: id => agents.list().profiles.find(p => p.id === currentRoleId(id)),
     settings: () => brain.settings(), registry: () => brain.modelRegistry(),
     hasKey: id => engines.hasKey(id), addApiSpend: (id, usd) => engines.addSpend(id, usd), fallback: () => brain.settings().jobs?.fallback ?? 'auto',
     headless, text: engines.text, runs: manager.runs });
-  // the little people's lines of the day (ADR 0305): three light one-shots a day per language on the Herald's engine
+  // the little people's lines of the day (ADR 0305): three light one-shots a day per language on the Artisan's engine
   // (twice when the first try was not whole), when the setting is on; never in a test run
   const quips = new DailyQuipsService({ file: path.join(ctx.userData, 'quips-daily.json'), runOnce: r => oneShot.runOnce(r), on: () => !process.env.SB_TEST && brain.settings().quipsDaily !== false });
 

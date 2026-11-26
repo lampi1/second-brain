@@ -60,7 +60,6 @@ export const TOOL_CATALOG: Readonly<Record<string, ToolInfo>> = {
   brain_changelog_add: t('orchestrator', 'Log a brain change made outside the script tools in the brain\'s changelog.'),
   app_recordings: t('orchestrator', 'The call recordings and their local transcripts, or the audio files found on the PC.'),
   app_recording_import: t('orchestrator', 'Import an audio or video file from the PC to be transcribed locally.'),
-  app_learn: t('orchestrator', 'Start an Impara lesson the user asked for (an explanation or a quiz), or list the lessons.'),
   app_news: t('orchestrator', 'The user\'s newspaper by editions: the editions, or one edition\'s front page, sections and sources with their last reading.'),
   app_news_edition: t('orchestrator', 'Create, change or delete an edition of the newspaper: name, what the user wants from it, sections, key words.'),
   app_news_source: t('orchestrator', 'Try a link at zero tokens, then add, remove, pause or resume a source of an edition.'),

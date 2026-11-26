@@ -48,7 +48,7 @@ describe('cards', () => {
     expect(html).toContain('ghp_…9f2c');
     expect(html).not.toContain('type="password"');
     expect(html).toContain('aria-label="Prova GitHub"');
-    expect(html).toContain('6 su 6'); // the Orchestrator and the five roles, every one on by default
+    expect(html).toContain('5 su 5'); // the Orchestrator and the four work roles, every one on by default
   });
   it('OAuth (ADR 0273): «Accedi» when the test asked for it; «Connesso come …», «Esci» and no Authorization token once logged in', () => {
     const asks = card({ ...broken, secrets: [], secretMasks: {}, lastTest: { ...broken.lastTest!, error: { ...broken.lastTest!.error!, login: true } } });
