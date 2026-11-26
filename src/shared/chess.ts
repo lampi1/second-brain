@@ -3,10 +3,10 @@
 // (wins, losses, draws, the fastest wins and the rows of wins per bot). The engine is Stockfish as a separate process speaking UCI
 // (main/chess/engine.ts); the rules live in the page (renderer/lib/chess-game.ts, chess.js). Pure: no Node, no DOM.
 // Used by main (chess/engine.ts, chess/store.ts, ipc-handlers/chess.ts) and the renderer (components/chess/).
-import { isRoleId, type RoleId } from './roles';
+import { isCharacterId, type CharacterId } from './characters';
 
-/** A bot is a role: its little person plays. */
-export type ChessBotId = RoleId;
+/** A bot is a character: its little person plays. */
+export type ChessBotId = CharacterId;
 export const CHESS_BOT_IDS: readonly ChessBotId[] = ['scout', 'herald', 'artisan', 'sentinel', 'strategist', 'orchestrator'];
 
 export interface ChessBot {
@@ -39,7 +39,7 @@ export const CHESS_BOTS: Readonly<Record<ChessBotId, ChessBot>> = {
 };
 /** A bot's rating as shown: an estimate under Stockfish's own scale («~600»), a floor without a limit («2200+»). */
 export const eloLabel = (b: ChessBot): string => (b.open ? `${b.elo}+` : b.uciElo === null ? `~${b.elo}` : String(b.elo));
-export const isChessBot = (v: unknown): v is ChessBotId => isRoleId(v);
+export const isChessBot = (v: unknown): v is ChessBotId => isCharacterId(v);
 
 /** A move as UCI writes it: e2e4, e7e8q. */
 export const UCI_MOVE_RE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;

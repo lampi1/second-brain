@@ -125,12 +125,12 @@ describe('standings', () => {
     expect(standings([run({ endedAt: undefined })], [], NOW).has('scout')).toBe(false);
   });
   it('counts a small job that is no role’s work for nothing: the Guida’s answer, the little people’s lines of the day (ADR 0305)', () => {
-    const job = (j: 'guide' | 'phrases') => run({ agentId: 'herald', source: 'oneshot', outcome: human('fail'), oneshot: { engine: 'claude', job: j, fallback: false, costBasis: 'reported' } });
-    const real = run({ agentId: 'herald', outcome: human('success') });
-    const with_ = standings([job('guide'), job('phrases'), real], [], NOW).get('herald')!, alone = standings([real], [], NOW).get('herald')!;
+    const job = (j: 'guide' | 'phrases') => run({ agentId: 'artisan', source: 'oneshot', outcome: human('fail'), oneshot: { engine: 'claude', job: j, fallback: false, costBasis: 'reported' } });
+    const real = run({ agentId: 'artisan', outcome: human('success') });
+    const with_ = standings([job('guide'), job('phrases'), real], [], NOW).get('artisan')!, alone = standings([real], [], NOW).get('artisan')!;
     expect(with_).toEqual(alone);
-    expect(standings([job('phrases')], [], NOW).has('herald')).toBe(false);
-    const ended = (runs: AgentRun[]) => runMetrics(runs).find(m => m.agentId === 'herald')?.all?.ended ?? 0;
+    expect(standings([job('phrases')], [], NOW).has('artisan')).toBe(false);
+    const ended = (runs: AgentRun[]) => runMetrics(runs).find(m => m.agentId === 'artisan')?.all?.ended ?? 0;
     expect(ended([job('guide'), job('phrases'), real])).toBe(ended([real]));
     expect(ended([real])).toBe(1);
   });
@@ -241,12 +241,12 @@ describe('every role progresses without a manual verdict (ADR 0125)', () => {
     const failed = root('strategist', 'fail');
     expect(wins([failed, child('artisan', failed)], 'artisan')).toBe(0);
   });
-  it('herald: a delegated child of a verified Strategist levels up too, and a partial parent gives a partial (no XP)', () => {
+  it('artisan: a delegated child of a verified Strategist levels up too, and a partial parent gives a partial (no XP)', () => {
     const s = root('strategist');
-    expect(wins([s, child('herald', s)], 'herald')).toBe(1);
-    const p = root('strategist', 'partial'), hp = child('herald', p);
-    expect(earnedVerdict(hp, earnIndex([p, hp]))).toEqual({ verdict: 'partial', basis: 'chain' });
-    expect(wins([p, hp], 'herald')).toBe(0);
+    expect(wins([s, child('artisan', s)], 'artisan')).toBe(1);
+    const p = root('strategist', 'partial'), ap = child('artisan', p);
+    expect(earnedVerdict(ap, earnIndex([p, ap]))).toEqual({ verdict: 'partial', basis: 'chain' });
+    expect(wins([p, ap], 'artisan')).toBe(0);
   });
   it('sentinel: its review is judged by what happened later: the user, a second review, the facts (before: 0, never judged)', () => {
     const x = root('artisan'), r = review(x, 'success');

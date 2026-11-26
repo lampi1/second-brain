@@ -46,7 +46,7 @@ const jobs = (E: number): DemoJob[] => [
     { title: 'Guardo come fanno gli altri negozi', role: 'scout', state: 'todo', par: true, preset: 'min' },
     { title: 'Scrivo il campo e la regola del codice', role: 'artisan', state: 'todo', preset: 'max', on: 'ordini', detail: 'Un codice per ordine, mai sotto zero' },
     { title: 'Verifico con i test', role: 'sentinel', state: 'todo', preset: 'base' },
-    { title: 'Scrivo le note di rilascio', role: 'herald', state: 'todo', par: true, preset: 'min' },
+    { title: 'Scrivo le note di rilascio', role: 'artisan', state: 'todo', par: true, preset: 'min' },
   ] },
   { id: 'login-sms', title: 'Accesso con codice via SMS', project: 'app-mobile', ago: 22, phase: 'proposed', steps: [
     { title: 'Leggo come funziona oggi', role: 'scout', state: 'todo', preset: 'min' },
@@ -63,13 +63,13 @@ const jobs = (E: number): DemoJob[] => [
     { title: 'Leggo come funziona oggi', role: 'scout', state: 'done', preset: 'min', startedAt: E - 64 * MIN, endedAt: E - 52 * MIN, chatIds: ['pl-returns-read'] },
     { title: 'Cerco l’ordine dal numero della carta', role: 'artisan', state: 'now', preset: 'max', startedAt: E - 50 * MIN, chatIds: ['pl-returns-card'] },
     { title: 'Preparo i casi di prova', role: 'sentinel', state: 'now', par: true, preset: 'base', startedAt: E - 50 * MIN, chatIds: ['pl-returns-cases'] },
-    { title: 'Scrivo le note di rilascio', role: 'herald', state: 'todo', preset: 'min' },
+    { title: 'Scrivo le note di rilascio', role: 'artisan', state: 'todo', preset: 'min' },
   ] },
   { id: 'push', title: 'Notifiche di consegna', project: 'app-mobile', ago: 9, phase: 'running', owner: { state: 'idle' }, steps: [
     { title: 'Leggo come funziona oggi', role: 'scout', state: 'done', preset: 'min', startedAt: E - 200 * MIN, endedAt: E - 190 * MIN },
     { title: 'Invio la notifica alla partenza', role: 'artisan', state: 'done', preset: 'base', startedAt: E - 188 * MIN, endedAt: E - 90 * MIN },
     { title: 'Provo su telefono vero', role: 'sentinel', state: 'blocked', preset: 'base', startedAt: E - 80 * MIN, outcome: 'blocked', chatIds: ['pl-push-old', 'pl-push-phone'] },
-    { title: 'Scrivo le note di rilascio', role: 'herald', state: 'todo', preset: 'min' },
+    { title: 'Scrivo le note di rilascio', role: 'artisan', state: 'todo', preset: 'min' },
   ] },
   { id: 'search', title: 'Ricerca prodotti che perdona gli errori', project: 'alfa-shop', ago: 15, phase: 'running', owner: { state: 'idle' }, steps: [
     { title: 'Leggo come funziona oggi', role: 'scout', state: 'done', preset: 'min', startedAt: E - 120 * MIN, endedAt: E - 100 * MIN },
@@ -102,7 +102,7 @@ const jobs = (E: number): DemoJob[] => [
     { title: 'Creo il buono e il suo codice', role: 'artisan', state: 'todo', preset: 'max', on: 'ordini' },
     { title: 'Aggiungo la mail con il buono', role: 'artisan', state: 'todo', par: true, preset: 'base' },
     { title: 'Verifico con i test', role: 'sentinel', state: 'todo', preset: 'base' },
-    { title: 'Scrivo le note di rilascio', role: 'herald', state: 'todo', par: true, preset: 'min' },
+    { title: 'Scrivo le note di rilascio', role: 'artisan', state: 'todo', par: true, preset: 'min' },
   ] },
   { id: 'backup', title: 'Copia notturna degli archivi', project: 'gestionale', ago: 700, phase: 'approved', closedBy: 'auto', steps: [
     { title: 'Leggo come funziona oggi', role: 'scout', state: 'todo', preset: 'min' },

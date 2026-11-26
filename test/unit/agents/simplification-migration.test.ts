@@ -15,8 +15,8 @@ import type { AgentModelChoice, AgentProfile } from '../../../src/shared/agents'
 import type { Harness } from '../../../src/shared/contract';
 import { ROLE_DEFAULTS, WORK_ROLE_IDS, type ModelTier, type RoleId } from '../../../src/shared/roles';
 
-const WORKERS = ['scout', 'artisan', 'sentinel', 'herald'] as const;
-const OLD_LAUNCHES: Record<(typeof WORKERS)[number], string[]> = { scout: ['artisan'], artisan: ['scout', 'sentinel'], sentinel: ['scout'], herald: ['scout'] };
+const WORKERS = ['scout', 'artisan', 'sentinel'] as const;
+const OLD_LAUNCHES: Record<(typeof WORKERS)[number], string[]> = { scout: ['artisan'], artisan: ['scout', 'sentinel'], sentinel: ['scout'] };
 const TIERS = { light: 'haiku', mid: 'sonnet', top: 'opus' } as const;
 
 const models = (): AgentModelChoice[] => [
@@ -62,7 +62,7 @@ describe('an old profile, both migrations', () => {
     oldProfile();
     const { catalog, moved } = start();
     expect(catalog.list().problem).toBeNull();
-    expect([...moved].sort()).toEqual(['artisan', 'herald', 'orchestrator', 'scout', 'sentinel', 'strategist']);
+    expect([...moved].sort()).toEqual(['artisan', 'orchestrator', 'scout', 'sentinel', 'strategist']);
     for (const id of ['orchestrator', ...WORK_ROLE_IDS] as RoleId[]) expect({ id, ...state(card(catalog, id)) }).toEqual({ id, ...expected(id) });
     // the role texts still shipped before the routing change are today's
     for (const id of ['artisan', 'strategist'] as const) expect(card(catalog, id).instructions).toBe(ROLE_DEFAULTS[id].instructions);

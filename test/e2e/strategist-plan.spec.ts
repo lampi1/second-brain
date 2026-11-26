@@ -16,7 +16,7 @@ const demo = <T,>(app: ElectronApplication, fn: string, ...args: unknown[]): Pro
 const STEPS: PlanStep[] = [
   { id: 's1', title: 'Trovo dove si calcola lo sconto oggi', role: 'scout', state: 'todo' },
   { id: 's2', title: 'Applico lo sconto % sul prezzo pieno', role: 'artisan', state: 'todo', after: ['s1'] },
-  { id: 's3', title: 'Scrivo le note di rilascio', role: 'herald', state: 'todo', after: ['s2'] },
+  { id: 's3', title: 'Scrivo le note di rilascio', role: 'artisan', state: 'todo', after: ['s2'] },
 ];
 const plan = (p: Partial<StrategyPlan>): StrategyPlan => ({ phase: 'asking', at: Date.now(), clarified: [], steps: [], ...p } as StrategyPlan);
 const QUESTION = 'Lo sconto vale anche sui prodotti già in offerta?';

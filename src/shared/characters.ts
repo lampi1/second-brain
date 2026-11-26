@@ -2,10 +2,10 @@
 // successor), fixed in code (the art is in
 // renderer/lib/character-art.ts, trusted, never user or model content). Pure ids and labels, shared by main (owner
 // snapshots, agents/catalog.ts) and the renderer (AgentAvatar, the tree, the role editor).
-import { ROLE_IDS, currentRoleId, type RoleId } from './roles';
+import { ROLE_IDS, currentRoleId } from './roles';
 
-export const CHARACTER_IDS = ROLE_IDS;
-export type CharacterId = RoleId;
+export const CHARACTER_IDS = [...ROLE_IDS, 'herald'] as const;
+export type CharacterId = (typeof CHARACTER_IDS)[number];
 export const isCharacterId = (v: unknown): v is CharacterId => typeof v === 'string' && (CHARACTER_IDS as readonly string[]).includes(v);
 
 /** What each character is, for alt text and the approval sheet (scripts/agent-avatar-sheets.mjs). */

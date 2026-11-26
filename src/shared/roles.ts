@@ -1,7 +1,7 @@
-// The built-in roles: the Orchestrator and the five work roles every task is delegated to (ADR 0100: Strategist, Scout,
-// Artisan, Sentinel, Herald), with their default tools, permission ceiling, model tier, which roles each may launch,
-// default skills and the result format. The catalog is exactly these six (no custom roles): the user edits them in
-// Brain → Agenti, "Ripristina predefinito" goes back to these defaults. Router, Judge and Scribe are retired
+// The built-in roles: the Orchestrator and the four work roles every task is delegated to (ADR 0100: Strategist, Scout,
+// Artisan, Sentinel), with their default tools, permission ceiling, model tier, which roles each may launch,
+// default skills and the result format. The catalog is exactly these five (no custom roles): the user edits them in
+// Brain → Agenti, "Ripristina predefinito" goes back to these defaults. Router, Judge, Scribe and Herald are retired
 // (RETIRED_ROLE_IDS): stored data naming one shows its successor (currentRoleId), a launches list drops it. Only the
 // Orchestrator and the Strategist delegate (DELEGATOR_ROLE_IDS, 2026-11-23); the others launch nobody. By default every role has every permission (ADR 0085: all tool classes, no ceiling below the user's
 // own mode); a role's job lives in its instructions, skills, tier and launches, and the user narrows its permissions
@@ -15,7 +15,7 @@ import { TOOL_CLASSES, type PermissionCeiling, type ToolClass } from './agents';
  *  and name a screenshot is main/ask-image.ts SCREENSHOT_HINT, in the chat's MCP instructions. */
 export const BEFORE_AFTER = 'When your task changes something visible in a UI, end it with a before and an after screenshot of the same view at the same size: take the before one before you change anything, save both as PNG under your chat\'s evidence folder with names that differ only by before/after (e.g. settings-before.png and settings-after.png), and write both absolute paths in your agent_report output (or final message): the app shows them side by side in its viewer.';
 
-export const ROLE_IDS = ['orchestrator', 'strategist', 'scout', 'artisan', 'sentinel', 'herald'] as const;
+export const ROLE_IDS = ['orchestrator', 'strategist', 'scout', 'artisan', 'sentinel'] as const;
 export type RoleId = (typeof ROLE_IDS)[number];
 /** Every role but the Orchestrator: the ones a task is delegated to. */
 export const WORK_ROLE_IDS = ROLE_IDS.filter((r): r is Exclude<RoleId, 'orchestrator'> => r !== 'orchestrator');
@@ -24,19 +24,17 @@ export const ORCHESTRATOR_ROLE_ID = 'orchestrator' satisfies RoleId;
 export const isRoleId = (v: unknown): v is RoleId => typeof v === 'string' && (ROLE_IDS as readonly string[]).includes(v);
 export const isWorkRole = (v: unknown): v is WorkRoleId => isRoleId(v) && v !== 'orchestrator';
 /** The only roles that delegate (the owner, 2026-11-23: «solo orchestrator e stratega possano delegare»): the
- *  Orchestrator opens root chats, the Strategist launches the parts of its plan. Scout, Artisan, Sentinel and Herald do
+ *  Orchestrator opens root chats, the Strategist launches the parts of its plan. Scout, Artisan and Sentinel do
  *  their own part and hand anything else back in their report; their `launches` is always empty (catalog, migration),
  *  and canLaunch refuses them even with a stale roles.json. */
 export const DELEGATOR_ROLE_IDS = ['orchestrator', 'strategist'] as const satisfies readonly RoleId[];
 export const isDelegatorRole = (v: unknown): boolean => typeof v === 'string' && (DELEGATOR_ROLE_IDS as readonly string[]).includes(v);
 
-/** The roles of the nine-role catalog retired by ADR 0100 (owner, 2026-10-20), and who does their job now: the
- *  Orchestrator opens one chat per independent request itself (Router), Sentinel verifies and gives the independent
- *  verdict (Judge), Artisan writes documents and brain notes with a brain skill (Scribe). An old run, a stored profile or
- *  version, a chat's owner or an MCP access entry that names one is read as its successor; a launches list drops it. */
-export const RETIRED_ROLE_IDS = ['router', 'judge', 'scribe'] as const;
+/** Retired roles and who does their job now: Router → Orchestrator, Judge → Sentinel, Scribe → Artisan, Herald → Artisan
+ *  (drafts and external messages with approval live with Artisan). Stored data naming a retired role reads as its successor. */
+export const RETIRED_ROLE_IDS = ['router', 'judge', 'scribe', 'herald'] as const;
 export type RetiredRoleId = (typeof RETIRED_ROLE_IDS)[number];
-export const RETIRED_ROLE_SUCCESSOR: Readonly<Record<RetiredRoleId, RoleId>> = { router: 'orchestrator', judge: 'sentinel', scribe: 'artisan' };
+export const RETIRED_ROLE_SUCCESSOR: Readonly<Record<RetiredRoleId, RoleId>> = { router: 'orchestrator', judge: 'sentinel', scribe: 'artisan', herald: 'artisan' };
 export const isRetiredRoleId = (v: unknown): v is RetiredRoleId => typeof v === 'string' && (RETIRED_ROLE_IDS as readonly string[]).includes(v);
 /** The id a stored role id stands for today: a retired role's successor, any other id itself. */
 export const currentRoleId = (id: string): string => (isRetiredRoleId(id) ? RETIRED_ROLE_SUCCESSOR[id] : id);
@@ -90,16 +88,15 @@ export function launchGap(child: readonly ToolClass[], parent: readonly ToolClas
 }
 
 /** The Strategist's job: only real doubts reach the user, proactive in planning, alone to the end once approved (ADR
- *  0344); every change that is not small and already clear comes to it; a parallel group is
- *  parallel or sequential, decided on real resources, and launched in one call; it opens the Sentinel review of what it
- *  built and checks each finding itself before any rework. */
-const STRATEGIST_TEXT = 'Before planning, read the code and the brain and find the real doubts: what would change the goal, the scope, how it works for people, or how you know it is done. Close each one with the code or the brain and its source; ask the user only what is left, one Sì/No question at a time, never what is already answered; do not invent their preferences. Be proactive: bring the options and their risks, and propose a better way when you see one. Once the plan is approved, carry the work to its end alone; this widens no permission. Your workers’ questions come to you first: answer what the request, the user’s recorded decisions, the brain or the code settle, and pass the rest up. Turn the goal into a plan of independent parts with clear owners and done-criteria, with, for every part, the parts it depends on; parts that depend on each other wait, independent ones form a parallel group. A group is parallel only when its parts can really run at the same time: check the resources they share first (worktree slots and env leases, test nodes, local stacks); when one is not free, plan those parts one after the other. A group is parallel or sequential, nothing in between. Delegate each part with agent_delegate to the role that fits (Scout for facts, Artisan for a change, a document or a brain note, Sentinel for running checks or an independent verdict, Herald for a message): a whole parallel group in one call, so its parts run at the same time (the app refuses a group split over several calls); a part starts once the parts it depends on are done. After a part that changed code or files, launch one independent Sentinel review with agent_delegate, its reviewOf set to the implementation child\'s run (agent_children shows it). The verdict comes to you, never to the Artisan: check each finding on the code (a targeted read; a Scout when long) before any rework. Only confirmed findings go, with agent_assign_task rework, to the same implementation chat, and the same Sentinel re-reviews only the delta; report a false positive or a disputed functional finding to the user in plain words, never to the Artisan. The roles you launch do not delegate: what they hand back as a ready contract is yours to launch. A launch refused because your permissions were narrowed goes in your report as a ready contract (role, goal, done-criteria) for the Orchestrator. Then merge the results into one decision-ready answer. Do not do the parts yourself.';
+ *  0344); used for multi-part epics and complex designs; a parallel group is parallel or sequential, decided on real
+ *  resources, and launched in one call; it opens the Sentinel review of what it built and checks each finding itself. */
+const STRATEGIST_TEXT = 'Before planning, read the code and the brain and find the real doubts: what would change the goal, the scope, how it works for people, or how you know it is done. Close each one with the code or the brain and its source; ask the user only what is left, one Sì/No question at a time, never what is already answered; do not invent their preferences. Be proactive: bring the options and their risks, and propose a better way when you see one. Once the plan is approved, carry the work to its end alone; this widens no permission. Your workers’ questions come to you first: answer what the request, the user’s recorded decisions, the brain or the code settle, and pass the rest up. Turn the goal into a plan of independent parts with clear owners and done-criteria, with, for every part, the parts it depends on; parts that depend on each other wait, independent ones form a parallel group. A group is parallel only when its parts can really run at the same time: check the resources they share first (worktree slots and env leases, test nodes, local stacks); when one is not free, plan those parts one after the other. A group is parallel or sequential, nothing in between. Delegate each part with agent_delegate to the role that fits (Scout for facts, Artisan for a change, a document, a brain note or a draft message, Sentinel for running checks or an independent verdict): a whole parallel group in one call, so its parts run at the same time (the app refuses a group split over several calls); a part starts once the parts it depends on are done. After a part that changed code or files, launch one independent Sentinel review with agent_delegate, its reviewOf set to the implementation child\'s run (agent_children shows it). The verdict comes to you, never to the Artisan: check each finding on the code (a targeted read; a Scout when long) before any rework. Only confirmed findings go, with agent_assign_task rework, to the same implementation chat, and the same Sentinel re-reviews only the delta; report a false positive or a disputed functional finding to the user in plain words, never to the Artisan. The roles you launch do not delegate: what they hand back as a ready contract is yours to launch. A launch refused because your permissions were narrowed goes in your report as a ready contract (role, goal, done-criteria) for the Orchestrator. Then merge the results into one decision-ready answer. Do not do the parts yourself.';
 
 const PRE_ALIGNMENT_DEFAULTS: Record<RoleId, RoleDefaults> = {
   orchestrator: {
-    id: 'orchestrator', name: 'Orchestrator', summary: 'Coordina il lavoro: delega ogni compito a un ruolo e ti tiene al corrente dello stato.',
+    id: 'orchestrator', name: 'Orchestrator', summary: 'Coordina il lavoro: gestisce piani, delega ai ruoli giusti e ti tiene al corrente dello stato.',
     instructions: [
-      'Coordinate the user’s work and stay available for conversation. Do only brief routing, status checks, decisions, short answers and synthesis yourself, never a worker’s long task and never a blocking wait.',
+      'Coordinate the user’s work and stay available for conversation. Do only brief routing, status checks, plan updates, decisions, short answers and synthesis yourself, never a worker’s long task and never a blocking wait.',
       'A Strategist delegates the parts of its plan itself (agent_delegate); a ready contract in its report (a part it could not launch because the user narrowed its permissions) is yours to start as its own chat. Pass a brain skill (its SKILL.md name) as skills only when the task needs it; agent_catalog lists each role\'s own skills.',
       'Write each contract in the contract field (goal, why, alreadyDecided, doneWhen; steps only if order matters) with the cwd for repository work, in English. The role does not see this conversation. Parallel chats only for independent parts with distinct owners.',
       'You see every delegated chat’s state as app events (started, waiting for the user, done, failed, stalled), never what a role’s own children say: each role reports to the chat that launched it. Your own chats report to you; check a claim against its done-criteria before telling the user it is done, and say what could not be checked.',
@@ -110,10 +107,10 @@ const PRE_ALIGNMENT_DEFAULTS: Record<RoleId, RoleDefaults> = {
     tools: all(), ceiling: null, tier: 'top', tierMax: 'top', launches: ALL_WORK, skills: [],
   },
   strategist: {
-    id: 'strategist', name: 'Strategist', summary: 'Scompone un obiettivo in un piano e delega le parti ai ruoli giusti.',
+    id: 'strategist', name: 'Strategist', summary: 'Scompone obiettivi grandi in piani multi-step e delega le parti ai ruoli giusti.',
     instructions: STRATEGIST_TEXT,
     output: 'The plan, each part’s result with its evidence, and the decision or next step it supports.',
-    tools: all(), ceiling: null, tier: 'top', tierMax: 'top', launches: ['scout', 'artisan', 'sentinel', 'herald'], skills: [],
+    tools: all(), ceiling: null, tier: 'top', tierMax: 'top', launches: ['scout', 'artisan', 'sentinel'], skills: [],
   },
   scout: {
     id: 'scout', name: 'Scout', summary: 'Cerca e verifica fatti: codice, log, web e pagine, senza cambiare nulla.',
@@ -122,8 +119,8 @@ const PRE_ALIGNMENT_DEFAULTS: Record<RoleId, RoleDefaults> = {
     tools: all(), ceiling: null, tier: 'mid', tierMax: 'top', launches: [], skills: ['code-investigation'],
   },
   artisan: {
-    id: 'artisan', name: 'Artisan', summary: 'Fa le modifiche: codice, file, configurazioni, documenti e note del cervello, con i controlli del repository.',
-    instructions: 'Make the change the contract asks for, following the repository’s AGENTS.md / CLAUDE.md: branch, small commits, its checks. Preserve existing work. Documents and brain notes too: clear for their reader, sourced, consistent with the brain’s rules (the brain-edit skill holds them when your launch gives it); write only the files your contract names. Never claim a check you did not run. ' + BEFORE_AFTER,
+    id: 'artisan', name: 'Artisan', summary: 'Fa le modifiche: codice, file, documenti, note del cervello e bozze di messaggi con approvazione.',
+    instructions: 'Make the change the contract asks for, following the repository’s AGENTS.md / CLAUDE.md: branch, small commits, its checks. Preserve existing work. Documents, brain notes and external message drafts too: clear for their reader, sourced, consistent with the brain’s rules (the brain-edit skill holds them when your launch gives it); write only the files your contract names, and wait for user approval before any external send. Never claim a check you did not run. ' + BEFORE_AFTER,
     output: 'What changed (files, branch, commits), the checks run with their results, the before and after screenshots of a visible change (their absolute paths), and what remains.',
     tools: all(), ceiling: null, tier: 'mid', tierMax: 'top', launches: [], skills: [],
   },
@@ -132,12 +129,6 @@ const PRE_ALIGNMENT_DEFAULTS: Record<RoleId, RoleDefaults> = {
     instructions: 'Verify the work against its done-criteria: run the tests and checks, reproduce the bug or the fix, look for regressions. Report each criterion as met or not with the command and its output. When nothing can be run (a document, a plan, a message, a result you only have as evidence), give an independent verdict from the evidence you are given and what you can read: does it meet each criterion, is it correct and well made, what is missing; quote what supports each point. You run in a clean session: judge what you see, never the author’s intentions. Do not fix what you find: report it. When the work changed something visible in a UI, judge it from its before and after screenshots (a missing pair is a finding) and name their absolute paths in your report, so the user sees them side by side in the app\'s viewer.',
     output: 'Each criterion met or not, with the command run and its output (or the evidence quoted when nothing could be run); a verdict (success, partial, fail); failures with how to reproduce them and the most important fix.',
     tools: all(), ceiling: null, tier: 'top', tierMax: 'top', launches: [], skills: ['code-review'],
-  },
-  herald: {
-    id: 'herald', name: 'Herald', summary: 'Prepara messaggi e bozze per persone e servizi esterni; ogni invio lo approvi tu.',
-    instructions: 'Prepare messages, drafts and updates for people and external services in the recipient’s language and tone. Every external call or send needs the user’s approval: prepare it, show it, wait. Never send on your own. When an external write is denied (a refused permission, the auto mode classifier), ask the user here, in this chat, with a question (approve / change / cancel) that quotes the exact command, so they can run it with Esegui; report blocked to your parent only after the user answered.',
-    output: 'The drafts ready to send, each with its recipient and channel, and what was sent after approval.',
-    tools: all(), ceiling: null, tier: 'light', tierMax: 'mid', launches: [], skills: [],
   },
 };
 /** Apply the shipped skill update only to fields still on their previous default. */
@@ -148,7 +139,6 @@ const alignment: Record<RoleId, { instruction: string; skills: string[] }> = {
   scout: { instruction: 'Use code-investigation to test one falsifiable hypothesis and report the first unsupported link.', skills: ['code-investigation'] },
   artisan: { instruction: 'Use implement-change to choose the smallest regression check and preserve existing behavior during refactoring.', skills: ['implement-change'] },
   sentinel: { instruction: 'Use verify-behavior for test evidence and flaky failures; use code-review for reachable defects in a diff.', skills: ['code-review', 'verify-behavior'] },
-  herald: { instruction: 'Use draft-update to connect each claim to evidence and present the exact draft and destination for approval.', skills: ['draft-update'] },
 };
 export const ROLE_DEFAULTS = Object.fromEntries(ROLE_IDS.map(id => [id, {
   ...PRE_ALIGNMENT_DEFAULTS[id], instructions: PRE_ALIGNMENT_DEFAULTS[id].instructions + '\n' + alignment[id].instruction,

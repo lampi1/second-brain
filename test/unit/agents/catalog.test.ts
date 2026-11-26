@@ -61,11 +61,11 @@ describe('the Orchestrator has its own model (ADR 0107)', () => {
 });
 
 describe('role catalog', () => {
-  it('holds exactly the Orchestrator and the five work roles, with English names', () => {
+  it('holds exactly the Orchestrator and the four work roles, with English names', () => {
     const { catalog } = setup(), list = catalog.list();
     expect(list.problem).toBeNull();
     expect(list.profiles.map(p => p.id)).toEqual([...ROLE_IDS]);
-    expect(list.profiles.filter(p => p.scope === 'role').map(p => p.name)).toEqual(['Orchestrator', 'Strategist', 'Scout', 'Artisan', 'Sentinel', 'Herald']);
+    expect(list.profiles.filter(p => p.scope === 'role').map(p => p.name)).toEqual(['Orchestrator', 'Strategist', 'Scout', 'Artisan', 'Sentinel']);
     expect(list.profiles.every(p => p.avatar.kind === 'character')).toBe(true);
   });
   it('every shipped role is valid on its own and survives a restart', () => {
@@ -151,7 +151,7 @@ describe('role catalog', () => {
     expect(list.problem).toBeNull();
     expect(list.profiles.map(p => p.id)).toEqual(catalog.list().profiles.map(p => p.id));
     const get = (id: string) => list.profiles.find(p => p.id === id)!;
-    expect(get('strategist')).toMatchObject({ launches: ['scout', 'artisan', 'sentinel', 'herald'], instructions: ROLE_DEFAULTS.strategist.instructions, lastEditedBy: 'default' });
+    expect(get('strategist')).toMatchObject({ launches: ['scout', 'artisan', 'sentinel'], instructions: ROLE_DEFAULTS.strategist.instructions, lastEditedBy: 'default' });
     // a migration changes the active version in place (ADR 0186), and says so on it
     expect(again.history('strategist').flatMap(v => (v.amended ?? []).map(a => a.reason))).toContain('Cinque ruoli di lavoro (ADR 0100)');
     expect(get('strategist')).toMatchObject({ version: 1, activeVersion: 1 });
@@ -161,25 +161,26 @@ describe('role catalog', () => {
     expect(again.restoreVersion('artisan', 1).launches).not.toContain('judge');
     expect(() => again.resolve({ harness: 'claude', roleId: 'judge' } as never)).toThrow(/Sentinel/);
   });
-  it('a saved roles.json where Scout, Artisan, Sentinel or Herald launch roles loads with no launches (only the Orchestrator and the Strategist delegate, 2026-11-23)', () => {
+  it('a saved roles.json where Scout, Artisan or Sentinel launch roles loads with no launches (only the Orchestrator and the Strategist delegate, 2026-11-23)', () => {
     const { dir, make } = setup(), file = path.join(dir, 'roles.json');
     const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as { roles: Record<string, unknown>[] };
-    for (const id of ['scout', 'artisan', 'sentinel', 'herald']) Object.assign(raw.roles.find(r => r.id === id)!, { launches: ['scout', 'sentinel'], userLocked: true, lastEditedBy: 'user', instructions: `My own ${id} text.` });
+    for (const id of ['scout', 'artisan', 'sentinel']) Object.assign(raw.roles.find(r => r.id === id)!, { launches: ['scout', 'sentinel'], userLocked: true, lastEditedBy: 'user', instructions: `My own ${id} text.` });
     fs.writeFileSync(file, JSON.stringify(raw));
     const again = make(), list = again.list();
     expect(list.problem).toBeNull();
-    for (const id of ['scout', 'artisan', 'sentinel', 'herald']) {
+    for (const id of ['scout', 'artisan', 'sentinel']) {
       expect([id, list.profiles.find(p => p.id === id)!.launches]).toEqual([id, []]);
       expect(list.profiles.find(p => p.id === id)!.instructions).toBe(`My own ${id} text.`); // the user's edit is kept
       expect(again.restoreVersion(id, 1).launches).toEqual([]); // an old version restored launches nobody either
     }
-    expect(list.profiles.find(p => p.id === 'strategist')!.launches).toEqual(['scout', 'artisan', 'sentinel', 'herald']);
+    expect(list.profiles.find(p => p.id === 'strategist')!.launches).toEqual(['scout', 'artisan', 'sentinel']);
   });
   it('an old chat of a retired role shows as its successor (ADR 0100)', () => {
     const owner = { id: 'judge', name: 'Judge', purpose: 'old', avatar: { kind: 'character', value: 'judge' }, engine: 'claude', model: null, revision: 1, source: 'catalog', version: 3 };
     expect(readOwner(owner)).toMatchObject({ id: 'sentinel', name: 'Sentinel', avatar: { kind: 'character', value: 'sentinel' }, version: 3 });
     expect(readOwner({ ...owner, id: 'router', name: 'Router' })).toMatchObject({ id: 'orchestrator', name: 'Orchestrator' });
     expect(readOwner({ ...owner, id: 'scribe', name: 'Scribe' })).toMatchObject({ id: 'artisan', name: 'Artisan' });
+    expect(readOwner({ ...owner, id: 'herald', name: 'Herald' })).toMatchObject({ id: 'artisan', name: 'Artisan' });
   });
   it('resolves a role chat on its tier, the Orchestrator on the session, a chat without role as plain', () => {
     const { catalog } = setup();
@@ -189,7 +190,8 @@ describe('role catalog', () => {
     expect(scout.instructions).toContain('Role: Scout.');
     // a launch picks a preset, never a tier (2026-11-23): an old `tier` field is ignored; Massimo on a card without one is its Base
     expect(catalog.resolve({ harness: 'claude', roleId: 'scout', tier: 'top' } as never).request.model).toBe('m-mid');
-    expect(catalog.resolve({ harness: 'claude', roleId: 'herald', preset: 'max', presetWhy: 'x' } as never).presetChoice).toMatchObject({ preset: 'max', model: 'm-mid' });
+    expect(catalog.resolve({ harness: 'claude', roleId: 'artisan', preset: 'max', presetWhy: 'x' } as never).presetChoice).toMatchObject({ preset: 'max', model: 'm-mid' });
+    expect(() => catalog.resolve({ harness: 'claude', roleId: 'herald' } as never)).toThrow(/Artisan/);
     expect(() => catalog.resolve({ harness: 'claude', roleId: 'orchestrator' } as never)).toThrow('coordinatore');
     expect(() => catalog.resolve({ harness: 'claude', roleId: 'reviewer' } as never)).toThrow('Ruolo sconosciuto');
     expect(catalog.resolve({ harness: 'claude', orchestrator: true, model: 'session' } as never).owner).toMatchObject({ id: 'orchestrator', model: 'session' });

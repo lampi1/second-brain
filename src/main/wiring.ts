@@ -747,13 +747,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     agents.list().profiles, id => agents.history(id));
   const judgeSampler = new JudgeSampler({ file: path.join(ctx.userData, 'judge-samples.json'), runs: () => manager.runs.list(),
     chat: id => manager.list().find(c => c.id === id),
-    judging: () => {
-      const st = brain.settings(), on = st.judging === true;
-      let since = Number(st.judgingSince) || 0;
-      // on by default with no start yet (a fresh install, an upgrade): from now on, never the runs that ended before
-      if (on && !since) { since = Date.now(); void brain.setSettings({ judgingSince: since }).catch(e => log.warn('agents', 'judging start not saved', { cause: errText(e) })); }
-      return { on, since };
-    },
+    judging: () => ({ on: false, since: 0 }),
     capUsd: () => Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD,
     shares: judgeShares,
     reviewer: () => { const p = sentinel(); return p ? { engine: p.engine, model: p.model, effort: p.effort ?? null, version: p.activeVersion, instructions: p.instructions } : null; },

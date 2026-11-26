@@ -37,17 +37,17 @@ it('updates old shipped instructions and skills once, preserving user and mainte
     const old = previousRoleDefaults(p.id);
     Object.assign(p, { instructions: old.instructions, skills: [...old.skills] });
     if (p.id === 'artisan') Object.assign(p, { skills: ['mine'], userLocked: true, lastEditedBy: 'user' });
-    if (p.id === 'herald') Object.assign(p, { instructions: 'Learned from a review.', lastEditedBy: 'maintenance' });
+    if (p.id === 'sentinel') Object.assign(p, { instructions: 'Learned from a review.', lastEditedBy: 'maintenance' });
   }
   fs.writeFileSync(file, JSON.stringify(raw));
   const updated = make();
-  for (const id of ['orchestrator', 'strategist', 'scout', 'sentinel'] as const) {
+  for (const id of ['orchestrator', 'strategist', 'scout'] as const) {
     const p = updated.list().profiles.find(p => p.id === id)!;
     expect(p.skills).toEqual(ROLE_DEFAULTS[id].skills);
     expect(p.instructions).toBe(ROLE_DEFAULTS[id].instructions);
   }
   expect(updated.list().profiles.find(p => p.id === 'artisan')?.skills).toEqual(['mine']);
-  expect(updated.list().profiles.find(p => p.id === 'herald')?.instructions).toBe('Learned from a review.');
+  expect(updated.list().profiles.find(p => p.id === 'sentinel')?.instructions).toBe('Learned from a review.');
   expect(make().list().profiles).toEqual(updated.list().profiles);
 });
 
@@ -60,7 +60,7 @@ describe('full default permissions (ADR 0085)', () => {
       expect(defaultPermissions(p.id as never, p.tools, p.permissionCeiling)).toBe(true);
       for (const kid of p.launches) expect(launchGap(ROLE_DEFAULTS[kid as never as 'scout'].tools, p.tools!.allow)).toEqual([]);
     }
-    expect(list.find(p => p.id === 'strategist')!.launches).toEqual(expect.arrayContaining(['artisan', 'sentinel', 'herald']));
+    expect(list.find(p => p.id === 'strategist')!.launches).toEqual(expect.arrayContaining(['scout', 'artisan', 'sentinel']));
     expect(defaultPermissions('scout', { allow: ['read'] }, null)).toBe(false);
     expect(defaultPermissions('scout', { allow: [...TOOL_CLASSES] }, 'plan')).toBe(false);
   });
@@ -115,14 +115,13 @@ describe('full default permissions (ADR 0085)', () => {
     for (const id of ['orchestrator', 'strategist', 'artisan', 'sentinel'] as const) expect(ROLE_DEFAULTS[id].instructions).not.toMatch(/Router|Judge|Scribe/);
   });
 
-  it('#145: an untouched Herald on the older shipped text gets the one that asks the user when a send is denied; an edited one stays', () => {
-    const base = { id: 'herald', userLocked: false, lastEditedBy: 'default' as const, instructions: SHIPPED_BEFORE.herald![0]! };
-    expect(shippedTextFor(base)).toEqual({ instructions: ROLE_DEFAULTS.herald.instructions });
-    expect(ROLE_DEFAULTS.herald.instructions).toMatch(/denied.*ask the user here, in this chat.*exact command.*Esegui/);
-    expect(shippedTextFor({ ...base, instructions: ROLE_DEFAULTS.herald.instructions })).toBeNull();
-    expect(shippedTextFor({ ...base, instructions: 'My herald.' })).toBeNull();
+  it('an untouched Artisan on an older shipped text gets the current text; an edited one stays', () => {
+    const base = { id: 'artisan', userLocked: false, lastEditedBy: 'default' as const, instructions: SHIPPED_BEFORE.artisan![0]! };
+    expect(shippedTextFor(base)).toEqual({ instructions: ROLE_DEFAULTS.artisan.instructions });
+    expect(shippedTextFor({ ...base, instructions: ROLE_DEFAULTS.artisan.instructions })).toBeNull();
+    expect(shippedTextFor({ ...base, instructions: 'My artisan.' })).toBeNull();
     expect(shippedTextFor({ ...base, lastEditedBy: 'user' })).toBeNull();
     expect(shippedTextFor({ ...base, userLocked: true })).toBeNull();
-    for (const [id, texts] of Object.entries(SHIPPED_BEFORE)) expect(texts).not.toContain(ROLE_DEFAULTS[id as 'herald'].instructions);
+    for (const [id, texts] of Object.entries(SHIPPED_BEFORE)) expect(texts).not.toContain(ROLE_DEFAULTS[id as 'artisan'].instructions);
   });
 });

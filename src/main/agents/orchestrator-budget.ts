@@ -40,7 +40,7 @@ export function budgetedTool(tool: string, input?: unknown): boolean {
 /** The refusal the model reads once the budget is used. */
 export function budgetMessage(tool: string, limit = ORCHESTRATOR_TOOL_BUDGET): string {
   return `${tool} refused: you already used ${limit} workspace calls in this turn, and the Orchestrator must stay free for the user. ` +
-    'Delegate this work now with app_create_chat (roleId scout to inspect code, files or DevOps state; herald for GitHub issues and writes to external services; artisan for a change; sentinel for checks), ' +
+    'Delegate this work now with app_create_chat (roleId scout to inspect code, files or DevOps state; artisan for changes, documents, drafts or external writes with approval; sentinel for checks; strategist for multi-part plans), ' +
     'tell the user in one line what you started, and end your turn.';
 }
 

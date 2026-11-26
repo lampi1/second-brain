@@ -126,7 +126,7 @@ export function demoTree(E: number): { chats: ChatSummary[]; items: Record<strin
     { costUsd: 0.74, contextTokens: 88_000, contextMaxTokens: 1_000_000, lastText: 'Fatti carrello e ordine, ora il reso.' }, lead.id, ['I test ordini passano']);
   const sentinel = node('tree-sentinel', 'sentinel', 'Sentinel', 'La suite ordini passa?', 'Esegui la suite ordini e giudica il fix.', 3,
     { costUsd: 0.09, lastText: 'Lancio dotnet test: 41 su 42 finora.' }, artisan.id, ['Esito della suite']);
-  const herald = node('tree-herald', 'herald', 'Herald', 'Note di rilascio', 'Scrivi le note di rilascio quando il fix è in main.', 1,
+  const notes = node('tree-herald', 'artisan', 'Artisan', 'Note di rilascio', 'Scrivi le note di rilascio quando il fix è in main.', 1,
     { costUsd: 0.02, lastText: 'Preparo la bozza, la chiudo quando Artisan finisce.' }, lead.id, ['Bozza delle note']);
   // a grandchild of the Artisan's: the tree three levels deep (the cards' indentation, owner 2026-10-22)
   const probe = node('tree-probe', 'scout', 'Scout', 'Perché il test 42 fallisce', 'Trova perché il test 42 fallisce.', 2,
@@ -139,9 +139,9 @@ export function demoTree(E: number): { chats: ChatSummary[]; items: Record<strin
       { id: 's1', title: 'Trovo dove si calcola lo sconto oggi', role: 'scout', state: 'done', proof: { at: E - 11 * MIN, by: 'report', text: 'Lo sconto si calcola in due punti: carrello e reso.', chatId: scout.id }, chatIds: [scout.id], startedAt: E - 16 * MIN, endedAt: E - 11 * MIN, minutes: 5 },
       { id: 's2', title: 'Applico lo sconto % sul prezzo pieno, un solo arrotondamento', role: 'artisan', state: 'now', after: ['s1'], touches: ['src/ordini'], chatIds: [artisan.id], startedAt: E - 10 * MIN, minutes: 20 },
       { id: 's3', title: 'Verifico con la suite ordini', role: 'sentinel', state: 'todo', after: ['s2'], minutes: 8 },
-      { id: 's4', title: 'Scrivo le note di rilascio', role: 'herald', state: 'now', touches: ['docs/note'], chatIds: [herald.id], startedAt: E - 1 * MIN, minutes: 6 },
+      { id: 's4', title: 'Scrivo le note di rilascio', role: 'artisan', state: 'now', touches: ['docs/note'], chatIds: [notes.id], startedAt: E - 1 * MIN, minutes: 6 },
     ] };
-  const chats = [lead, scout, artisan, sentinel, probe, herald];
+  const chats = [lead, scout, artisan, sentinel, probe, notes];
   // what each did, as tool rows: the cards' steps (lib/run-steps.ts)
   const tool = (c: ChatSummary, k: number, name: string, input: Record<string, unknown>, status: 'ok' | 'running' = 'ok'): ChatItem =>
     ({ kind: 'tool', id: `${c.id}-t${k}`, at: c.run!.startedAt + (k + 1) * 40_000, name, summary: name, input, status });

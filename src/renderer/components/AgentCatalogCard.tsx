@@ -72,23 +72,14 @@ function Costs({ id, metrics, wins, loaded }: { id: string; metrics: AgentMetric
   </section>;
 }
 
-/** 0..1 → a band for the gauge's colour (the same cut-offs as agentsGrid.perfBand) */
-const band = (v: number) => v >= 0.85 ? 'top' : v >= 0.7 ? 'good' : v >= 0.5 ? 'fair' : 'low';
 const pct = (v: number) => new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: 0 }).format(v);
 
-/** The level (its XP, with the way to the next level) and the performance gauge (a Bayesian estimate with its ±), each
- *  with its "?" formula (ADR 0131). An agent with no verified success is a Lv 1 "Recluta" at 0 XP; before agents:metrics
- *  answers both read as unknown. */
+/** Clean zero-token RPG level & XP bar (no competing Bayesian Performance % gauge). */
 const NONE: AgentStanding = { runs: 0, wins: 0, xp: 0, level: 1, levelAt: 0, nextAt: 6, progress: 0, performance: null, spread: null, evaluated: 0, minRuns: 5,
   sources: { human: 0, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 0, decision: 0, chain: 0, self: 0 } };
-/** the widest ± the card shows a performance with (standing.ts MAX_SPREAD), in points */
-const MAX_SPREAD_POINTS = 30;
 function Standing({ id, standing: s, reviewedAt = null }: { id: string; standing: AgentStanding | null; reviewedAt?: number | null }) {
   const xp = s ? Math.floor(s.xp) : 0;
   const left = s && s.nextAt !== null ? Math.max(1, Math.ceil(s.nextAt - s.xp)) : 0;
-  const perf = s?.performance ?? null, spread = s?.spread != null ? Math.round(s.spread * 100) : null;
-  const R = 22, C = 2 * Math.PI * R;
-  const arc = perf !== null ? perf : s ? Math.min(1, s.evaluated / s.minRuns) : 0;
   return <div className="catalog-standing" data-testid={`catalog-standing-${id}`}>
     <section className="catalog-level" aria-label={t('agentsGrid.level')} data-testid={`catalog-level-${id}`} data-level={s?.level}>
       <h4>{t('agentsGrid.level')}
@@ -105,24 +96,6 @@ function Standing({ id, standing: s, reviewedAt = null }: { id: string; standing
         <i style={{ width: `${s ? Math.round(s.progress * 100) : 0}%` }} /></div>
       <small>{!s ? t('catalog.unknown') : s.wins === 0 && s.xp === 0 ? t('agentsGrid.noRuns') : s.nextAt === null ? t('agentsGrid.levelTop') : t('agentsGrid.levelNext', { left, next: s.level + 1 })}</small>
       {reviewedAt !== null && <small className="catalog-updated" data-testid={`catalog-updated-${id}`} title={t('catalog.updated.tip')}>{t('catalog.updated', { when: updatedWhen(reviewedAt, clockNow()) })}</small>}
-    </section>
-    <section className="catalog-perf" aria-label={t('agentsGrid.perf')} data-testid={`catalog-perf-${id}`} data-band={perf !== null ? band(perf) : 'warmup'}>
-      <svg className="catalog-gauge" viewBox="0 0 56 56" aria-hidden="true">
-        <circle className="track" cx="28" cy="28" r={R} />
-        <circle className="fill" cx="28" cy="28" r={R} strokeDasharray={`${(arc * C).toFixed(2)} ${C.toFixed(2)}`} transform="rotate(-90 28 28)" />
-      </svg>
-      <div className="catalog-perf-text">
-        <h4>{t('agentsGrid.perf')}
-          <HelpTip title={t('agentsGrid.perfHelpTitle')} wide testid={`catalog-perf-help-${id}`}>
-            <p>{t('agentsGrid.perfHelp1')}</p><p>{t('agentsGrid.perfHelp2')}</p><p>{t('agentsGrid.perfHelp3', { min: s?.minRuns ?? 5, spread: MAX_SPREAD_POINTS })}</p>
-            {s && (s.evaluated > 0 || s.sources.self > 0) && <p className="catalog-help-now">{t('agentsGrid.perfSources', s.sources)}</p>}
-            {s?.touches && <p className="catalog-help-now" data-testid={`catalog-perf-touches-${id}`}>{t('agentsGrid.perfTouches', s.touches)}</p>}
-          </HelpTip></h4>
-        <p className="catalog-perf-value">{perf !== null ? <><b>{pct(perf)}</b>{spread !== null && <span className="catalog-perf-spread" title={t('agentsGrid.perfSpreadTip', { v: spread })}
-          data-testid={`catalog-perf-spread-${id}`}>{t('agentsGrid.perfSpread', { v: spread })}</span>} <span>{t('agentsGrid.perfBand', { v: perf })}</span></>
-          : s ? <span className="warmup">{t('agentsGrid.perfWarmup')}</span> : <span aria-hidden="true">—</span>}</p>
-        <small>{!s ? t('catalog.unknown') : perf !== null ? t('agentsGrid.perfJudged', { n: s.evaluated }) : t('agentsGrid.perfWarmupCount', { n: s.evaluated })}</small>
-      </div>
     </section>
   </div>;
 }

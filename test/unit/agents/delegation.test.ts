@@ -382,11 +382,11 @@ describe('agent_delegate', () => {
     await expect(f.call('agent_delegate', scout, { tasks: [f.task('artisan', 'X')] })).rejects.toThrow(/Scout does not delegate/);
   });
 
-  it('only the Orchestrator and the Strategist delegate: an Artisan, a Sentinel, a Herald are refused even with stale launches', async () => {
+  it('only the Orchestrator and the Strategist delegate: an Artisan or Sentinel is refused even with stale launches', async () => {
     // a roles.json saved before 2026-11-23 still lists launches for the workers
     const stale = () => { const c = catalog(); for (const p of c.profiles) if (p.id !== 'strategist' && p.id !== 'orchestrator') p.launches = ['scout', 'sentinel']; return c; };
     const f = fixture({}, stale);
-    for (const role of ['artisan', 'sentinel', 'herald'] as const) {
+    for (const role of ['artisan', 'sentinel'] as const) {
       const parent = await f.root(role);
       await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Cerca')] })).rejects.toThrow(/does not delegate \(only the Orchestrator and the Strategist do\).*your parent launches it/);
       expect(f.m.list().filter(c => c.parentId === parent.id)).toEqual([]);
@@ -395,10 +395,9 @@ describe('agent_delegate', () => {
 
   it('every default launch fits (every role has every permission); under a planner the user narrowed, a role that needs more is refused, visibly', async () => {
     for (const id of WORK_ROLE_IDS) for (const kid of ROLE_DEFAULTS[id].launches) expect([id, kid, launchGap(ROLE_DEFAULTS[kid].tools, ROLE_DEFAULTS[id].tools)]).toEqual([id, kid, []]);
-    expect(ROLE_DEFAULTS.strategist.launches).toEqual(['scout', 'artisan', 'sentinel', 'herald']);
+    expect(ROLE_DEFAULTS.strategist.launches).toEqual(['scout', 'artisan', 'sentinel']);
     expect(ROLE_DEFAULTS.artisan.launches).toEqual([]);
     expect(ROLE_DEFAULTS.sentinel.launches).toEqual([]);
-    expect(ROLE_DEFAULTS.herald.launches).toEqual([]);
     // read-only classes are narrowed away, never a reason to refuse; a writing class is
     expect(launchGap(['read', 'web', 'shell-read', 'browser-read'], ['read'])).toEqual([]);
     expect(launchGap(['read', 'edit', 'shell'], ['read', 'web'])).toEqual(['edit', 'shell']);
@@ -408,10 +407,6 @@ describe('agent_delegate', () => {
     const planner = await edited.root('strategist');
     await expect(edited.call('agent_delegate', planner.id, { tasks: [edited.task('artisan', 'Fix')] })).rejects.toThrow(/Artisan needs edit, shell, browser.*the Orchestrator starts it/);
     expect(edited.m.list().filter(c => c.parentId === planner.id)).toEqual([]);
-    const f = fixture({}, () => { const c = catalog(NARROW); c.profiles.find(p => p.id === 'strategist')!.launches.push('herald'); return c; }, undefined, NARROW);
-    const parent = await f.root('strategist');
-    await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('herald', 'Clienti · Avviso')] })).rejects.toThrow(/mail-draft, mcp/);
-    expect(f.m.list().filter(c => c.parentId === parent.id)).toEqual([]);
   });
 
   it('a child works in any existing folder, also of another repository, and stays its parent\'s child (#460, ADR 0345)', async () => {
@@ -577,8 +572,8 @@ describe('agent_delegate', () => {
   it('with the default (full) permissions a Strategist launches an Artisan, which runs with every tool and no ceiling', async () => {
     const f = fixture();
     const parent = await f.root('strategist');
-    const out = await f.call('agent_delegate', parent.id, { tasks: [f.task('artisan', 'Ordini · Fix'), f.task('herald', 'Ordini · Avviso'), f.task('sentinel', 'Ordini · Verifica')] });
-    expect(out.children.map((c: { role: string; chatId?: string }) => [c.role, !!c.chatId])).toEqual([['artisan', true], ['herald', true], ['sentinel', true]]);
+    const out = await f.call('agent_delegate', parent.id, { tasks: [f.task('artisan', 'Ordini · Fix'), f.task('scout', 'Ordini · Indagine'), f.task('sentinel', 'Ordini · Verifica')] });
+    expect(out.children.map((c: { role: string; chatId?: string }) => [c.role, !!c.chatId])).toEqual([['artisan', true], ['scout', true], ['sentinel', true]]);
     const start = f.starts.get(out.children[0].chatId)!;
     expect([...(start.toolPolicy?.allow ?? [])].sort()).toEqual([...ROLE_DEFAULTS.artisan.tools].sort());
     expect(start.ceiling ?? null).toBeNull();

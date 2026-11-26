@@ -2,11 +2,11 @@
 // the UCI lines of a move, the engine's answer, a finished game's shape, the history's records, the rows of wins and the clock.
 import { describe, expect, it } from 'vitest';
 import { CHESS_BOTS, CHESS_BOT_IDS, MAX_PLIES, bestMove, chessHistory, cleanGame, cleanMoves, clock, goLines, isChessBot, isRecord, isStreakRecord, STREAK_MIN, type ChessGame } from '../../src/shared/chess';
-import { ROLE_IDS } from '../../src/shared/roles';
+import { CHARACTER_IDS } from '../../src/shared/characters';
 
 describe('the bots', () => {
-  it('are the six roles, weakest first, the Orchestrator last and without a limit', () => {
-    expect([...CHESS_BOT_IDS].sort()).toEqual([...ROLE_IDS].sort());
+  it('are the six characters, weakest first, the Orchestrator last and without a limit', () => {
+    expect([...CHESS_BOT_IDS].sort()).toEqual([...CHARACTER_IDS].sort());
     const elos = CHESS_BOT_IDS.map(id => CHESS_BOTS[id].elo);
     expect(elos).toEqual([...elos].sort((a, b) => a - b));
     expect(new Set(elos).size).toBe(elos.length);
