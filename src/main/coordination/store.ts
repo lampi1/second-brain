@@ -235,5 +235,8 @@ export function coordinationSchema(db: DatabaseSync): void {
       left join coordination_deliveries l on l.decision_id=d.id
       where r.state='pending' or (r.state='accepted' and json_extract(r.json,'$.kind') != 'workflow'
         and coalesce(json_extract(l.json,'$.state'),'') != 'delivered');
+  `), connection => connection.exec(`
+    create index if not exists coordination_requests_chat_state_run
+      on coordination_requests(chat_id, state, json_extract(json,'$.key.runId'));
   `)]);
 }

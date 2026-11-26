@@ -27,15 +27,16 @@ describe('orchestrator-delivery', () => {
     expect(ORCHESTRATOR_GROUP_MS).toBe(30_000); // the owner's choice, 15/10
   });
 
-  it('news: failures immediate, results and original requests grouped, plain turn ends and starts quiet', () => {
+  it('news: failures immediate, results and failed-turn requests grouped, plain requests/turn ends/starts quiet', () => {
     expect(newsClass('error')).toBe('now');
     // 2026-11-07 (cloudroom comms proposal 1): a plain "finished" or "started" never opens an Orchestrator turn
     expect(newsClass('done')).toBe('quiet');
     expect(newsClass('started')).toBe('quiet');
     expect(newsClass('done', false, true)).toBe('group'); // a root chat's report on an active work thread
-    expect(newsClass('question')).toBe('group');
-    expect(newsClass('permission')).toBe('group');
-    expect(newsClass('command')).toBe('group');
+    expect(newsClass('question')).toBe('quiet');
+    expect(newsClass('permission')).toBe('quiet');
+    expect(newsClass('command')).toBe('quiet');
+    expect(newsClass('stalled')).toBe('group');
     expect(newsClass('command', true)).toBe('group'); // a request that ends a failed turn keeps its wake
     expect(newsClass('question', true)).toBe('group');
   });

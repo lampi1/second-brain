@@ -23,8 +23,8 @@ export const RUNS_STEPS: readonly Migration[] = [
   `),
 ];
 
-/** A run as stored: the indexed columns beside its JSON. */
-export interface RunRow { id: string; agentId: string; startedAt: number; endedAt: number | null; json: string }
+/** A run as stored: the indexed columns beside its JSON (optional in-memory run avoids JSON.parse on live writes). */
+export interface RunRow { id: string; agentId: string; startedAt: number; endedAt: number | null; json: string; run?: AgentRun }
 /** What one save changes: runs to insert or replace, runs to delete (pruned), meta keys to set (null = delete). */
 export interface RunsWrite { upsert: readonly RunRow[]; remove: readonly string[]; meta: ReadonlyMap<string, string | null> }
 
@@ -96,7 +96,8 @@ export class RunsDb {
       on conflict(id) do update set agent_id = excluded.agent_id, started_at = excluded.started_at, ended_at = excluded.ended_at, json = excluded.json`);
     for (const r of w.upsert) {
       put.run(r.id, r.agentId, r.startedAt, r.endedAt, r.json);
-      let run: AgentRun; try { run = JSON.parse(r.json) as AgentRun; } catch { continue; }
+      let run: AgentRun | undefined = r.run;
+      if (!run) { try { run = JSON.parse(r.json) as AgentRun; } catch { continue; } }
       writeAssignment(this.db, run);
     }
     const del = this.db.prepare('delete from agent_runs where id = ?');

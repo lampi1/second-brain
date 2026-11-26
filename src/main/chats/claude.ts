@@ -539,7 +539,7 @@ export class ClaudeSession implements HarnessSession {
     log.info('chats', 'interrupt', { chat: this.opts.chatId, data: { sendNow: !!opts?.keepQueued } });
     // only a turn in flight ends with a result: an interrupt on an idle CLI must not mark the next real failure
     if (this.turnOpen && opts?.byUser) this.stopping = { sendNow: !!opts.keepQueued };
-    try { await this.control({ subtype: 'interrupt' }, 15000); } catch (e) { this.stopping = null; throw e; }
+    try { await this.control({ subtype: 'interrupt' }, 5000); } catch (e) { this.stopping = null; throw e; }
   }
 
   async setModel(model: string | null): Promise<void> {

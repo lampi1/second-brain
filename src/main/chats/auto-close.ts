@@ -63,7 +63,8 @@ export class AutoCloseService {
 
   setPresence(rows: readonly AutoClosePresence[]): void {
     const now = this.d.now();
-    const candidates = new Set(this.d.candidates().map(c => c.id));
+    const list = this.d.candidates();
+    const candidates = new Set(list.map(c => c.id));
     for (const p of rows.slice(0, 1000)) {
       if (!p || typeof p.chatId !== 'string' || typeof p.draft !== 'boolean' || typeof p.shown !== 'boolean' || typeof p.browser !== 'boolean' || !Number.isFinite(p.touchedAt) || !Number.isSafeInteger(p.queued) || p.queued < 0) continue;
       if (!candidates.has(p.chatId)) continue;
@@ -73,7 +74,7 @@ export class AutoCloseService {
       const touchedAt = rendererTouch !== (previous?.rendererTouch ?? 0) ? now : previous?.touchedAt ?? 0;
       this.presence.set(p.chatId, { ...p, touchedAt, rendererTouch, receivedAt: now });
     }
-    this.refresh();
+    this.refresh(list);
   }
 
   keepOpen(chatId: string, keep = true): void {

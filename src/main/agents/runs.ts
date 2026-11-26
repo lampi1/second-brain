@@ -858,7 +858,7 @@ export class AgentRunStore {
     const upsert: RunRow[] = [], fresh = new Map<string, { json: string; bytes: number; endedAt?: number | undefined }>();
     all.forEach((r, i) => {
       if (p.drop.has(r) || this.written.get(r.runId)?.json === json[i]) return;
-      const row = rowOf(r, json[i]!);
+      const row = { ...rowOf(r, json[i]!), run: r };
       upsert.push(row); fresh.set(r.runId, { json: json[i]!, bytes: bytesOf[i]!, endedAt: row.endedAt ?? undefined });
     });
     const remove = [...p.drop].map(r => r.runId).filter(id => this.written.has(id));

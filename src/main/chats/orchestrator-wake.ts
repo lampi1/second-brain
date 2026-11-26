@@ -44,7 +44,7 @@
 // page as "N novità in attesa"); reading it never sends anything to the Orchestrator and changes no rule above.
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { readLocal, writeLocal } from '../agents/local-store';
+import { readLocal, writeLocalText, writeLocalTextAsync } from '../agents/local-store';
 import { timersFor } from '../timers';
 const { setTimeout, clearTimeout } = timersFor('chats/orchestrator-wake');
 import type { ChatState, ChatSummary, EventMap, Harness, HeldNewsItem, PendingRequest } from '../../shared/contract';
@@ -191,10 +191,23 @@ export class OrchestratorWake {
     this.reschedule();
   }
 
+  private lastPersisted: string | null = null;
+  private pendingBody: string | null = null;
+  private persistRev = 0;
   private persist(): void {
     if (!this.d.userData) return;
-    try { writeLocal(path.join(this.d.userData, 'orchestrator-outbox.json'), { events: this.queued().filter(e => e.kind !== 'stalled') }); }
-    catch (e) { log.warn('chats', 'news outbox not saved', { cause: errText(e), hint: 'the next update retries' }); }
+    const body = `${JSON.stringify({ events: this.queued().filter(e => e.kind !== 'stalled') }, null, 2)}\n`;
+    if (body === this.lastPersisted) return;
+    this.lastPersisted = body;
+    this.pendingBody = body;
+    const rev = ++this.persistRev;
+    const file = path.join(this.d.userData, 'orchestrator-outbox.json');
+    void writeLocalTextAsync(file, body, () => this.persistRev === rev)
+      .then(written => { if (written && this.persistRev === rev) this.pendingBody = null; })
+      .catch(e => {
+        if (this.persistRev === rev) this.lastPersisted = null;
+        log.warn('chats', 'news outbox not saved', { cause: errText(e), hint: 'the next update retries' });
+      });
   }
 
   private now(): number { return this.d.now?.() ?? Date.now(); }
@@ -254,7 +267,17 @@ export class OrchestratorWake {
   /** How much queued news the Orchestrator's gate holds now (it works or waits for the user; tests, diagnostics). */
   held(): number { const r = this.orchestrator(); return r ? this.queued().filter(e => !passes(gateOf(r), this.cls(e))).length : 0; }
 
-  stop(): void { if (this.timer) clearTimeout(this.timer); this.timer = null; }
+  stop(): void {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    if (this.d.userData && this.pendingBody !== null) {
+      const body = this.pendingBody;
+      this.pendingBody = null;
+      this.persistRev++;
+      try { writeLocalText(path.join(this.d.userData, 'orchestrator-outbox.json'), body); }
+      catch (e) { log.warn('chats', 'news outbox not saved', { cause: errText(e), hint: 'the next update retries' }); }
+    }
+  }
 
   private updated(c: ChatSummary): void {
     const was = this.chats.get(c.id);

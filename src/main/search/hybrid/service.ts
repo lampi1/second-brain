@@ -160,13 +160,21 @@ export class HybridSearch {
   /** The past errors most similar to `text`. Never waits for a sync or for the errors' vectors (the brain's hook asks
    *  on every prompt with a short timeout): until they exist it answers ready:false and builds them in the background;
    *  after a change of ai-errors.md it answers from the previous vectors while the new lines are embedded. */
+  private errorFileCache: { root: string; at: number; entries: ReturnType<typeof errorEntries> } | null = null;
   async recall(text: string, k = RECALL_K): Promise<Recall> {
     const notReady: Recall = { ready: false, errors: [] };
     const root = this.deps.brainRoot();
     if (root) {
       try {
-        const textFile = read(root, THEME_FILES.errors);
-        const entries = errorEntries([{ id: 0, doc: 'brain:ai-errors.md', line: 1, at: 0, text: textFile, v: new Float32Array() }]);
+        const now = Date.now();
+        let entries: ReturnType<typeof errorEntries>;
+        if (this.errorFileCache && this.errorFileCache.root === root && now - this.errorFileCache.at < 5000) {
+          entries = this.errorFileCache.entries;
+        } else {
+          const textFile = read(root, THEME_FILES.errors);
+          entries = errorEntries([{ id: 0, doc: 'brain:ai-errors.md', line: 1, at: 0, text: textFile, v: new Float32Array() }]);
+          this.errorFileCache = { root, at: now, entries };
+        }
         if (entries.length > 0 && entries.length < RECALL_MIN_ERRORS) return { ready: true, errors: lexicalErrors(text, entries, k) };
       } catch { /* unreadable error file retains the normal unavailable behavior */ }
     }

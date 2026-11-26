@@ -324,11 +324,11 @@ export class ChatMail {
     if (!root || !chat) return false;
     const box = slug(chat.title);
     if (!box) return true;
-    // the automatic archive asks this for every open chat each second: a mailbox listed less than BOX_TTL_MS ago is not
-    // listed again (a sync readdir per chat per second on the window's UI thread, 2026-10-27); a delivery under way
-    // answers above at once, and the archive asks again with fresh = true right before it archives
     const dir = path.join(inboxDir(root), box), now = Date.now(), seen = this.boxSeen.get(dir);
-    if (!fresh && seen && now - seen.at < BOX_TTL_MS) return seen.work;
+    if (!fresh && seen) {
+      if (now - seen.at >= BOX_TTL_MS) this.refreshBoxAsync(dir);
+      return seen.work;
+    }
     let work: boolean;
     try { work = fs.readdirSync(dir).some(name => name.endsWith('.json') && !name.startsWith('.')); }
     catch (e) { work = (e as NodeJS.ErrnoException).code !== 'ENOENT'; }
@@ -336,7 +336,20 @@ export class ChatMail {
     this.boxSeen.set(dir, { at: now, work });
     return work;
   }
+  private refreshBoxAsync(dir: string): void {
+    if (this.refreshing.has(dir)) return;
+    this.refreshing.add(dir);
+    void fs.promises.readdir(dir)
+      .then(names => names.some(name => name.endsWith('.json') && !name.startsWith('.')))
+      .catch(e => (e as NodeJS.ErrnoException).code !== 'ENOENT')
+      .then(work => {
+        if (this.boxSeen.size > 500) this.boxSeen.clear();
+        this.boxSeen.set(dir, { at: Date.now(), work });
+      })
+      .finally(() => { this.refreshing.delete(dir); });
+  }
   private readonly boxSeen = new Map<string, { at: number; work: boolean }>();
+  private readonly refreshing = new Set<string>();
 
   async tick(): Promise<number> {
     if (this.stopped || updateActivity.frozen) return 0;

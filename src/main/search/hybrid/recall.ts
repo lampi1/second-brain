@@ -27,13 +27,13 @@ export interface RecallHit extends ThemeEntry { score: number }
 export interface Recall { ready: boolean; errors: RecallHit[] }
 
 /** Prompt-time context for app-managed engines without Claude's hook. Slow or failed recall never blocks delivery. */
-export async function recallWarning(text: string, recall?: (text: string) => Promise<Recall>): Promise<string> {
+export async function recallWarning(text: string, recall?: (text: string) => Promise<Recall>, timeoutMs = 50): Promise<string> {
   if (!recall || !text.trim() || /^\s*<task-notification/.test(text)) return '';
   let timer: NodeJS.Timeout | undefined;
   try {
     const result = await Promise.race([
       Promise.resolve().then(() => recall(text.slice(0, MAX_TEXT))),
-      new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 300); }),
+      new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), timeoutMs); }),
     ]);
     if (!result?.ready || !result.errors.length) return '';
     const quote = (s: string): string => s.replace(/<[^>]*>/g, '').replace(/[\r\n]+/g, ' ').slice(0, 240);

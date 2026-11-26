@@ -157,8 +157,8 @@ export function runCodeTool(deps: RunCodeDeps): McpTool {
       const code = typeof args.code === 'string' ? args.code : '';
       if (!code.trim()) return { raw: { content: [{ type: 'text', text: 'code is required: the script body.' }], isError: true } };
       const now = deps.now ?? Date.now;
-      const started = now();
       const entries = await catalog(deps, chatId);
+      const started = now();
       // the run's own signal: aborted when the script ends however it ends, so nothing it started outlives it (a panel
       // still open, a running command, an app tool); run_code's cancel aborts it too
       const run = new AbortController();

@@ -133,10 +133,9 @@ export class ChatManager extends ManagerRemote implements ChatService {
     catch (e) { log.warn('chats', 'role card not read for a new assignment', { chat: r.s.id, cause: errText(e), hint: 'the chat goes on with the card it had' }); return; }
     if (card.owner.source !== 'catalog' || card.owner.id !== owner.id) return;
     const parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
-    // a child with its parent: the card below the parent's (and the contract's tool classes). Any other chat (a root
-    // chat, a fork, one opened from the unauthenticated mount, a child whose parent is gone) never goes wider than it runs
-    // now: the card only narrows it, since how it was bounded at its start is not kept (review of ADR 0352)
-    const policy = parent ? narrowest(belowParent(card.policy, parent.policy ?? null, this.boundMode(parent)), r.s.delegation?.tools ? { tools: { allow: r.s.delegation.tools }, ceiling: null } : null)
+    // a child with its parent: the card below the parent's (ADR 0355: contract.tools is for worktree selection only,
+    // never a runtime policy narrowing). Any other chat only narrows to the card, never wider than it runs now.
+    const policy = parent ? belowParent(card.policy, parent.policy ?? null, this.boundMode(parent))
       : narrowest(card.policy, r.policy ?? null);
     const relaunch = JSON.stringify(policy ?? null) !== JSON.stringify(r.policy ?? null);
     if (!relaunch && owner.version === card.owner.version && owner.revision === card.owner.revision) return;

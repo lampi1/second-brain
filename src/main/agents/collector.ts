@@ -97,7 +97,26 @@ export class AgentAnalyticsCollector {
     this.timer.unref?.();
   }
 
-  private body(): string { return timedStep('agent-analytics.json serialize', () => JSON.stringify({ version: 1, rows: [...this.rows.values()] })); }
+  private body(): string {
+    return timedStep('agent-analytics.json serialize', () => {
+      let json = JSON.stringify({ version: 1, rows: [...this.rows.values()] });
+      // Keep well below local-store.ts's 8_000_000 B cap by evicting oldest rolled-up (then inactive) rows.
+      if (Buffer.byteLength(json, 'utf8') > 6_000_000) {
+        while (Buffer.byteLength(json, 'utf8') > 5_500_000 && this.evict()) {
+          json = JSON.stringify({ version: 1, rows: [...this.rows.values()] });
+        }
+        while (Buffer.byteLength(json, 'utf8') > 5_500_000) {
+          let dropped = false;
+          for (const key of this.rows.keys()) {
+            if (!this.live.has(key)) { this.rows.delete(key); dropped = true; break; }
+          }
+          if (!dropped) break;
+          json = JSON.stringify({ version: 1, rows: [...this.rows.values()] });
+        }
+      }
+      return json;
+    });
+  }
   /** Quit-time durability; invalidate an older asynchronous rename before writing the latest observation. */
   flush(): void {
     if (this.timer) { clearTimeout(this.timer); this.timer = undefined; }

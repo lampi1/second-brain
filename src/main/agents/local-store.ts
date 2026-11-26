@@ -10,7 +10,8 @@ import { randomUUID } from 'node:crypto';
 import { log } from '../log';
 
 const RETRY_CODES = new Set(['EPERM', 'EACCES', 'EBUSY']);
-const RENAME_WAITS_MS = [20, 40, 80, 160, 320, 640];
+const RENAME_WAITS_MS = [10, 20, 40, 80];
+const ASYNC_RENAME_WAITS_MS = [20, 40, 80, 160, 320, 640];
 const sleeper = new Int32Array(new SharedArrayBuffer(4));
 /** Synchronous short wait (writeLocal is synchronous by contract: callers save in-line after a mutation). */
 function waitSync(ms: number): void { Atomics.wait(sleeper, 0, 0, ms); }
@@ -63,7 +64,7 @@ export async function writeLocalTextAsync(file: string, body: string, current: (
   await fs.promises.mkdir(path.dirname(file), { recursive: true });
   try { const s = await fs.promises.lstat(file); if (!s.isFile() || s.nlink !== 1) throw new Error('Archivio locale collegato: scrittura rifiutata.'); }
   catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; }
-  const tmp = `${file}.${randomUUID()}.tmp`, waits = opts.waits ?? RENAME_WAITS_MS;
+  const tmp = `${file}.${randomUUID()}.tmp`, waits = opts.waits ?? ASYNC_RENAME_WAITS_MS;
   let renamed = false;
   try {
     await fs.promises.writeFile(tmp, body, { flag: 'wx', mode: 0o600 });

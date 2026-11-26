@@ -36,15 +36,42 @@ export type Entry =
   | { name: string; kind: 'app'; tool: McpTool }
   | { name: string; kind: 'ext'; server: string; tool: McpTool };
 
+const EXT_CATALOG_TIMEOUT_MS = 2000;
+const EXT_WARN_COOLDOWN_MS = 5 * 60_000;
+const extWarnedAt = new Map<string, number>();
+
 /** Every tool a script of this chat may call, by script name: natives, app tools (run_code itself left out), then each
- *  connector's as <server>__<tool>. A connector that does not answer is left out (logged), never the whole run. */
+ *  connector's as <server>__<tool>. A connector that does not answer is left out (logged with cooldown), never the whole run. */
 export async function catalog(deps: BridgeDeps, chatId: string): Promise<Entry[]> {
   const out: Entry[] = NATIVE_WRAPPERS.map(t => ({ name: t, kind: 'native' as const, tool: t, description: NATIVE_TYPES[t].doc }));
   for (const t of deps.appTools(chatId)) if (t.name !== RUN_CODE) out.push({ name: t.name, kind: 'app', tool: t });
-  for (const server of deps.extServers(chatId)) {
-    try { for (const t of await deps.extTools(chatId, server)) out.push({ name: `${server}__${t.name}`, kind: 'ext', server, tool: t }); }
-    catch (e) { log.warn('code-mode', 'a connector left out of run_code', { chat: chatId, data: { server }, cause: errText(e), hint: 'see the connector card (Impostazioni → Connettori)' }); }
-  }
+  const servers = deps.extServers(chatId);
+  if (!servers.length) return out;
+  const settled = await Promise.allSettled(servers.map(async server => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const tools = await Promise.race([
+        deps.extTools(chatId, server),
+        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(`connector ${server} catalog timed out (${EXT_CATALOG_TIMEOUT_MS}ms)`)), EXT_CATALOG_TIMEOUT_MS); timer.unref?.(); }),
+      ]);
+      extWarnedAt.delete(`${chatId}:${server}`);
+      return { server, tools };
+    } finally { if (timer) clearTimeout(timer); }
+  }));
+  const now = Date.now();
+  settled.forEach((res, i) => {
+    const server = servers[i]!;
+    if (res.status === 'fulfilled') {
+      for (const t of res.value.tools) out.push({ name: `${server}__${t.name}`, kind: 'ext', server, tool: t });
+    } else {
+      const key = `${chatId}:${server}`, last = extWarnedAt.get(key) ?? 0;
+      if (now - last >= EXT_WARN_COOLDOWN_MS) {
+        if (extWarnedAt.size > 500) extWarnedAt.clear();
+        extWarnedAt.set(key, now);
+        log.warn('code-mode', 'a connector left out of run_code', { chat: chatId, data: { server }, cause: errText(res.reason), hint: 'see the connector card (Impostazioni → Connettori)' });
+      }
+    }
+  });
   return out;
 }
 

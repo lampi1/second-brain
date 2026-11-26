@@ -71,18 +71,32 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
   /** A delegation tree closes as one (owner, 2026-10-21: «in una chat ad albero dopo 2 minuti che hanno finito tutti»):
    *  a chat of a tree is ready only when every open chat of its tree is, and its clock starts at the tree's last activity. */
   autoCloseCandidates(externalHold: (chatId: string) => boolean | AutoCloseWaiting = () => true): AutoCloseCandidate[] {
-    const own = this.ownAutoCloseCandidates(externalHold);
+    const busyDelegated = this.delegatedBusyCounts();
+    const own = this.ownAutoCloseCandidates(externalHold, busyDelegated);
+    const rootCache = new Map<string, string>();
     const rootOf = (id: string): string => {
+      const cached = rootCache.get(id);
+      if (cached !== undefined) return cached;
       let cur = id;
       for (let i = 0; i < 50; i++) { const up = this.chats.get(cur)?.s.parentId; if (!up || !this.chats.has(up)) break; cur = up; }
+      rootCache.set(id, cur);
       return cur;
     };
     const trees = new Map<string, AutoCloseCandidate[]>();
-    for (const c of own) { const root = rootOf(c.id); trees.set(root, [...trees.get(root) ?? [], c]); }
+    for (const c of own) {
+      const root = rootOf(c.id);
+      let list = trees.get(root);
+      if (!list) { list = []; trees.set(root, list); }
+      list.push(c);
+    }
     for (const root of this.treeActivity.keys()) if (!trees.has(root)) this.treeActivity.delete(root);
+    const depthCache = new Map<string, number>();
     const depthOf = (id: string): number => {
+      const cached = depthCache.get(id);
+      if (cached !== undefined) return cached;
       let n = 0;
       for (let cur = this.chats.get(id)?.s.parentId; cur && this.chats.has(cur) && n < 50; cur = this.chats.get(cur)?.s.parentId) n++;
+      depthCache.set(id, n);
       return n;
     };
     return own.map(lone => {
@@ -94,7 +108,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
       // itself and must not keep its tree open forever
       if (c.eligible && tree.some(x => !x.eligible && this.atWork(x.id))) {
         // its own sub-chats still owe it a result: its tag counts them (#359), the hold is the tree's as before
-        const r = this.chats.get(c.id), n = r ? this.busyChildren(r) : 0;
+        const r = this.chats.get(c.id), n = r ? this.busyChildren(r, busyDelegated) : 0;
         return { ...c, eligible: false, reason: 'Si chiude insieme al resto dell’albero, quando hanno finito tutti', ...(n > 0 ? { waitingFor: 'children' as const, waitingN: n } : {}) };
       }
       // the tree's last activity only grows: a member closing first never restarts the others' clock (its own closing
@@ -104,10 +118,24 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
       return { ...c, activityAt: at };
     });
   }
-  /** A worker waits for this chat's answer (ADR 0344). */
-  private holdsQuestion(id: string): boolean {
-    for (const r of this.chats.values()) if (!r.s.closedAt && openQuestions(r.s.questions).some(q => q.holder === id)) return true;
-    return false;
+  /** Active question holders across all open chats, computed once per auto-close scan (O(N) instead of O(N^2)). */
+  private openQuestionHolders(): Set<string> {
+    const holders = new Set<string>();
+    for (const r of this.chats.values()) {
+      if (r.s.closedAt) continue;
+      for (const q of openQuestions(r.s.questions)) if (q.holder) holders.add(q.holder);
+    }
+    return holders;
+  }
+  /** Delegated sub-chat counts still at work per parentId, computed once per scan (O(N) instead of O(N^2)). */
+  private delegatedBusyCounts(): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const x of this.chats.values()) {
+      const pid = x.s.parentId;
+      if (!pid || x.s.closedAt || !x.s.delegation || x.s.delegation.result || !this.atWork(x.s.id)) continue;
+      counts.set(pid, (counts.get(pid) ?? 0) + 1);
+    }
+    return counts;
   }
   /** A chat still doing or waiting for something: running, a pending request, a turn or a delivery under way. */
   private atWork(id: string): boolean {
@@ -118,11 +146,18 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
       !!r.deliveryHolds || !!c.queued || !!r.opening || !!c.waitsOn || c.plan?.phase === 'proposed' || workBehind(c) || (c.agentChildren?.active ?? 0) > 0;
   }
 
-  private ownAutoCloseCandidates(externalHold: (chatId: string) => boolean | AutoCloseWaiting): AutoCloseCandidate[] {
-    return [...this.chats.values()].filter(r => !r.s.closedAt).map(r => {
+  private ownAutoCloseCandidates(externalHold: (chatId: string) => boolean | AutoCloseWaiting, busyDelegated: ReadonlyMap<string, number>): AutoCloseCandidate[] {
+    const holders = this.openQuestionHolders();
+    const out: AutoCloseCandidate[] = [];
+    for (const r of this.chats.values()) {
+      if (r.s.closedAt) continue;
       const c = r.s;
-      let held: boolean | AutoCloseWaiting = true;
-      try { held = externalHold(c.id); } catch { /* fail closed */ }
+      // Orchestrator chats never auto-close and never show an external waiting label: skip externalHold completely.
+      let held: boolean | AutoCloseWaiting = false;
+      if (!c.isOrchestrator) {
+        held = true;
+        try { held = externalHold(c.id); } catch { /* fail closed */ }
+      }
       // finished: idle after a clean result, or its engine gone (ended by itself, or restored at start-up with its saved
       // result; a chat saved before results were saved counts as done when it had turns). Errors, the user's Stop and an
       // engine gone mid-turn stay open.
@@ -130,13 +165,14 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
       const finished = (c.state === 'idle' || ended) && !c.lastError &&
         !r.unfinished && ((result => result ? !result.isError && !result.interrupted : ended && !r.session && r.lastTurnAt > 0)(c.lastResult ?? r.savedResult));
       const eligible = !this.quitting && !updateActivity.frozen && !c.isOrchestrator && !held && finished &&
-        !r.working && !r.session?.busy && r.pending.size === 0 && !openQuestions(c.questions).length && !this.holdsQuestion(c.id) && !this.userAsks.has(r.userActionAsk ?? '') && !r.userStepAt && !this.awaitsRun(c.id) && !workBehind(c) && !c.waitsOn && c.plan?.phase !== 'proposed' && !c.queued && !r.deliveryHolds &&
+        !r.working && !r.session?.busy && r.pending.size === 0 && !openQuestions(c.questions).length && !holders.has(c.id) && !this.userAsks.has(r.userActionAsk ?? '') && !r.userStepAt && !this.awaitsRun(c.id) && !workBehind(c) && !c.waitsOn && c.plan?.phase !== 'proposed' && !c.queued && !r.deliveryHolds &&
         !r.opening && !r.releasing && !r.switching && !r.handoffTurn && (!r.archiving || r.autoClosing) && this.childrenDone(r);
-      const waiting = eligible || c.isOrchestrator ? undefined : this.waitingOf(r, held), waitingFor = waiting?.what;
-      return { id: c.id, eligible: !!eligible, stamp: `${r.activityRevision ?? 0}:${r.lastTurnAt}:${c.lastResult?.at ?? 0}:${c.pending}:${c.model ?? ''}:${c.work?.status ?? ''}:${c.waitsOn ?? ''}`,
+      const waiting = eligible || c.isOrchestrator ? undefined : this.waitingOf(r, held, busyDelegated), waitingFor = waiting?.what;
+      out.push({ id: c.id, eligible: !!eligible, stamp: `${r.activityRevision ?? 0}:${r.lastTurnAt}:${c.lastResult?.at ?? 0}:${c.pending}:${c.model ?? ''}:${c.work?.status ?? ''}:${c.waitsOn ?? ''}`,
         activityAt: r.autoActivityAt ??= autoCloseNow(), ...(waitingFor ? { waitingFor } : {}), ...(waiting?.n ? { waitingN: waiting.n } : {}),
-        reason: waitingFor ? WAITING_REASON[waitingFor] : !this.childrenDone(r) ? 'Sottoagenti ancora al lavoro' : 'Attività o stato da verificare' };
-    });
+        reason: waitingFor ? WAITING_REASON[waitingFor] : !this.childrenDone(r) ? 'Sottoagenti ancora al lavoro' : 'Attività o stato da verificare' });
+    }
+    return out;
   }
   /** No sub-agent left at work. The CLI engines (Claude, Codex, Cursor) never report a complete census, so a live
    *  session counts what it saw: every sub-agent it observed has ended (its background tasks are held apart, `background`).
@@ -153,7 +189,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
    *  work before a missing report. Only real state: the words of its answer (waitsOn, waitsOnWork) still hold it open
    *  (an auto-close never comes earlier), but they never name a wait on its tile. undefined = held for another reason
    *  (busy, starting, an error, only a guess from its words, ...). */
-  private waitingOf(r: Rec, external: boolean | AutoCloseWaiting): { what: AutoCloseWaiting; n?: number } | undefined {
+  private waitingOf(r: Rec, external: boolean | AutoCloseWaiting, busyDelegated?: ReadonlyMap<string, number>): { what: AutoCloseWaiting; n?: number } | undefined {
     const c = r.s, pend = [...r.pending.values()].filter(p => !p.ladder);
     if (pend.some(p => p.type === 'permission')) return { what: 'permission' };
     if (pend.some(p => p.type === 'question')) return { what: 'answer' };
@@ -165,7 +201,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     // chat has none open, the step is a note in the Orchestrator
     if (this.awaitsRun(r.s.id)) return { what: 'command' };
     if (r.userStepAt) return { what: 'step' };
-    const children = this.busyChildren(r);
+    const children = this.busyChildren(r, busyDelegated);
     if (children > 0) return { what: 'children', n: children };
     if ((c.background ?? 0) > 0) return { what: 'background', n: c.background! };
     if (external === 'work') return { what: 'work' };
@@ -178,12 +214,13 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
   }
   /** Its sub-chats that still owe it a result and its engine's sub-agents still at work (#359: «Aspetta 2 sotto-chat»).
    *  A background shell is no sub-agent (as lib/agent-children.ts waitsOnChildren reads it): it counts as background. */
-  private busyChildren(r: Rec): number {
+  private busyChildren(r: Rec, busyDelegated?: ReadonlyMap<string, number>): number {
     const engine = r.s.agentChildren, live = engine?.children.filter(x => x.state === 'running' || x.state === 'waiting' || x.state === 'unknown') ?? [];
     const shells = live.filter(x => x.kind === 'shell').length, agents = live.length - shells;
-    let delegated = 0;
-    // only a sub-chat still at work (one that ended with an error or a Stop holds nothing)
-    for (const x of this.chats.values()) if (x.s.parentId === r.s.id && !x.s.closedAt && x.s.delegation && !x.s.delegation.result && this.atWork(x.s.id)) delegated++;
+    let delegated = busyDelegated?.get(r.s.id) ?? 0;
+    if (!busyDelegated) {
+      for (const x of this.chats.values()) if (x.s.parentId === r.s.id && !x.s.closedAt && x.s.delegation && !x.s.delegation.result && this.atWork(x.s.id)) delegated++;
+    }
     return Math.max(agents, engine?.active ?? 0) + delegated;
   }
 

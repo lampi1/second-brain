@@ -627,25 +627,34 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // a finished chat that left uncommitted or unpushed work in its repository is not closed by itself (#357)
   const worktreeHold: WorktreeHold = new WorktreeHold({ git: (cwd, args) => worktreeGit(cwd, args), brainRoot: () => brainRoot(),
     session: () => { const s = new GitSession(); return (cwd, args) => s.git(cwd, args); } });
-  const workChat = (id: string) => {
-    const c = manager.summary(id);
+  const workChat = (id: string, summary = manager.summary(id)) => {
+    const c = summary;
     return c ? { id, cwd: c.cwd, stamp: `${c.lastResult?.at ?? 0}|${c.checkpointAt ?? 0}`, ...(c.checkpointAt !== undefined ? { checkpointAt: c.checkpointAt } : {}) } : null;
   };
   const unsavedWork = (id: string): false | 'unsaved' | 'gitcheck' => {
     const c = manager.summary(id);
     // only a chat that finished its turn: a running one is held anyway, and its files are still moving
     if (!c || c.closedAt || !c.lastResult || c.lastResult.isError || (c.state !== 'idle' && c.state !== 'closed')) return false;
-    const state = worktreeHold.state(workChat(id)!);
+    const state = worktreeHold.state(workChat(id, c)!);
     return state === 'unsaved' ? 'unsaved' : state === 'checking' || state === 'failed' ? 'gitcheck' : false;
   };
   const autoCloseService = new AutoCloseService({ now: autoCloseNow,
     delayMs: () => keptProblem ? 0 : autoCloseDelay(),
-    // what holds a chat open, named for its "In attesa di…" label (ADR 0084); an open tab alone no longer holds it (the
-    // archive closes its tabs): only a hand-off, a dialog or a page still loading
-    candidates: () => manager.autoCloseCandidates(id => asks.pending().some(p => p.chatId === id) ? 'command'
-      : browser.list().some(t => t.ownerChatId === id && (!!t.handoffId || !!t.dialog)) ? 'browser'
-      : runner.list(id).some(r => r.state === 'running') || browser.list().some(t => t.ownerChatId === id && t.loading) ? 'work'
-      : mail.hasWork(id) ? 'mail' : unsavedWork(id)),
+    // what holds a chat open, named for its "In attesa di…" label (ADR 0084); snapshot asks and browser tabs once per
+    // tick instead of scanning every list once per open chat.
+    candidates: () => {
+      const cmdHolds = new Set(asks.pending().map(p => p.chatId));
+      const browserHolds = new Set<string>(), browserLoading = new Set<string>();
+      for (const t of browser.list()) {
+        if (!t.ownerChatId) continue;
+        if (t.handoffId || t.dialog) browserHolds.add(t.ownerChatId);
+        if (t.loading) browserLoading.add(t.ownerChatId);
+      }
+      return manager.autoCloseCandidates(id => cmdHolds.has(id) ? 'command'
+        : browserHolds.has(id) ? 'browser'
+        : browserLoading.has(id) || runner.list(id).some(r => r.state === 'running') ? 'work'
+        : mail.hasWork(id) ? 'mail' : unsavedWork(id));
+    },
     archive: async (id, _reservation, valid) => {
       // hasWork trusts a mailbox listing for BOX_TTL_MS: mail that came in since keeps the chat open
       if (mail.hasWork(id, true)) return false;
@@ -662,7 +671,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     away: () => { const w = ctx.window(); return !w || w.isDestroyed() || !w.isVisible() || w.isMinimized(); },
   });
   autoCloseRef.current = autoCloseService;
-  const autoCloseTimer = setInterval(() => { void autoCloseService.tick().catch(e => log.warn('chats', 'automatic archive suspended', { cause: errText(e) })); }, 1000);
+  const autoCloseTimer = setInterval(() => { void autoCloseService.tick().catch(e => log.warn('chats', 'automatic archive suspended', { cause: errText(e) })); }, 2500);
   autoCloseTimer.unref();
   agentPacks.learning.evidenceRuns = () => manager.runs.list();
   const workflows = workflowsRef = new Workflows(path.join(ctx.userData, 'work-threads.json'), rows => ctx.emitter.emit('work:changed', rows), Date.now, row => {
