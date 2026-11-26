@@ -31,7 +31,6 @@ import { follow, left, ownsJob, requestOf, settle, stateLine, summaryOf, taskOf,
 import { asksOf, liveOf, movesBelow, type LiveInput } from './live';
 import { LiveMemory, liveKey } from './live-memory';
 import type { PlanStore } from './store';
-import path from 'node:path';
 
 /** What the maps need from the chats (ChatService). */
 export interface PlanChats {
@@ -161,7 +160,7 @@ export class Plans {
     this.seenChats.set(c.id, { plan: c.plan, key });
   }
 
-  private followed(m: Plan, c: ChatSummary): Plan { const next = follow(m, c, this.now(), this.memory.crashed(c.id)); return next.project || !c.cwd ? next : { ...next, project: path.basename(c.cwd).slice(0, PLAN_LIMITS.project) }; }
+  private followed(m: Plan, c: ChatSummary): Plan { const next = follow(m, c, this.now(), this.memory.crashed(c.id)); const base = c.cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''; return next.project || !base ? next : { ...next, project: base.slice(0, PLAN_LIMITS.project) }; }
   /** Whether a map this chat leaves stopped was stopped by the chat's own end, not by the user's hand. */
   private alone(c: ChatSummary): boolean { return c.closedAt ? c.closedBy !== 'user' : this.memory.crashed(c.id); }
 

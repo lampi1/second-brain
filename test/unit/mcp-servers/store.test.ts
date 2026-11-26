@@ -95,10 +95,10 @@ describe('McpServerStore', () => {
     const s = new McpServerStore(tmp('mcp-store'), cipher);
     s.upsert(stdio);
     expect(() => s.upsert(stdio)).toThrow(/Esiste già/);
-    s.setAccess('herald', 'azure-devops', 'read');
+    s.setAccess('scout', 'azure-devops', 'read');
     s.upsert({ ...stdio, id: 'ado' }, 'azure-devops');
-    expect(s.access()).toEqual({ herald: { servers: { ado: 'read' } } });
-    s.setAccess('herald', 'ado', 'all');
+    expect(s.access()).toEqual({ scout: { servers: { ado: 'read' } } });
+    s.setAccess('scout', 'ado', 'all');
     expect(s.access()).toEqual({});
     s.remove('ado');
     expect(s.servers()).toEqual([]);
@@ -106,10 +106,10 @@ describe('McpServerStore', () => {
 
   it('a damaged access entry narrows to none; a broken file loads empty', () => {
     const dir = tmp('mcp-store');
-    fs.writeFileSync(path.join(dir, 'mcp-servers.json'), JSON.stringify({ version: 1, servers: [stdio, { id: 'bad', transport: 'stdio', command: 'x;y' }], access: { herald: { servers: { 'azure-devops': { tools: 'oops' } } } }, tests: {} }));
+    fs.writeFileSync(path.join(dir, 'mcp-servers.json'), JSON.stringify({ version: 1, servers: [stdio, { id: 'bad', transport: 'stdio', command: 'x;y' }], access: { scout: { servers: { 'azure-devops': { tools: 'oops' } } } }, tests: {} }));
     const s = new McpServerStore(dir, cipher);
     expect(s.servers().map(x => x.id)).toEqual(['azure-devops']);
-    expect(s.roleAccess('herald')).toEqual({ servers: { 'azure-devops': 'none' } });
+    expect(s.roleAccess('scout')).toEqual({ servers: { 'azure-devops': 'none' } });
     fs.writeFileSync(path.join(dir, 'mcp-servers.json'), '{not json');
     expect(new McpServerStore(dir, cipher).servers()).toEqual([]);
   });

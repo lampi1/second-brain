@@ -57,10 +57,10 @@ function fixture(brainRoot: string = rulesBrain().root) {
   const port = createPhonePort(m, bus);
   const decided: { type: string; item: PhoneDecidable; by?: string }[] = [];
   port.onDecidable(ev => decided.push(ev));
-  const strategist = async (steps: { title: string; role?: string }[] = PLAN.steps) => {
+  const strategist = async (steps: { title: string; role?: string; after?: number[] }[] = PLAN.steps) => {
     const s = await m.create({ harness: 'claude', cwd: dir, roleId: 'strategist', title: 'Piano', prompt: 'Porta gli sconti in percentuale' }, 'agent');
     await m.send(s.id, 'Basta domande');
-    await call('plan_propose', s.id, { ...PLAN, steps });
+    await call('plan_propose', s.id, { ...PLAN, steps: steps.map(st => ({ after: [], ...st })) });
     return s;
   };
   const resolvedEvents = () => events.filter(e => e.ch === 'pending:resolved').map(e => e.p as EventMap['pending:resolved']);
@@ -69,7 +69,7 @@ function fixture(brainRoot: string = rulesBrain().root) {
   return { m, dir, sinks, sent, answers, port, decided, strategist, resolvedEvents, items, chat, events };
 }
 
-const PLAN = { steps: [{ title: 'Trovo dove si calcola lo sconto', role: 'scout' }, { title: 'Applico lo sconto', role: 'artisan' }], doneWhen: 'I test passano' };
+const PLAN = { steps: [{ title: 'Trovo dove si calcola lo sconto', role: 'scout', after: [] }, { title: 'Applico lo sconto', role: 'artisan', after: [] }], doneWhen: 'I test passano' };
 const yesNo = (id: string, question = 'Apro la PR?', extra: Partial<PendingRequest> = {}): Omit<PendingRequest, 'chatId'> => ({ id, type: 'question', tool: 'AskUserQuestion', title: question, detail: '', input: {}, at: Date.now(),
   questions: [{ question, multiSelect: false, options: [{ label: 'Sì (consigliato)' }, { label: 'No' }] }], ...extra });
 // a permission that still reaches the user (an edit of the brain's rules file, ADR 0294)
@@ -408,9 +408,9 @@ describe('the phone port', () => {
     expect(await f.port.decidePlanFromPhone(plan.id, (item.ref as { at: string }).at, true)).toBe('ok');
   });
 
-  it('a plan with a Herald step (it sends or publishes) is decided from the phone too (ADR 0275)', async () => {
+  it('a plan with an external draft step (Artisan) is decided from the phone too (ADR 0275)', async () => {
     const f = fixture();
-    const s = await f.strategist([{ title: 'Scrivo il riassunto' }, { title: 'Lo giro al team', role: 'herald' }]);
+    const s = await f.strategist([{ title: 'Scrivo il riassunto' }, { title: 'Lo giro al team', role: 'artisan' }]);
     const d = f.port.listDecidable().find(x => x.chatId === s.id)!;
     expect(d).toMatchObject({ simple: true, reserved: false });
     expect(await f.port.decidePlanFromPhone(s.id, (d.ref as { at: string }).at, true)).toBe('ok');

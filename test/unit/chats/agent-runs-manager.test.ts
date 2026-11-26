@@ -89,7 +89,7 @@ describe('agent runs on chats', () => {
     expect(recovered.m.runs.get(old.run!.runId)).toBeDefined();
     expect(recovered.m.runs.get(phrases.runId)?.oneshot?.job).toBe('phrases');
     const orchestrator = await recovered.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true });
-    const role = await recovered.create('agent', {}, { id: 'herald' });
+    const role = await recovered.create('agent', {}, { id: 'artisan' });
     expect(role.run?.startedBy).toBe('orchestrator');
     const report = delegationTools({ chats: recovered.m, roles: vi.fn(), settings: () => DELEGATION_DEFAULTS,
       engineRefusal: () => null, label: '[agente]', runs: () => recovered.m.runs.list() }).find(t => t.name === 'agent_report')!;

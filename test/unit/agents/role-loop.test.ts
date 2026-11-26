@@ -189,9 +189,9 @@ describe('run feedback and Annulla', () => {
   });
   it('Annulla restores the version before an applied change, and a stale button is refused', () => {
     const w = world();
-    const r = w.catalog.maintain('herald', { instructions: 'Write clearly. Cite the note.' }, 'lesson')!;
-    expect(() => w.feedback.undo({ agentId: 'herald', expectedRevision: r.profile.updatedAt - 1, version: r.before })).toThrow(/cambiato/);
-    const back = w.feedback.undo({ agentId: 'herald', expectedRevision: r.profile.updatedAt, version: r.before });
+    const r = w.catalog.maintain('artisan', { instructions: 'Write clearly. Cite the note.' }, 'lesson')!;
+    expect(() => w.feedback.undo({ agentId: 'artisan', expectedRevision: r.profile.updatedAt - 1, version: r.before })).toThrow(/cambiato/);
+    const back = w.feedback.undo({ agentId: 'artisan', expectedRevision: r.profile.updatedAt, version: r.before });
     expect(back.activeVersion).toBe(r.before);
   });
 });

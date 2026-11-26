@@ -16,12 +16,12 @@ it('focuses the coordinator without leaving Memoria', () => {
   expect(ui.get().map).toBe(false);
   expect(ui.get().focusReq?.chatId).toBe('r');
 });
-it.each([toggleOrchestrator, () => focusChat('r')])('keeps the 3D map open when focusing the coordinator (%#)', focus => {
+it.each([toggleOrchestrator, () => focusChat('r')])('redirects legacy mappa to 2D collegamenti and keeps it open when focusing the coordinator (%#)', focus => {
   go({ page: 'memoria' });
   go({ page: 'mappa' });
   focus();
-  expect(ui.get().page).toBe('memoria');
-  expect(ui.get().map).toBe(true);
+  expect(ui.get().page).toBe('collegamenti');
+  expect(ui.get().map).toBe(false);
   expect(ui.get().focusReq?.chatId).toBe('r');
 });
 it('keeps Memoria on the coordinator shortcut', () => {

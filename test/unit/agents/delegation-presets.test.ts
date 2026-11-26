@@ -124,11 +124,12 @@ describe('a part of an approved plan takes its step\'s preset', () => {
     expect(f.created[0]).not.toHaveProperty('model');
   });
   it('a step without a preset stays on Base, and the part\'s own preset wins over the step\'s', async () => {
-    const f = fixture({ plan });
-    await f.call('agent_delegate', f.delegateArgs({ step: 2 }));
-    expect(f.created[0]).not.toHaveProperty('preset');
-    await f.call('agent_delegate', f.delegateArgs({ step: 1, preset: 'min', presetWhy: 'basta poco' }));
-    expect(f.created[1]).toMatchObject({ preset: 'min', presetWhy: 'basta poco' });
+    const f2 = fixture({ plan: { ...plan, steps: [{ ...plan.steps[0]!, state: 'done' }, plan.steps[1]!] } });
+    await f2.call('agent_delegate', f2.delegateArgs({ step: 2 }));
+    expect(f2.created[0]).not.toHaveProperty('preset');
+    const f1 = fixture({ plan });
+    await f1.call('agent_delegate', f1.delegateArgs({ step: 1, preset: 'min', presetWhy: 'basta poco' }));
+    expect(f1.created[0]).toMatchObject({ preset: 'min', presetWhy: 'basta poco' });
   });
   it('agent_assign_task with step and no preset moves the reused child to the step\'s preset', async () => {
     const f = fixture({ plan });
