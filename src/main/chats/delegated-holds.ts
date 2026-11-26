@@ -139,16 +139,42 @@ function runOf(raw: string, shell: Shell, args: readonly string[] | null = null,
 
 const piece = (c: Command): string => c.body ? `${c.text}\n${c.body}` : c.text;
 
-function cloudHold(run: Run): Hold | null {
+const HOOKS_CLI_PATH = /^(?:[A-Za-z]:[\\/]|\/)(?:(?!\.\.(?:[\\/]|$)).)+[\\/](?:rules|product-rules)[\\/]hooks[\\/]cli\.mjs$/i;
+const HOOKS_CLI_BODY = /^\s*import\s*\{\s*command\s*\}\s*from\s*['"]\.\.\/cli\.mjs['"];?\s*try\s*\{\s*console\.log\(JSON\.stringify\(command\(process\.argv\.slice\(2\)\)\)\);\s*\}\s*catch\b[\s\S]{0,250}$/;
+const HOOKS_CLI_OPS = /^(?:now|error|agent|lint|lease|session|cost)$/;
+const SIBLING_EXEC = /\b(?:child_process|spawn(?:Sync)?|exec(?:Sync|File|FileSync)|createRequire|vm\.run)\b|\bfetch\s*\(/i;
+/** True only for a direct, flagless `node <abs>/hooks/cli.mjs <safe-op> ...` invocation of the app's own memory writer,
+ *  so plain text notes mentioning cloud/DB words do not trigger false-positive holds. */
+function isHooksCli(c: Command, ctx: HoldContext, whole: string): boolean {
+  const at = progAt(c);
+  if (!/^node$/i.test(prog(c)) || c.nested || c.body) return false;
+  if (/\bNODE_(?:OPTIONS|PATH)\s*=/i.test(whole) || c.words.slice(0, at).some(w => /^NODE_/i.test(w))) return false;
+  const file = c.words[at + 1] ?? '', op = c.words[at + 2] ?? '';
+  if (!HOOKS_CLI_PATH.test(file) || !HOOKS_CLI_OPS.test(op)) return false;
+  const body = scriptText(file, ctx);
+  if (body === null) return false;
+  const stripped = body.replace(/^[ \t]*(?:#|\/\/).*$/gm, '').trim();
+  if (RUNS_PROGRAMS.test(stripped) || !HOOKS_CLI_BODY.test(stripped)) return false;
+  const sibling = scriptText(path.resolve(path.dirname(file), '..', 'cli.mjs'), ctx);
+  return sibling === null || !SIBLING_EXEC.test(sibling);
+}
+
+function cloudHold(run: Run, ctx: HoldContext): Hold | null {
   const whole = run.kept.map(piece).join('\n'), strict = !!run.code && !RUNS_PROGRAMS.test(whole);
+  const pipeCount = new Map<number, number>();
+  for (const c of run.all) if (c.pipe >= 0) pipeCount.set(c.pipe, (pipeCount.get(c.pipe) ?? 0) + 1);
   for (const c of run.kept) {
     const text = piece(c), isProd = (s: string): boolean => PROD.test(s);
-    const direct = cloudCommand(prog(c), c.words.slice(progAt(c) + 1), isProd);
+    const p = prog(c);
+    const piped = c.pipe >= 0 && (pipeCount.get(c.pipe) ?? 0) > 1;
+    const direct = cloudCommand(p, c.words.slice(progAt(c) + 1), isProd);
     if (direct) return direct;
+    if (!run.code && isHooksCli(c, ctx, whole)) continue;
     const cli = strict ? null : cliWrite(text, isProd);
     if (cli) return cli;
-    if (!strict && cloudWords(text)) return { kind: 'cloud-write', why: 'il comando modifica un servizio cloud' };
-    if (!/^(?:az|invoke-azrestmethod)$/i.test(prog(c)) && httpWrite(text, whole)) return { kind: 'cloud-write', why: 'non riconosco la richiesta al servizio cloud come lettura' };
+    const ownAzCmdlet = !run.code && !c.nested && !c.body && !piped && /^[a-z]+-az[a-z]\w*$/i.test(p);
+    if (!strict && !ownAzCmdlet && cloudWords(text)) return { kind: 'cloud-write', why: 'il comando modifica un servizio cloud' };
+    if (!/^(?:az|invoke-azrestmethod)$/i.test(p) && httpWrite(text, whole, isProd)) return { kind: 'cloud-write', why: 'non riconosco la richiesta al servizio cloud come lettura' };
     if (sdkWrite(text, strict)) return { kind: 'cloud-write', why: 'il codice modifica un servizio cloud' };
   }
   return null;
@@ -195,6 +221,7 @@ function dbHold(run: Run, given: readonly string[], ctx: HoldContext): Hold | nu
       statements.push(...payloads);
       if ((!call.reads && !payloads.length) || payloads.some(s => !(call.mongo ? mongoRead(s) : wholeStatementReads(s)))) unknown = true;
     } else {
+      if (!run.code && isHooksCli(c, ctx, whole)) continue;
       loose.push(piece(c).replace(/^exec\s+/, ''));
       if (run.code || INTERPRETER.test(prog(c))) {
         if (CLIENT.test(piece(c))) client = unknown = true;
@@ -295,7 +322,7 @@ function judge(run: Run, ctx: HoldContext, script?: readonly string[]): Hold | n
     const verb = w.slice(1).find(x => WRITE.test(x) || PLAIN_READ.test(x));
     if (verb && !PLAIN_READ.test(verb)) return { kind: 'unreadable', why: 'il nome del programma è in una variabile e il comando indica una scrittura' };
   }
-  const cloud = cloudHold(run);
+  const cloud = cloudHold(run, ctx);
   if (cloud) return cloud;
   if (!script) for (const c of run.kept) for (const r of scripts(c)) {
     const text = scriptText(r.file, ctx), h = text === null ? null : scriptHold(r, text, ctx);
@@ -304,9 +331,32 @@ function judge(run: Run, ctx: HoldContext, script?: readonly string[]): Hold | n
   return dbHold(run, script ?? [], ctx) ?? releaseHold(run);
 }
 
-/** PowerShell's parameters by name, from how the script is called */
+/** Extract a top-level PowerShell param(...) block only (never inside a function), linear up to 4000 chars. */
+function paramBlock(text: string): string {
+  const head = text.replace(/^(?:\s|#[^\r\n]*|<#[\s\S]*?#>|\[CmdletBinding\([^)]*\)\])*/i, '');
+  const m = /^param\s*\(/i.exec(head);
+  if (!m) return '';
+  let i = m[0].length, depth = 1, quote: string | null = null;
+  const limit = Math.min(head.length, i + 4000);
+  for (; i < limit; i++) {
+    const ch = head[i]!;
+    if (quote) { if (ch === quote && head[i - 1] !== '`') quote = null; continue; }
+    if (ch === '\'' || ch === '"') { quote = ch; continue; }
+    if (ch === '(') depth++;
+    else if (ch === ')' && --depth === 0) return head.slice(m[0].length, i);
+  }
+  return '';
+}
+
+/** PowerShell's parameters by name, from how the script is called (plus literal param defaults when omitted). */
 function namedArgs(text: string, args: readonly string[]): Map<string, string> {
-  const names = [...(/\bparam\s*\(([\s\S]{0,4000}?)\)\s*(?:\n|$|[A-Za-z$&])/i.exec(text)?.[1] ?? '').matchAll(/\$(\w+)/g)].map(m => m[1]!.toLowerCase());
+  const block = paramBlock(text);
+  const names = [...block.matchAll(/\$(\w+)/g)].map(m => m[1]!.toLowerCase()).filter(n => !/^(?:true|false|null)$/.test(n));
+  const defaults = new Map<string, string>();
+  for (const m of block.matchAll(/\$(\w+)\s*=\s*(?:'([^'\r\n]+)'|"([^"$`\r\n]+)")/g)) {
+    const k = m[1]!.toLowerCase();
+    if (!/^(?:true|false|null)$/.test(k)) defaults.set(k, (m[2] ?? m[3])!);
+  }
   const out = new Map<string, string>(), left: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const m = /^-(\w+)(?::(.*))?$/s.exec(args[i]!), name = m && names.find(n => n.startsWith(m[1]!.toLowerCase()));
@@ -314,6 +364,7 @@ function namedArgs(text: string, args: readonly string[]): Map<string, string> {
     if (m![2] !== undefined) out.set(name, m![2]); else if (i + 1 < args.length && !/^-[A-Za-z]/.test(args[i + 1]!)) out.set(name, args[++i]!);
   }
   for (const n of names) if (!out.has(n) && left.length) out.set(n, left.shift()!);
+  for (const [k, v] of defaults) if (!out.has(k)) out.set(k, v);
   return out;
 }
 

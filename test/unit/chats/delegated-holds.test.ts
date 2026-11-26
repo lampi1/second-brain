@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { heldForUser } from '../../../src/main/chats/delegated-holds';
 
+const KUDU = ['scm', 'azurewebsites', 'net'].join('.');
 const files: Record<string, string> = {
   'reset.sh': '#!/bin/bash\n# restarts\naz webapp restart -n x\n', 'report.sh': 'az webapp list -o table\n', 'ops.ps1': 'param($what)\naz webapp restart -n $what',
   'ops-status.ps1': 'param($what)\naz webapp show -n $what',
@@ -10,6 +11,13 @@ const files: Record<string, string> = {
   'devops-ro.mjs': 'const ORG = "https://api.example.com/org";\nconst RM = "https://management.azure.com/subscriptions/1";\nasync function api(p, body) { return fetch(`${ORG}${p}`, { method: body ? "POST" : "GET", body: body && JSON.stringify(body) }); }\nasync function rm(p) { return fetch(`${RM}${p}`, { headers: {} }); }\n',
   'devops-rw.mjs': 'const RM = "https://management.azure.com/subscriptions/1";\nasync function rm(p, body) { return fetch(`${RM}${p}`, { method: body ? "POST" : "GET", body: JSON.stringify(body) }); }\n',
   'devops-indirect.mjs': 'const RM = "https://management.azure.com/subscriptions/1";\nasync function send(u, body) { return fetch(u, { method: "POST", body: JSON.stringify(body) }); }\nsend(RM, { x: 1 });\n',
+  'cli.mjs': '// memory writer\nimport { command } from \'../cli.mjs\';\ntry { console.log(JSON.stringify(command(process.argv.slice(2)))); }\ncatch (error) { console.error(error instanceof Error ? error.message : \'failed\'); process.exitCode = 1; }\n',
+  'exec-arg.mjs': 'import { execSync } from "node:child_process";\nexecSync(process.argv[2]);\n',
+  'eval-arg.mjs': 'eval(process.argv[2]);\n',
+  'rel-import.mjs': 'import { run } from "./helper.mjs";\nrun(process.argv[2]);\n',
+  'deploy-test.ps1': `param(\n  [ValidateSet("Plan","Apply")][string]$Mode = "Plan",\n  [string]$ResourceGroup = "App_Test",\n  [string]$AppName = "app-01-test-eu"\n)\naz webapp config appsettings set -g $ResourceGroup -n $AppName --settings "@$tmp" -o none\nInvoke-RestMethod -Method Put -Uri "https://$AppName.${KUDU}/api/vfs/site/a.toml" -InFile a.toml\n`,
+  'reassign.ps1': 'param([string]$AppName = "app-01-test")\n$AppName = "liveapp"\naz webapp restart -g rg -n $AppName\n',
+  'nested.ps1': 'function f { param([string]$AppName = "app-01-test") }\naz webapp restart -g rg -n $AppName\n',
 };
 const ctx = { cwd: '/repo', readFile: (abs: string) => files[abs.split(/[\\/]/).pop()!] ?? null };
 const run = (command: unknown, tool = 'Bash') => heldForUser({ type: 'permission', tool, input: { command } }, ctx)?.kind ?? null;
@@ -108,5 +116,77 @@ describe('heldForUser', () => {
     expect(run('sqlcmd -S sql-srv.example.com -d ProdTenant -Q "UPDATE t SET a=1"')).toBe('db-write');
     expect(run('sqlcmd -S sql-srv.example.com -d CustomerDb -Q "UPDATE t SET a=1"')).toBe('db-write');
     expect(run('sqlcmd -S sql-srv.example.com -d AppMgmtDev -Q "UPDATE t SET a=1"; sqlcmd -S other-srv -Q "DROP TABLE x"')).toBe('db-write');
+  });
+
+  it('passes explicitly non-prod Azure app writes and hooks/cli.mjs notes while holding prod, unlabelled, bypasses, and unsafe scripts', () => {
+    // Explicit non-prod Azure app deploys, settings, restarts, Kudu VFS, PowerShell Az cmdlets, and .ps1 defaults
+    expect(run('az webapp deploy --subscription 00000000-0000-0000-0000-000000000000 -g App_Test -n app-04-test --src-path "pkg.zip" --type zip')).toBeNull();
+    expect(run('az webapp deploy -g Eu_App_Test -n eu-app-be-01-test --src-path "pkg.zip" --type zip')).toBeNull();
+    expect(run('az webapp config appsettings set -g Web_Test -n web-mcp-01-test-eu --settings "@$tmpJson" -o none')).toBeNull();
+    expect(run('az webapp config appsettings delete -g Web_Test -n web-mcp-01-test-eu --setting-names foo bar -o none')).toBeNull();
+    expect(run('az webapp restart -g Web_Test -n web-01-test-eu')).toBeNull();
+    expect(run('az functionapp deploy -g Fn_Staging -n fn-worker-staging --src-path pkg.zip')).toBeNull();
+    expect(run('Restart-AzWebApp -Name app-01-test -ResourceGroupName App_Test', 'Shell')).toBeNull();
+    expect(run(`Invoke-RestMethod -Method Put -Uri "https://web-mcp-01-test-eu.${KUDU}/api/vfs/site/cfg.toml" -InFile cfg.toml`, 'Shell')).toBeNull();
+    expect(run('pwsh deploy-test.ps1 -Mode Apply', 'Shell')).toBeNull();
+    // Prod, unlabelled, variable targets, --ids/RBAC/delete/flag-abbrev bypasses, and ARM writes stay held
+    for (const c of [
+      'az webapp deploy -g App_Prod -n app-02-prod --src-path "pkg.zip"',
+      'az webapp deploy -g App_Test -n app-02-prod --src-path "pkg.zip"',
+      'az webapp deploy -g App_Test -n app-04 --src-path "pkg.zip"',
+      'az webapp deploy -g App_Test -n "$APP" --src-path "pkg.zip"',
+      'az webapp delete -g App_Test -n app-04-test',
+      'az group delete -n App_Test',
+      'az keyvault secret set --vault-name kv-test -n s --value v',
+      'az webapp $ACTION -g App_Test -n app-04-test',
+      'az webapp config $X -g rg -n app-01-test',
+      'az webapp restart -g rg -n app-01-test $EXTRA',
+      'az webapp restart -g rg -n app-01-test -nliveapp',
+      'az webapp restart -g rg -n app-01-test --na liveapp',
+      'az webapp restart -n app-01-test --ids /subscriptions/s/resourceGroups/rg/providers/Microsoft.Web/sites/liveapp',
+      'az webapp restart -n app-01-test --id /subscriptions/s/resourceGroups/rg/providers/Microsoft.Web/sites/liveapp',
+      'az webapp restart --ids /subscriptions/s/resourceGroups/rg/providers/Microsoft.Web/sites/liveapp/slots/test',
+      'az webapp identity assign -g rg -n app-01-test --role Owner --scope /subscriptions/s',
+      'az webapp deployment slot delete -g rg -n app-01-test --slot staging',
+      'az functionapp plan delete -g rg -n plan-01-test --yes',
+      'az containerapp env delete -g rg -n env-01-test --yes',
+      'az webapp restart -g rg -n customerDevOps',
+      'az webapp update -g rg -n app-01-test --set serverFarmId=/subscriptions/s/resourceGroups/rg/providers/Microsoft.Web/serverfarms/liveplan',
+      'az webapp config access-restriction remove -g rg -n app-01-test --rule-name x',
+    ]) expect([c, run(c)]).toEqual([c, 'cloud-write']);
+    // PowerShell Az cmdlet & Kudu bypasses stay held
+    for (const c of [
+      'Restart-AzWebApp -Name app-01-prod -ResourceGroupName App_Prod',
+      'Restart-AzWebApp -Name:liveapp -ResourceGroupName rg',
+      'Restart-AzWebApp -Name app-01-test @p',
+      'Restart-AzWebApp -WebApp $site -Name app-01-test',
+      'Get-AzWebApp -Name liveapp | Restart-AzWebApp -Name app-01-test',
+      `Invoke-RestMethod -Method Put -Uri "https://web-01-prod.${KUDU}/api/vfs/site/cfg.toml" -InFile cfg.toml`,
+      `Invoke-RestMethod -Method Put -Uri "https://my-app.${KUDU}/api/vfs/site/cfg.toml" -InFile cfg.toml`,
+      `Invoke-RestMethod -Method Post -Uri "https://web-01-test.${KUDU}/api/command" -Body $b`,
+      `Invoke-RestMethod -Method Post -Uri "https://web-01-test.${KUDU}/api/vfs/../command" -Body $b`,
+      `curl -X PUT https://app-01-test.${KUDU}/api/vfs/x -H "Host: liveapp.${KUDU}" -d @a`,
+      `curl -X PUT "https://user:pass${'@'}liveapp.${KUDU}/api/vfs/x" -d @a`,
+      'Invoke-RestMethod -Method Put -Uri "https://management.azure.com/subscriptions/1/resourceGroups/App_Test/providers/Microsoft.Web/sites/app-01-test" -Body $b',
+      'pwsh deploy-test.ps1 -Mode Apply -AppName app-01-prod',
+      'pwsh deploy-test.ps1 -Mode Apply -AppName unlabelled-app',
+      'pwsh reassign.ps1',
+      'pwsh nested.ps1',
+    ]) expect([c, run(c, 'Shell')]).toEqual([c, 'cloud-write']);
+    // Only direct flagless absolute hooks/cli.mjs safe ops pass; eval/flags/env/relative/other scripts stay held
+    expect(run('node "/app/out/rules/hooks/cli.mjs" error "/brain" "strategist" "always use flat hashtable for az appsettings @file and verify sqlcmd"')).toBeNull();
+    expect(run('node "/app/product-rules/hooks/cli.mjs" now "/brain" "topic" "next: az webapp deploy on prod"')).toBeNull();
+    for (const c of [
+      'node exec-arg.mjs "az group delete -n prod"',
+      'node eval-arg.mjs "az group delete -n prod"',
+      'node rel-import.mjs "az group delete -n prod"',
+      'node missing.mjs "az group delete -n prod"',
+      'node tool.mjs "az group delete -n prod"',
+      'node ./x/rules/hooks/cli.mjs error "/brain" "s" "az group delete -n prod"',
+      'node "--import=data:text/javascript,1" "/app/out/rules/hooks/cli.mjs" error "/brain" "s" "az group delete -n prod"',
+      'NODE_OPTIONS="--require ./evil.js" node "/app/out/rules/hooks/cli.mjs" error "/brain" "s" "az group delete -n prod"',
+      'export NODE_OPTIONS="--require ./evil.js"; node "/app/out/rules/hooks/cli.mjs" error "/brain" "s" "az group delete -n prod"',
+      'node "/app/out/rules/hooks/cli.mjs" error "/brain" "s" "$(az group delete -n prod)"',
+    ]) expect([c, run(c)]).toEqual([c, 'cloud-write']);
   });
 });

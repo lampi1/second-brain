@@ -102,6 +102,74 @@ function verdict(prog: string, words: readonly string[]): Verdict {
 const split = (rest: string): string[] => (rest.match(/"[^"\n]*"|'[^'\n]*'|[^\s"']+/g) ?? []).map(w => w.replace(/^(["'])([\s\S]*)\1$/, '$2'));
 export type CloudHit = { kind: 'cloud-write' | 'prod-release'; why: string };
 
+const NON_PROD_TAG = /(?:^|[-_])(?:dev|tst|qa|uat|staging|stage|sandbox|test)(?:[-_.\d]|$)/i;
+const NON_PROD_CAMEL = /(?<=[a-z])(?:Dev(?!Ops\b)|Test|Tst|Staging|Sandbox)(?:[A-Z]|[-_\d]|$)/;
+/** True only when a literal resource name clearly carries a non-prod/test marker and no prod marker or variable. */
+export function isNonProdName(name: string, isProd: (s: string) => boolean): boolean {
+  return !!name && !isProd(name) && !/[$`%]/.test(name) && (NON_PROD_TAG.test(name) || NON_PROD_CAMEL.test(name));
+}
+
+const NON_PROD_AZ_GROUPS = /^(?:webapp|functionapp|containerapp|staticwebapp)$/i;
+const AZ_SAFE_PATHS: readonly (readonly string[])[] = [
+  ['deploy'], ['up'], ['restart'], ['start'], ['stop'], ['create'], ['update'],
+  ['deployment', 'source', 'config-zip'],
+  ['config', 'set'],
+  ['config', 'appsettings', 'set'],
+  ['config', 'appsettings', 'delete'],
+  ['log', 'config'],
+];
+function flagValues(words: readonly string[], names: RegExp, allowColon = false): { values: string[]; bad: boolean } {
+  const values: string[] = [];
+  const sep = allowColon ? /^(--?[\w-]+)[=:](.*)$/ : /^(--?[\w-]+)=(.*)$/;
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i]!;
+    const eq = sep.exec(w);
+    if (eq && names.test(eq[1]!)) {
+      if (!eq[2] || /[$`%]/.test(eq[2])) return { values, bad: true };
+      values.push(eq[2]);
+      continue;
+    }
+    if (names.test(w)) {
+      const next = words[++i] ?? '';
+      if (!next || next.startsWith('-') || /[$`%]/.test(next)) return { values, bad: true };
+      values.push(next);
+    }
+  }
+  return { values, bad: false };
+}
+
+function isNonProdAzAppWrite(words: readonly string[], isProd: (s: string) => boolean): boolean {
+  if (isProd(words.join(' '))) return false;
+  // Fail closed on multi-resource --ids, RBAC flags, abbreviated/attached -n/--na, or unresolved variables outside --settings values.
+  for (let idx = 0; idx < words.length; idx++) {
+    const w = words[idx]!;
+    if (/^--(?:id(?:s)?|ro(?:l(?:e)?)?|sc(?:o(?:p(?:e)?)?)?|set)(?:=|$)/i.test(w)) return false;
+    if (/^-n.+/i.test(w) || /^--na(?:m)?(?:=|$)/i.test(w)) return false;
+    const prev = idx > 0 ? words[idx - 1]! : '';
+    const isSettingsVal = /^--settings$/i.test(prev) || /^--settings=/i.test(w);
+    if (!isSettingsVal && /[$`%]/.test(w)) return false;
+  }
+  let i = 0;
+  while (i < words.length && /^-./.test(words[i]!)) i += AZ_SWITCH.test(words[i]!) ? 1 : 2;
+  const path: string[] = [];
+  const doing = (w: string): boolean => (AZ_READ.test(w) && !AZ_NAMES.test(w)) || WRITE.test(w);
+  for (; i < words.length; i++) {
+    const w = words[i]!;
+    if (!/^-./.test(w)) { path.push(w); continue; }
+    if (AZ_SWITCH.test(w)) continue;
+    if (path.some(doing)) break;
+    i++;
+  }
+  if (path.length < 2 || !NON_PROD_AZ_GROUPS.test(path[0]!) || path.some(w => /[$`%@]/.test(w))) return false;
+  const sub = path.slice(1).map(w => w.toLowerCase());
+  if (!AZ_SAFE_PATHS.some(allowed => allowed.length === sub.length && allowed.every((w, n) => sub[n] === w))) return false;
+  const names = flagValues(words, /^(?:-n|--name)$/i);
+  const groups = flagValues(words, /^(?:-g|--resource-group)$/i);
+  const slots = flagValues(words, /^(?:-s|--slot)$/i);
+  if (names.bad || groups.bad || slots.bad) return false;
+  return names.values.length > 0 && names.values.every(n => isNonProdName(n, isProd));
+}
+
 const CLI_NAME = new RegExp(`^(?:${PROGRAMS})$`, 'i');
 export const releaseRead = /^(?:list|show|get|view|status|history|logs?|download|verify|inspect|describe|query)$/i;
 export function cloudCommand(program: string, words: readonly string[], isProd: (s: string) => boolean): CloudHit | null {
@@ -113,6 +181,12 @@ export function cloudCommand(program: string, words: readonly string[], isProd: 
     if (/^(?:get|find|show|search|read|export|test|measure|compare)-az/i.test(prog) || /^(?:connect|disconnect|select|set|clear|enable|disable)-azcontext$/i.test(prog)) return null;
     if (/^invoke-azrestmethod$/i.test(prog) && !restWrites(words)) return null;
     if (/^invoke-azoperationalinsightsquery$/i.test(prog)) return null;
+    if (/^(?:restart|start|stop|publish|set|update)-az(?:web|function)app$/i.test(prog) && !isProd(words.join(' '))
+      && !words.some(w => /^@|[$`%]|^-(?:webapp|inputobject|resourceid|slot)/i.test(w))) {
+      const names = flagValues(words, /^-name$/i, true);
+      const groups = flagValues(words, /^-resourcegroupname$/i, true);
+      if (!names.bad && !groups.bad && names.values.length > 0 && names.values.every(n => isNonProdName(n, isProd))) return null;
+    }
     return { kind: 'cloud-write', why: 'non riconosco la chiamata Azure PowerShell come lettura' };
   }
   if (!CLI_NAME.test(prog)) return null;
@@ -129,6 +203,8 @@ export function cloudCommand(program: string, words: readonly string[], isProd: 
       const release = (area.toLowerCase() === 'release' && !releaseRead.test(releaseAction)) || (rest.includes('release') && rest.includes('create')) || (rest.includes('run') && isProd(rest.join(' ')));
       return group === 'pipelines' && release ? { kind: 'prod-release', why: 'non riconosco il comando della pipeline di rilascio come lettura' } : null;
     }
+    if (verdict(prog, words) === 'read' || isNonProdAzAppWrite(words, isProd)) return null;
+    return { kind: 'cloud-write', why: `non riconosco il comando ${prog} come lettura` };
   }
   return verdict(prog, words) === 'write' ? { kind: 'cloud-write', why: `non riconosco il comando ${prog} come lettura` } : null;
 }
@@ -200,11 +276,26 @@ function scriptFetchWritesCloud(text: string): boolean | null {
   }
   return false;
 }
+const NON_KUDU_HOSTS = new RegExp(HOSTS.source.replace('|\\.scm\\.azurewebsites\\.net', ''), 'i');
+function onlyNonProdKudu(target: string, whole: string, isProd: (s: string) => boolean): boolean {
+  if (isProd(target) || isProd(whole) || NON_KUDU_HOSTS.test(target) || /\bhost\s*:/i.test(target)) return false;
+  const kuduUrls = [...target.matchAll(/https?:\/\/([A-Za-z0-9-]+)\.scm\.azurewebsites\.net(\/[^\s"'`)]*)?/gi)];
+  if (!kuduUrls.length) return false;
+  // Fail closed if any Kudu SCM host uses variables/userinfo or targets command execution.
+  const allScm = target.match(/\.scm\.azurewebsites\.net\b/gi)?.length ?? 0;
+  return allScm === kuduUrls.length && kuduUrls.every(m => {
+    const p = m[2] ?? '';
+    return isNonProdName(m[1]!, isProd) && !/(?:^|[\\/])\.\.(?:[\\/]|$)|%2e/i.test(p)
+      && /^\/(?:api\/(?:vfs|zipdeploy|wardeploy|publish|deployments)|msdeploy)(?:[/?]|$)/i.test(p);
+  });
+}
 /** @param whole where a variable's address may be written; a command with its own literal address is judged by it */
-export function httpWrite(text: string, whole: string): boolean {
+export function httpWrite(text: string, whole: string, isProd: (s: string) => boolean = () => false): boolean {
   const { writes, posts } = httpMethods(text);
   if (!writes && !posts) return false;
-  if (!HOSTS.test(/https?:\/\/[\w.-]/i.test(text) ? text : whole)) return false;
+  const target = /https?:\/\/[\w.-]/i.test(text) ? text : whole;
+  if (!HOSTS.test(target)) return false;
+  if (onlyNonProdKudu(target, whole, isProd)) return false;
   if (!writes && /\bfetch\s*\(/.test(text) && !/\b(?:curl|wget|iwr|irm|invoke-restmethod|invoke-webrequest|axios|requests\.)\b/i.test(text)) {
     const perCall = scriptFetchWritesCloud(text);
     if (perCall !== null) return perCall;
