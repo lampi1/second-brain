@@ -144,6 +144,16 @@ export function placeOf(v: unknown, where: string): 'here' | 'copy' | undefined 
 }
 export const PLACE_SCHEMA = { type: 'string', enum: ['here', 'copy'], description: 'here (the default) = works in cwd itself, e.g. a slot already booked: nothing is copied, its uncommitted changes are only told. copy = a new isolated worktree of that folder\'s repository (clean and committed), only when you really want one' };
 
+/** Parses a JSON string for flat MCP parameters (tasksJson, contractJson, #487) into the expected object or array. */
+function parseJsonArg(v: unknown, expected: 'object' | 'array', what: string): unknown {
+  if (typeof v !== 'string' || !v.trim()) throw new Error(`${what}: JSON ${expected} string required.`);
+  let parsed: unknown;
+  try { parsed = JSON.parse(v); } catch (e) { throw new Error(`${what}: invalid JSON (${e instanceof Error ? e.message : String(e)}).`); }
+  const ok = expected === 'array' ? Array.isArray(parsed) : !!parsed && typeof parsed === 'object' && !Array.isArray(parsed);
+  if (!ok) throw new Error(`${what}: JSON ${expected} required.`);
+  return parsed;
+}
+
 export function delegationTools(d: DelegationDeps): McpTool[] {
   /** the runs already sent back once for a missing userAction (#358): the second identical call goes through */
   const askedUserAction = new Set<string>();
@@ -172,7 +182,12 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (!isDelegatorRole(own.id)) throw new Error(`agent_delegate refused: ${own.name} does not delegate (only the Orchestrator and the Strategist do). Do your own part; put a part for another role in your agent_report as a ready contract (role, goal, done-criteria): your parent launches it.`);
     // the ceiling of every part's preset (ADR 0336): the model this chat runs on, else its card's
     const delegator: Delegator = { role: own.id, model: parent.model || own.model || null };
-    const raw = a.tasks;
+    if (a.tasks !== undefined && a.tasks !== null && a.tasksJson !== undefined && a.tasksJson !== null) throw new Error('agent_delegate: pass either tasks or tasksJson, not both.');
+    const raw = a.tasksJson !== undefined && a.tasksJson !== null
+      ? parseJsonArg(a.tasksJson, 'array', 'tasksJson')
+      : typeof a.tasks === 'string'
+        ? parseJsonArg(a.tasks, 'array', 'tasks')
+        : a.tasks;
     if (!Array.isArray(raw) || !raw.length || raw.length > TASKS_MAX) throw new Error(`agent_delegate: tasks = 1 to ${TASKS_MAX} parts.`);
     const limits = d.settings(), all = d.chats.list();
     const parentOf = (id: string) => all.find(c => c.id === id)?.parentId;
@@ -191,7 +206,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     const plans = raw.map((value, i) => {
       const t = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
       if (!t) throw new Error(`tasks[${i}]: object required.`);
-      const extra = Object.keys(t).find(k => !['role', 'title', 'contract', 'cwd', 'place', 'step', 'freshReview', 'preset', 'presetWhy', 'taskKind', 'reviewOf'].includes(k));
+      const extra = Object.keys(t).find(k => !['role', 'title', 'contract', 'contractJson', 'cwd', 'place', 'step', 'freshReview', 'preset', 'presetWhy', 'taskKind', 'reviewOf'].includes(k));
       if (extra) throw new Error(`tasks[${i}]: unknown field ${extra}.`);
       const role = t.role;
       if (!isWorkRole(role)) throw new Error(`tasks[${i}].role: one of ${WORK_ROLE_IDS.join(', ')}.`);
@@ -205,7 +220,13 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       const title = typeof t.title === 'string' ? t.title.trim() : '';
       if (!title || title.length > TITLE_MAX) throw new Error(`tasks[${i}].title: 1 to ${TITLE_MAX} characters ("Area · what").`);
       if (title.toLowerCase() === ORCHESTRATOR_TITLE.toLowerCase()) throw new Error(`tasks[${i}].title: «${title}» is reserved for the Orchestrator.`);
-      const contract = checkContract(t.contract, role);
+      if (t.contract !== undefined && t.contract !== null && t.contractJson !== undefined && t.contractJson !== null) throw new Error(`tasks[${i}]: pass either contract or contractJson, not both.`);
+      const rawContract = t.contractJson !== undefined && t.contractJson !== null
+        ? parseJsonArg(t.contractJson, 'object', `tasks[${i}].contractJson`)
+        : typeof t.contract === 'string'
+          ? parseJsonArg(t.contract, 'object', `tasks[${i}].contract`)
+          : t.contract;
+      const contract = checkContract(rawContract, role);
       const beyond = (contract.tools ?? []).filter(c => !allowsClass(parentPolicy, c));
       if (beyond.length) throw new Error(`tasks[${i}].contract.tools refused: ${beyond.join(', ')} goes beyond your own permissions (a child never gets more than its parent).`);
       const outside = (contract.tools ?? []).filter(c => !(profile.tools?.allow ?? []).includes(c));
@@ -278,7 +299,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
   async function assignChild(a: Record<string, unknown>, callerId: string): Promise<unknown> {
     const parent = activeParent(callerId, 'agent_assign_task');
     if (!d.chats.assignTask || !d.chats.userEvents) throw new Error('agent_assign_task is unavailable.');
-    const extra = Object.keys(a).find(k => !['chatId', 'roleId', 'cwd', 'place', 'mode', 'expectedVersion', 'expectedEventSeq', 'contract', 'step', 'preset', 'presetWhy', 'taskKind'].includes(k));
+    const extra = Object.keys(a).find(k => !['chatId', 'roleId', 'cwd', 'place', 'mode', 'expectedVersion', 'expectedEventSeq', 'contract', 'contractJson', 'step', 'preset', 'presetWhy', 'taskKind'].includes(k));
     if (extra) throw new Error(`agent_assign_task: unknown field ${extra}.`);
     // a child that went on in another chat (an engine change): the task goes to the one that works now (ADR 0356)
     const child = typeof a.chatId === 'string' ? successorIn(d.chats.list(), a.chatId) : undefined;
@@ -298,7 +319,12 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     // expectedVersion and expectedEventSeq are optional (cloudroom P6): honoured when given, else the current version
     if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || (a.expectedVersion !== undefined && (!Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1))) throw new Error('Invalid assignment mode/version.');
     if (a.expectedEventSeq !== undefined && (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0)) throw new Error('Invalid user event cursor.');
-    const contractRaw = a.contract;
+    if (a.contract !== undefined && a.contract !== null && a.contractJson !== undefined && a.contractJson !== null) throw new Error('agent_assign_task: pass either contract or contractJson, not both.');
+    const contractRaw = a.contractJson !== undefined && a.contractJson !== null
+      ? parseJsonArg(a.contractJson, 'object', 'contractJson')
+      : typeof a.contract === 'string'
+        ? parseJsonArg(a.contract, 'object', 'contract')
+        : a.contract;
     if (!contractRaw || typeof contractRaw !== 'object' || Array.isArray(contractRaw) || Object.keys(contractRaw).some(k => !['goal', 'output', 'context', 'doneWhen', 'why', 'alreadyDecided', 'inScope', 'outOfScope', 'constraints', 'steps', 'askIf'].includes(k))) throw new Error('Reuse contract allows only goal, output, context, doneWhen and the hybrid fields (why, alreadyDecided, inScope, outOfScope, constraints, steps, askIf); tools and skills require a fresh chat.');
     const contract = checkContract(contractRaw, a.roleId);
     // the preset of this task (ADR 0336): as agent_delegate's, missing = its plan step's (ADR 0346), else Base; the child
@@ -586,15 +612,17 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     } };
   return [{
     name: 'agent_delegate',
-    description: 'Delegate the parts of your task to other roles: each part starts a visible chat under yours, running the role you name (only roles your role may launch: agent_catalog). The child sees only its contract, never this conversation: write it self-contained. Several parts start at once (parallel): a parallel group of your approved plan goes in one call. It never gets more permissions than you, works in the folder you name (cwd: any existing one: the brain, any repository, worktree or slot; place: here by default, copy only to get an isolated worktree), and returns one result with agent_report that reaches you as a message. The depth limit is the user\'s. A Sentinel reviewing a child\'s work: reviewOf = that child\'s runId. One review chat per piece of work: once a Sentinel of yours reported on this task, a new Sentinel is refused; re-review the fix in that chat with agent_assign_task (only the fix delta). Each part runs on its role\'s card: preset picks one of its three (omitted = its plan step\'s preset, else base); the model is the one the card has now.',
-    inputSchema: { type: 'object', required: ['tasks'], additionalProperties: false, properties: {
-      tasks: { type: 'array', minItems: 1, maxItems: TASKS_MAX, items: { type: 'object', required: ['role', 'title', 'contract'], additionalProperties: false, properties: {
+    description: 'Delegate the parts of your task to other roles: each part starts a visible chat under yours, running the role you name (only roles your role may launch: agent_catalog). The child sees only its contract, never this conversation: write it self-contained. Several parts start at once (parallel): a parallel group of your approved plan goes in one call. It never gets more permissions than you, works in the folder you name (cwd: any existing one: the brain, any repository, worktree or slot; place: here by default, copy only to get an isolated worktree), and returns one result with agent_report that reaches you as a message. The depth limit is the user\'s. A Sentinel reviewing a child\'s work: reviewOf = that child\'s runId. One review chat per piece of work: once a Sentinel of yours reported on this task, a new Sentinel is refused; re-review the fix in that chat with agent_assign_task (only the fix delta). Each part runs on its role\'s card: preset picks one of its three (omitted = its plan step\'s preset, else base); the model is the one the card has now. Pass tasksJson (JSON array string of tasks) instead of tasks, or contractJson instead of contract, on clients that drop nested objects/arrays (e.g. Cursor with Gemini).',
+    inputSchema: { type: 'object', additionalProperties: false, properties: {
+      tasksJson: { type: 'string', description: 'JSON array string of tasks (same items as tasks). Prefer this on Cursor/Gemini or any client that drops nested objects/arrays.' },
+      tasks: { type: 'array', minItems: 1, maxItems: TASKS_MAX, items: { type: 'object', required: ['role', 'title'], additionalProperties: false, properties: {
         role: { type: 'string', enum: [...WORK_ROLE_IDS] }, title: { ...str, description: '"Area · what", e.g. "Ordini · Log degli errori"' },
         cwd: { ...str, description: 'optional absolute folder the part works in: yours (the default) or any other existing one. It gives no permission' }, place: PLACE_SCHEMA,
         step: { type: 'integer', minimum: 1, description: 'with a plan approved by the user (plan_propose): the step number this part does' },
         ...PRESET_SCHEMA,
         freshReview: { type: 'boolean', description: 'only for role sentinel: open a fresh one although a Sentinel of yours already reviewed this task; only when the user asked for it or it checks a part none of them covers' },
         reviewOf: { ...str, description: 'only for role sentinel: the runId of your child\'s run it reviews (agent_children)' },
+        contractJson: { type: 'string', description: 'JSON object string of contract (same fields as contract). Prefer when nested objects are dropped.' },
         contract: { type: 'object', required: ['goal', 'doneWhen'], additionalProperties: false, properties: {
           goal: { ...str, description: 'the wanted outcome, one checkable sentence' }, output: { ...str, description: 'what to give back; default: the role\'s output' },
           doneWhen: { type: 'array', items: str, minItems: 1, maxItems: 12, description: 'checkable criteria, each with the expected evidence' },
@@ -614,13 +642,14 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: async (a, ctx) => JSON.stringify(await delegate(a, callerOf(ctx.params))),
   }, {
     name: 'agent_assign_task',
-    description: 'Continue YOUR direct child in the same role with a separate task run. The user\'s messages and answers in that chat you have not seen come back to you readable (userInstructions): the child already has them, so they are not repeated in its prompt; account for them, and correct the child or ask the user where your contract disagrees. expectedVersion (taskVersion from agent_children) and expectedEventSeq are optional and honoured when given. Refused only while the child works or has queued work. Any engine: a child active, stopped or closed by itself resumes with its history on its own engine (ADR 0352). Keeps the session and skills; the child takes its card\'s current tools and permissions, never wider than yours, so a changed card or level is no reason for a fresh child. Another folder (cwd, place), or the engine the user\'s order starts the role on now, goes on in a linked chat (the answer\'s chatId). When the child\'s engine cannot run now, the task goes on by itself in a new child of the role on the level\'s engine, from the hand-off: use the answer\'s chatId (continuedFrom = the old one). A Sentinel that reviewed this task is continued here after a fix (mode continue): it reviews only the fix delta. Use rework only for explicit corrections. With an approved plan, step is required. preset: one of the role card\'s three; omitted preset = its plan step\'s, else base. Closed parents must first receive a new assignment from their own parent or Orchestrator.',
-    inputSchema: { type: 'object', required: ['chatId', 'roleId', 'mode', 'contract'],additionalProperties: false, properties: {
+    description: 'Continue YOUR direct child in the same role with a separate task run. The user\'s messages and answers in that chat you have not seen come back to you readable (userInstructions): the child already has them, so they are not repeated in its prompt; account for them, and correct the child or ask the user where your contract disagrees. expectedVersion (taskVersion from agent_children) and expectedEventSeq are optional and honoured when given. Refused only while the child works or has queued work. Any engine: a child active, stopped or closed by itself resumes with its history on its own engine (ADR 0352). Keeps the session and skills; the child takes its card\'s current tools and permissions, never wider than yours, so a changed card or level is no reason for a fresh child. Another folder (cwd, place), or the engine the user\'s order starts the role on now, goes on in a linked chat (the answer\'s chatId). When the child\'s engine cannot run now, the task goes on by itself in a new child of the role on the level\'s engine, from the hand-off: use the answer\'s chatId (continuedFrom = the old one). A Sentinel that reviewed this task is continued here after a fix (mode continue): it reviews only the fix delta. Use rework only for explicit corrections. With an approved plan, step is required. preset: one of the role card\'s three; omitted preset = its plan step\'s, else base. Closed parents must first receive a new assignment from their own parent or Orchestrator. Pass contractJson (JSON object string) instead of contract on clients that drop nested objects/arrays (e.g. Cursor with Gemini).',
+    inputSchema: { type: 'object', required: ['chatId', 'roleId', 'mode'], additionalProperties: false, properties: {
       chatId: str, roleId: { type: 'string', enum: [...WORK_ROLE_IDS] }, cwd: { ...str, description: 'optional: omitted = the child\'s own folder; another existing one = the task goes on in a linked chat there, with the child\'s context, plan step and history; nothing of the old folder is moved' }, place: PLACE_SCHEMA,
       mode: { type: 'string', enum: ['continue', 'new-task', 'rework'] },
       expectedVersion: { type: 'integer', minimum: 1 }, expectedEventSeq: { type: 'integer', minimum: 0 },
       step: { type: 'integer', minimum: 1 },
       ...PRESET_SCHEMA,
+      contractJson: { type: 'string', description: 'JSON object string of contract (same fields as contract). Prefer this on Cursor/Gemini or any client that drops nested objects/arrays.' },
       contract: { type: 'object', required: ['goal', 'doneWhen'], additionalProperties: false, properties: {
         goal: str, output: str, context: str, doneWhen: { type: 'array', items: str, minItems: 1, maxItems: 12 },
         why: { ...str, description: 'what the result is for, who asks, what they will decide with it' },

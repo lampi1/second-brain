@@ -1290,3 +1290,18 @@ describe('corrections and caps, the pure parts', () => {
     expect(supersededResult(item('a-random-uuid'), 2)).toBe(false);
   });
 });
+
+describe('flat JSON-string parameters for Cursor/Gemini (#487)', () => {
+  it('agent_delegate accepts tasksJson and tasks[].contractJson; agent_assign_task accepts contractJson', async () => {
+    const f = fixture();
+    const parent = await f.root('strategist');
+    const out1 = await f.call('agent_delegate', parent.id, { tasksJson: JSON.stringify([f.task('scout', 'Flat · Tasks')]) });
+    expect(out1.children).toHaveLength(1);
+    const out2 = await f.call('agent_delegate', parent.id, { tasks: [{ role: 'scout', title: 'Flat · Contract', contractJson: JSON.stringify({ goal: 'Goal of Flat · Contract', doneWhen: ['criterion A'] }) }] });
+    expect(out2.children).toHaveLength(1);
+    const childId = out1.children[0].chatId as string;
+    await f.call('agent_report', childId, { outcome: 'done', summary: 'ok', output: 'ok', doneWhen: [{ criterion: 'criterion A', met: true }] });
+    const out3 = await f.call('agent_assign_task', parent.id, { chatId: childId, roleId: 'scout', mode: 'continue', contractJson: JSON.stringify({ goal: 'Next', doneWhen: ['criterion B'] }) });
+    expect(out3.chatId).toBe(childId);
+  });
+});

@@ -168,7 +168,7 @@ export function withApiModels(seen: ModelsSeen): ModelsSeen {
  *  them) and no subagent hooks (they would capture its subagents as new comparison rounds). */
 function cursorOptions(engine: EngineDef, ctx: EngineContext, readOnlyChat: string | null): Partial<AcpOptions> {
   return {
-    subagentHooks: !readOnlyChat, priceFallback: true,
+    subagentHooks: !readOnlyChat, priceFallback: true, flatJsonArgsHint: true,
     configDir: readOnlyChat ? readOnlyConfigDir(ctx.userData, engine.id, readOnlyChat) : path.join(ctx.userData, `${engine.id}-config`), modelConfig: ctx.acpModelConfig,
   };
 }

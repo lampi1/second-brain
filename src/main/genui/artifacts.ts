@@ -62,9 +62,23 @@ export class Artifacts {
     const summary = field(a.summary, 'summary', SUMMARY_MAX);
     const target = (a.target ?? 'chat') as ArtifactTarget;
     if (!ARTIFACT_TARGETS.includes(target)) problems.push(`target: expected one of ${ARTIFACT_TARGETS.join(', ')}`);
-    const ui = checkUi(a.component, a.props);
+    let rawProps: unknown = a.props;
+    let propsProblem: string | null = null;
+    if (a.propsJson !== undefined && a.propsJson !== null) {
+      if (a.props !== undefined && a.props !== null) propsProblem = 'pass either props or propsJson, not both';
+      else if (typeof a.propsJson !== 'string' || !a.propsJson.trim()) propsProblem = 'propsJson: required JSON object string';
+      else {
+        try { rawProps = JSON.parse(a.propsJson); }
+        catch (e) { propsProblem = `propsJson: invalid JSON (${errText(e)})`; }
+      }
+    } else if (typeof rawProps === 'string') {
+      try { rawProps = JSON.parse(rawProps); }
+      catch (e) { propsProblem = `props: invalid JSON (${errText(e)})`; }
+    }
+    if (propsProblem) problems.push(propsProblem);
+    const ui = propsProblem ? { ok: false as const, error: '' } : checkUi(a.component, rawProps);
     if (a.component === 'brief' && target !== 'next-ask') problems.push('brief: only with target "next-ask" (it is the context of your next question)');
-    if (!ui.ok) problems.push(ui.error);
+    if (!ui.ok && ui.error) problems.push(ui.error);
     if (a.id !== undefined && a.id !== null && (typeof a.id !== 'string' || !KEY.test(a.id))) problems.push('id: 1-40 letters, digits, ".", "_" or "-"');
     if (problems.length || !ui.ok) throw new ToolRefusal(`${problems.join('; ')}. Fix all fields and call show_ui again.${a.component === 'brief' ? ` Minimal brief example: ${BRIEF_EXAMPLE}` : ''}`);
     // a brief's screenshot the card cannot show is sent back now, while the chat can still move it (ADR 0150)
@@ -272,6 +286,7 @@ export function showUiTool(store: Artifacts): McpTool {
       'barChart {unit?, bars: [{label, value, note?}]}',
       'status: ok|fail|blocked|running|todo|info|warn. href: an http(s) URL or an absolute local path.',
       'Inside an AskUserQuestion option\'s preview the same JSON {"component", "props", "title"?} goes in a ```sb-ui fence.',
+      'On clients that drop nested objects/arrays (e.g. Cursor with Gemini), pass propsJson (JSON object string) instead of props.',
       // screenshots: in the endpoint's instructions (browser/service.ts CHAT_HINTS), the only place this tool is listed
     ].join('\n'),
     inputSchema: {
@@ -286,9 +301,10 @@ export function showUiTool(store: Artifacts): McpTool {
           ifYes: { type: 'string', minLength: 1, maxLength: 200 },
           ifNo: { type: 'string', minLength: 1, maxLength: 200 },
         } },
+        propsJson: { type: 'string', description: 'JSON object string of props (same fields as props). Prefer this on Cursor/Gemini or any client that drops nested objects/arrays.' },
         target: { type: 'string', enum: [...ARTIFACT_TARGETS], description: 'default chat' },
       },
-      required: ['title', 'summary', 'component', 'props'],
+      required: ['title', 'summary', 'component'],
     },
     run: (args, ctx) => store.show(ctx.params.chatId ?? '', args),
   };

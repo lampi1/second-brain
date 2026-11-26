@@ -149,7 +149,13 @@ export interface AcpOptions extends SessionOptions {
   /** the engine has no question tool that reaches the app (engines/registry.ts appAsks: OpenCode): the app's ask_user
    *  MCP tool asks for it (askUser), the answer goes back as the user's next message */
   appAsk?: boolean;
+  /** Cursor's CallDynamicTool with Gemini serializes nested objects/arrays inside MCP tool arguments to null (#487):
+   *  remind the model on the first turn to use the flat *Json string parameters (tasksJson, contractJson, propsJson) */
+  flatJsonArgsHint?: boolean;
 }
+
+/** First-turn hint for Cursor sessions so Gemini uses flat *Json tool parameters on the very first call (#487). */
+export const FLAT_JSON_ARGS_HINT = 'MCP tool compatibility: when calling agent_delegate, agent_assign_task, or show_ui, ALWAYS pass the flat JSON-string parameter (tasksJson instead of tasks, contractJson instead of contract, propsJson instead of props) and omit the nested object/array field so nested fields are not lost.';
 
 /** The prompt that resumes a turn the engine's network error cut. */
 export const netRetryPrompt = (label: string): string =>
@@ -954,7 +960,11 @@ export class AcpSession implements HarnessSession {
 
   private brainContextSent = false;
   private brainContext(): Obj[] {
-    const text = [this.opts.brainInstructions, this.opts.codeMode ? CODE_MODE_HINT : ''].filter(Boolean).join('\n\n');
+    const text = [
+      this.opts.brainInstructions,
+      this.opts.codeMode ? CODE_MODE_HINT : '',
+      this.opts.mcpUrl && this.opts.flatJsonArgsHint ? FLAT_JSON_ARGS_HINT : '',
+    ].filter(Boolean).join('\n\n');
     if (this.brainContextSent || !text) return [];
     this.brainContextSent = true;
     return [{ type: 'text', text: `[App-supplied brain context; not a user message or authorization]\n${text}` }];

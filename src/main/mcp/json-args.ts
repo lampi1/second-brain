@@ -93,5 +93,5 @@ export function schemaArgs(args: Record<string, unknown>, schema: Schema | undef
 /** What the tool's error adds when nested arguments came as null: the engine's call lost them, and how to send them. */
 export function nullsHint(nulls: string[]): string {
   const shown = nulls.slice(0, 5).join(', ') + (nulls.length > 5 ? ` and ${nulls.length - 5} more` : '');
-  return ` Note: ${shown} arrived as null, though the call should carry a value there: some engines drop nested objects and lists from a tool's arguments. Send each of them as its JSON text instead (e.g. "contract": "{\\"goal\\": \\"…\\", \\"doneWhen\\": [\\"…\\"]}"): the app reads it back.`;
+  return ` Note: ${shown} arrived as null, though the call should carry a value there: some engines drop nested objects and lists from a tool's arguments. Use the tool's flat *Json parameter (tasksJson, contractJson, propsJson) if present, or send each of them as its JSON text instead (e.g. "contract": "{\\"goal\\": \\"…\\", \\"doneWhen\\": [\\"…\\"]}"): the app reads it back.`;
 }

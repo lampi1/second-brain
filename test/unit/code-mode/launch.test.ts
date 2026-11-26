@@ -76,6 +76,8 @@ describe('Code Mode on the real Claude spawn path (role allowlist + codeMode)', 
     const { AcpSession } = await import('../../../src/main/chats/acp');
     const s = new AcpSession({ ...opts, engineId: 'cursor', label: 'Cursor', args: [], brainInstructions: 'Regole.' }, { changed: () => {} } as never) as unknown as { brainContext(): { text: string }[] };
     expect(s.brainContext()[0]?.text).toMatch(/prefer the second-brain tool run_code/);
+    const sFlat = new AcpSession({ ...opts, engineId: 'cursor', label: 'Cursor', args: [], mcpUrl: 'http://127.0.0.1:4319/mcp/chat/x/t', flatJsonArgsHint: true, brainInstructions: 'Regole.' }, { changed: () => {} } as never) as unknown as { brainContext(): { text: string }[] };
+    expect(sFlat.brainContext()[0]?.text).toMatch(/tasksJson instead of tasks.*propsJson instead of props/);
   });
 
   it('Antigravity (ACP): run_code exposed and first-turn hint added when on, neither when off, no Claude-only flags', async () => {

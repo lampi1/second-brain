@@ -280,10 +280,11 @@ describe('Artifacts: the store behind show_ui', () => {
   it('show_ui: the tool knows its caller from the endpoint path', async () => {
     const { store, sent } = setup([chat('w')]);
     const tool = showUiTool(store);
-    expect(tool.inputSchema).toMatchObject({ required: ['title', 'summary', 'component', 'props'] });
+    expect(tool.inputSchema).toMatchObject({ required: ['title', 'summary', 'component'] });
     const ctx = { mount: 'browser-chat', params: { chatId: 'w', token: 't' }, sessionId: '', signal: new AbortController().signal, progress: () => false } satisfies CallCtx;
     await expect(Promise.resolve(tool.run(args(), ctx))).resolves.toContain('Mostrato in questa chat');
     expect(sent[0]?.chatId).toBe('w');
+    await expect(Promise.resolve(tool.run({ title: 'Flat', summary: 'Via propsJson', component: 'brief', target: 'next-ask', propsJson: JSON.stringify({ done: ['Verified'], ifYes: 'Go', ifNo: 'Stop' }) }, ctx))).resolves.toContain('Mostrato sulla tua prossima domanda');
   });
 
   it('show_ui says how to attach a screenshot: a local path, never a remote URL (issue #83)', () => {
