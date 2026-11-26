@@ -7,6 +7,9 @@ const files: Record<string, string> = {
   'reset.sh': '#!/bin/bash\n# restarts\naz webapp restart -n x\n', 'report.sh': 'az webapp list -o table\n', 'ops.ps1': 'param($what)\naz webapp restart -n $what',
   'ops-status.ps1': 'param($what)\naz webapp show -n $what',
   'fix.sql': 'update t set a = 1 where id = 2', 'look.sql': 'select * from t', 'tool.mjs': 'import { readFileSync } from "node:fs";\n// az webapp restart\nconsole.log(readFileSync("x"))',
+  'devops-ro.mjs': 'const ORG = "https://api.example.com/org";\nconst RM = "https://management.azure.com/subscriptions/1";\nasync function api(p, body) { return fetch(`${ORG}${p}`, { method: body ? "POST" : "GET", body: body && JSON.stringify(body) }); }\nasync function rm(p) { return fetch(`${RM}${p}`, { headers: {} }); }\n',
+  'devops-rw.mjs': 'const RM = "https://management.azure.com/subscriptions/1";\nasync function rm(p, body) { return fetch(`${RM}${p}`, { method: body ? "POST" : "GET", body: JSON.stringify(body) }); }\n',
+  'devops-indirect.mjs': 'const RM = "https://management.azure.com/subscriptions/1";\nasync function send(u, body) { return fetch(u, { method: "POST", body: JSON.stringify(body) }); }\nsend(RM, { x: 1 });\n',
 };
 const ctx = { cwd: '/repo', readFile: (abs: string) => files[abs.split(/[\\/]/).pop()!] ?? null };
 const run = (command: unknown, tool = 'Bash') => heldForUser({ type: 'permission', tool, input: { command } }, ctx)?.kind ?? null;
@@ -82,5 +85,28 @@ describe('heldForUser', () => {
 
   it('a long line is read in linear steps', () => {
     expect(run(`node a.mjs ${'insert select into update delete from '.repeat(2500)}`)).toBeNull();
+  });
+
+  it('passes read-only release definitions, read-only DevOps scripts, ARM GETs, and non-prod DBs while holding real writes', () => {
+    // az pipelines release definition reads vs writes
+    expect(run('az pipelines release definition list --org https://example.com/org -p App')).toBeNull();
+    expect(run('az pipelines release definition show --id 42 -p App')).toBeNull();
+    expect(run('az pipelines release definition delete --id 42 -p App')).toBe('prod-release');
+    expect(run('az pipelines release definition --id 42')).toBe('prod-release');
+    // read-only JS script with ternary method on non-cloud URL + pure GET on cloud host vs write/indirect on cloud host
+    expect(run('node devops-ro.mjs --prs')).toBeNull();
+    expect(run('node devops-rw.mjs --create')).toBe('cloud-write');
+    expect(run('node devops-indirect.mjs')).toBe('cloud-write');
+    // PowerShell ARM Invoke-RestMethod GET vs PUT/DELETE
+    expect(run('$r = Invoke-RestMethod -Uri "https://management.azure.com/subscriptions/1/providers/Microsoft.Insights/metricAlerts?api-version=2018-03-01" -Headers $h -Method Get', 'Shell')).toBeNull();
+    expect(run('$r = Invoke-RestMethod -Uri "https://management.azure.com/subscriptions/1/providers/Microsoft.Insights/metricAlerts/a?api-version=2018-03-01" -Headers $h -Method Put -Body $b', 'Shell')).toBe('cloud-write');
+    // non-prod/dev DBs pass; prod, unlabelled, or mixed chained remote DBs stay held
+    expect(run('sqlcmd -S sql-srv.example.com -d AppMgmtDev -Q "UPDATE t SET a=1"')).toBeNull();
+    expect(run('sqlcmd -S sql-srv.example.com -d AppMgmtDevAt -Q "UPDATE t SET a=1"')).toBeNull();
+    expect(run('sqlcmd -S sql-tst-01.example.com -d Tenant01 -Q "UPDATE t SET a=1"')).toBeNull();
+    expect(run('sqlcmd -S sql-prod-01.example.com -d AppMgmtDev -Q "UPDATE t SET a=1"')).toBe('db-write');
+    expect(run('sqlcmd -S sql-srv.example.com -d ProdTenant -Q "UPDATE t SET a=1"')).toBe('db-write');
+    expect(run('sqlcmd -S sql-srv.example.com -d CustomerDb -Q "UPDATE t SET a=1"')).toBe('db-write');
+    expect(run('sqlcmd -S sql-srv.example.com -d AppMgmtDev -Q "UPDATE t SET a=1"; sqlcmd -S other-srv -Q "DROP TABLE x"')).toBe('db-write');
   });
 });

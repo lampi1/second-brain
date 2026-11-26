@@ -124,8 +124,9 @@ export function cloudCommand(program: string, words: readonly string[], isProd: 
     if (group === 'rest') return restWrites(words) ? { kind: 'cloud-write', why: 'non riconosco la richiesta az rest come lettura' } : null;
     // Work items, pull requests and the test CI queue are not covered by the cloud-resource hold.
     if (/^(?:repos|boards|devops|pipelines)$/.test(group)) {
-      const [area = '', action = ''] = positionals(rest, AZ_SWITCH).sure;
-      const release = (area.toLowerCase() === 'release' && !releaseRead.test(action)) || (rest.includes('release') && rest.includes('create')) || (rest.includes('run') && isProd(rest.join(' ')));
+      const [area = '', second = '', third = ''] = positionals(rest, AZ_SWITCH).sure;
+      const releaseAction = second.toLowerCase() === 'definition' ? third : second;
+      const release = (area.toLowerCase() === 'release' && !releaseRead.test(releaseAction)) || (rest.includes('release') && rest.includes('create')) || (rest.includes('run') && isProd(rest.join(' ')));
       return group === 'pipelines' && release ? { kind: 'prod-release', why: 'non riconosco il comando della pipeline di rilascio come lettura' } : null;
     }
   }
@@ -161,17 +162,53 @@ const CLOUD_WORDS = /\bcdk\s+(?:deploy|destroy|bootstrap)\b|\b(?:sam|swa|fly|sls
 export const cloudWords = (text: string): boolean => CLOUD_WORDS.test(text);
 
 const HOSTS = /management\.(?:core\.windows|azure)\.(?:com|net)|\.scm\.azurewebsites\.net|\.vault\.azure\.net|graph\.microsoft\.com|\.(?:blob|queue|table|file)\.core\.windows\.net|\.documents\.azure\.com|\.servicebus\.windows\.net|\.googleapis\.com|\.amazonaws\.com|api\.(?:cloudflare|vercel|netlify|heroku|digitalocean)\.com|vsrm\.dev\.azure\.com|dev\.azure\.com\S*\/_apis\/release/i;
+const TERNARY_METHOD = /\bmethod["']?\s*[:=]\s*[^,}\n?]+\?\s*["']([\w-]+)["']\s*:\s*["']([\w-]+)["']/gi;
 const METHOD = /(?:^|[\s"'])(?:-X|--request\b|--?method\b)[ =:]?["']?([\w$-]*)|\.(get|head|post|put|patch|delete|options)\s*\(|\bmethod["']?\s*[:=]\s*["']?([\w$-]*)/gi;
 const DATA = /(?:^|\s)(?:-d|--data\S*|-F|--form|-T|--upload-file|--json|--body|-b|-Body|-InFile)[ =:]/i;
 export function httpMethods(text: string): { writes: boolean; posts: boolean } {
-  const all = [...text.matchAll(METHOD)].map(m => (m[1] ?? m[2] ?? m[3])!.toLowerCase());
+  const ternary: string[] = [];
+  const cleaned = text.replace(TERNARY_METHOD, (_, a: string, b: string) => { ternary.push(a.toLowerCase(), b.toLowerCase()); return ''; });
+  const all = [...ternary, ...[...cleaned.matchAll(METHOD)].map(m => (m[1] ?? m[2] ?? m[3])!.toLowerCase())];
   return { writes: all.some(m => !/^(?:get|head|post)$/.test(m)), posts: all.includes('post') || (DATA.test(text) && !all.some(m => m === 'get' || m === 'head')) };
+}
+/** In a JS/TS script with multiple fetch() calls, pass fail-closed only when every writing/posting fetch()
+ *  explicitly targets a literal (or literal-bound const) non-cloud URL, never an unknown variable or cloud host. */
+function scriptFetchWritesCloud(text: string): boolean | null {
+  const calls = [...text.matchAll(/\bfetch\s*\(([^\n;]{1,600})/g)].map(m => m[1]!);
+  if (!calls.length) return null;
+  const safeUrlVars = new Set<string>();
+  for (const m of text.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*(['"`])(https?:\/\/[^'"`$\s]+)\2/g)) {
+    if (!HOSTS.test(m[3]!)) safeUrlVars.add(m[1]!);
+  }
+  const isSafeTarget = (arg0: string): boolean => {
+    const t = arg0.trim();
+    if (HOSTS.test(t) || /\/_apis\/release\b/i.test(t)) return false;
+    const lit = /^(['"`])(https?:\/\/[^'"`$\s]+)\1$/.exec(t);
+    if (lit) return !HOSTS.test(lit[2]!);
+    const tpl = /^`\$\{([A-Za-z_$][\w$]*)\}([^`]*)`$/.exec(t);
+    if (tpl) return safeUrlVars.has(tpl[1]!) && !HOSTS.test(tpl[2]!) && !/\/_apis\/release\b/i.test(tpl[2]!);
+    const add = /^([A-Za-z_$][\w$]*)\s*\+/.exec(t);
+    if (add) return safeUrlVars.has(add[1]!) && !HOSTS.test(t) && !/\/_apis\/release\b/i.test(t);
+    return safeUrlVars.has(t);
+  };
+  for (const call of calls) {
+    const { writes, posts } = httpMethods(call);
+    if (!writes && !posts) continue;
+    const comma = call.indexOf(',');
+    const arg0 = comma >= 0 ? call.slice(0, comma) : call;
+    if (writes || (!QUERY_URL.test(arg0) && !isSafeTarget(arg0))) return true;
+  }
+  return false;
 }
 /** @param whole where a variable's address may be written; a command with its own literal address is judged by it */
 export function httpWrite(text: string, whole: string): boolean {
   const { writes, posts } = httpMethods(text);
   if (!writes && !posts) return false;
   if (!HOSTS.test(/https?:\/\/[\w.-]/i.test(text) ? text : whole)) return false;
+  if (!writes && /\bfetch\s*\(/.test(text) && !/\b(?:curl|wget|iwr|irm|invoke-restmethod|invoke-webrequest|axios|requests\.)\b/i.test(text)) {
+    const perCall = scriptFetchWritesCloud(text);
+    if (perCall !== null) return perCall;
+  }
   return writes || !QUERY_URL.test(text);
 }
 

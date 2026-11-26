@@ -45,10 +45,19 @@ const PUBLISHES = /\bgh\s+(?:release\s+(?:create|edit|delete|upload)|workflow\s+
 const RUNS_PROGRAMS = /child_process|subprocess|\bexec\w*\s*\(|\bspawn\w*\s*\(|\bsystem\s*\(|popen|\bfetch\s*\(|requests\.|axios/i;
 
 const SERVER = /localhost|127\.\d+\.\d+\.\d+|\[?::1\]?|\(local(?:db)?\)|\.(?=$|[\\,;:])/;
+const NON_PROD_DB_TAG = /(?:^|[-_])(?:dev|tst|qa|uat|staging|stage|sandbox)(?:[-_.\d]|$)|(?:^|[-_])test(?:[-_\d]|$)|(?<=[a-z])(?:Dev|Test|Tst|Staging|Sandbox)(?:[A-Z]|[-_\d]|$)/;
 /** Every database server the text names is this machine, and it names one: the user's local database is free. */
 function onThisMachine(text: string): boolean {
   const hosts = [...text.matchAll(/(?:\s-S\s*|\s-ServerInstance\s+|\s-h\s+|--host[= ]|\b(?:Server|Data Source)\s*=\s*)["']?([^\s;"'&]+)|:\/\/(?:[^\s/@'"]*@)?([^\s/'"?]+)/gi)].map(m => m[1] ?? m[2] ?? '');
   return hosts.length > 0 && hosts.every(h => new RegExp(`^(?:tcp:)?(?:${SERVER.source})(?:[\\\\,:].*)?$`, 'i').test(h)) && !/database\.windows\.net|\.rds\.amazonaws/i.test(text);
+}
+/** Every explicitly named database (or server) is clearly a non-prod/dev/test target, with no prod marker anywhere. */
+function onNonProdDb(text: string): boolean {
+  if (PROD.test(text)) return false;
+  const hosts = [...text.matchAll(/(?:\s-S\s*|\s-ServerInstance\s+|\s-h\s+|--host[= ]|\b(?:Server|Data Source)\s*=\s*)["']?([^\s;"'&]+)/gi)].map(m => m[1] ?? '').filter(Boolean);
+  if (hosts.length > 0 && hosts.every(h => NON_PROD_DB_TAG.test(h.split('.')[0] ?? h))) return true;
+  const dbs = [...text.matchAll(/(?:\s-d\s+|--database[= ]|\b(?:Database|Initial Catalog)\s*=\s*)["']?([^\s;"'&]+)/gi)].map(m => m[1] ?? '').filter(Boolean);
+  return dbs.length > 0 && (hosts.length === 0 || dbs.length >= hosts.length) && dbs.every(d => NON_PROD_DB_TAG.test(d));
 }
 
 const base = (w: string): string => w.replace(/^.*[\\/]/, '').replace(/\.(?:exe|cmd)$/i, '');
@@ -201,7 +210,7 @@ function dbHold(run: Run, given: readonly string[], ctx: HoldContext): Hold | nu
       }
     }
   }
-  if ((!client && !REACHES.test(code)) || onThisMachine(whole) || localSqlcmdWithDisplayOptions(run)) return null;
+  if ((!client && !REACHES.test(code)) || onThisMachine(whole) || onNonProdDb(whole) || localSqlcmdWithDisplayOptions(run)) return null;
   if (statements.some(statementWrites) || loose.some(looseWrite)) return { kind: 'db-write', why: 'l’istruzione modifica un database' };
   if (unknown) return { kind: 'db-write', why: 'non riconosco tutte le istruzioni al database come letture' };
   return null;
