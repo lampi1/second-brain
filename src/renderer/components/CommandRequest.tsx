@@ -160,8 +160,8 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
         {onLater && (
           <button type="button" className={`btn btn-ghost ${small ? 'btn-s' : 'btn-m'}`} onClick={onLater} disabled={busy} data-testid={`${testBase}-later`}>{t('chat.command.later')}{!small && onEscape && <Kbd>Esc</Kbd>}</button>
         )}
-        <button type="button" className={`btn btn-ghost ${small ? 'btn-s' : 'btn-m'}`} onClick={() => { if (busy) return; setBusy(true); if (onReply) onReply('Già fatto'); else void dismissCommand(req, 'Già fatto'); }} disabled={busy} data-testid={`${testBase}-already-done`}
-          data-tip="Segnala all'agente che hai già eseguito questo comando">Già fatto</button>
+        <button type="button" className={`btn btn-ghost ${small ? 'btn-s' : 'btn-m'}`} onClick={() => { if (busy) return; setBusy(true); const done = t('chat.command.alreadyDone'); if (onReply) onReply(done); else void dismissCommand(req, done); }} disabled={busy} data-testid={`${testBase}-already-done`}
+          data-tip={t('chat.command.alreadyDoneTip')}>{t('chat.command.alreadyDone')}</button>
         <button type="button" className={`btn btn-ghost ${small ? 'btn-s' : 'btn-m'} cmd-dismiss`} onClick={dismiss} disabled={busy} data-testid={`${testBase}-dismiss`}
           data-tip={t('chat.command.dismissTip')}>{t('chat.command.dismiss')}</button>
       </div>

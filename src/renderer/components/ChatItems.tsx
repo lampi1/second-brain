@@ -358,8 +358,8 @@ function ReplyButton({ text }: { text: string }) {
   const excerpt = text.replace(/\s+/g, ' ').trim().slice(0, 180);
   return (
     <button type="button" className="msg-reply-btn" onClick={() => { quoteInDraft(chatId, excerpt); }}
-      aria-label="Rispondi a questo messaggio" data-tip="Rispondi citando questo messaggio" data-testid="msg-reply">
-      ↩ Rispondi
+      aria-label={t('chat.reply.aria')} data-tip={t('chat.reply.tip')} data-testid="msg-reply">
+      ↩ {t('chat.reply.label')}
     </button>
   );
 }
@@ -552,7 +552,7 @@ function ItemListFor({ items, empty, footer, chatId = null, readOnly = false, se
         <div ref={content} className="items-content">
         {cut > 0 && !pastOpen && !filtering && start === 0 && <FoldedPast count={cut} onOpen={() => { setPastOpen(true); setLimit(Infinity); }} />}
         {start > 0 && <ShowEarlier count={start} onOpen={() => { const el = ref.current; keepPlace.current = el ? el.scrollHeight - el.scrollTop : null; setLimit(l => l + TAIL_ITEMS); }} />}
-        {filtering && matched.length === 0 ? <div className="items-empty" data-testid="items-filter-empty">Nessun messaggio trovato per questo filtro.</div>
+        {filtering && matched.length === 0 ? <div className="items-empty" data-testid="items-filter-empty">{t('chat.filter.empty')}</div>
           : items.length === 0 && empty && !footer ? <div className="items-empty">{empty}</div>
           : view.map(v => v.kind === 'process'
             ? <ProcessGroup key={v.id} id={v.id} items={v.items} open={open} marks={fixed} />

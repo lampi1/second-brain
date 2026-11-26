@@ -45,10 +45,10 @@ export const catalogIt = {
   'catalog.costsHelp': 'Costo mediano: la metà dei lavori conclusi è costata meno, su quelli con un costo noto. Costo per successo verificato: il costo di tutti i lavori conclusi diviso per quelli riusciti e verificati (quelli che contano per il livello). Equivalente al listino API: con un abbonamento non è ciò che paghi.',
   'catalog.metricsError': 'Statistiche non disponibili. Riprova.', 
   // the built-in roles' purpose (name, purpose and character always come from the role: lib/role-text.ts)
-  'catalog.purpose.orchestrator': 'Coordina il lavoro: delega ogni compito a un ruolo e ti tiene al corrente dello stato.',
-  'catalog.purpose.strategist': 'Scompone un obiettivo in un piano e delega le parti ai ruoli giusti.',
+  'catalog.purpose.orchestrator': 'Coordina il lavoro: gestisce piani, delega ai ruoli giusti e ti tiene al corrente dello stato.',
+  'catalog.purpose.strategist': 'Scompone obiettivi grandi in piani multi-step e delega le parti ai ruoli giusti.',
   'catalog.purpose.scout': 'Cerca e verifica fatti: codice, log, web e pagine, senza cambiare nulla.',
-  'catalog.purpose.artisan': 'Fa le modifiche: codice, file, configurazioni, documenti e note del cervello, con i controlli del repository.',
+  'catalog.purpose.artisan': 'Fa le modifiche: codice, file, documenti, note del cervello e bozze di messaggi con approvazione.',
   'catalog.purpose.sentinel': 'Verifica: esegue test e controlli, o giudica il risultato dalle prove quando non c’è nulla da eseguire, e dice cosa passa e cosa no.',
   'catalog.purpose.herald': 'Prepara messaggi e bozze per persone e servizi esterni; ogni invio lo approvi tu.',
 };

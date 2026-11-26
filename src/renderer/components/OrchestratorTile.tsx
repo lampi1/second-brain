@@ -171,14 +171,14 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
             <IconSearch size={13} />
             <input ref={searchInput} type="search" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
               onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); closeSearch(); } }}
-              placeholder="Cerca in questa chat…" aria-label="Cerca nei messaggi dell'Orchestrator" data-testid="orchestrator-search-input" />
-            {searchQuery && <button type="button" className="orch-search-clear" onClick={() => setSearchQuery('')} aria-label="Pulisci ricerca"><IconX size={11} /></button>}
-            <button type="button" className="orch-search-clear" onClick={closeSearch} aria-label="Chiudi ricerca"><IconX size={12} /></button>
+              placeholder={t('chat.orch.searchPlaceholder')} aria-label={t('chat.orch.searchAria')} data-testid="orchestrator-search-input" />
+            {searchQuery && <button type="button" className="orch-search-clear" onClick={() => setSearchQuery('')} aria-label={t('chat.orch.searchClear')}><IconX size={11} /></button>}
+            <button type="button" className="orch-search-clear" onClick={closeSearch} aria-label={t('chat.orch.searchClose')}><IconX size={12} /></button>
           </div>
         )}
         {topics.length > 1 && (
-          <div className="orch-topics" role="group" aria-label="Filtra per argomento" data-testid="orchestrator-topics">
-            <button type="button" className={`orch-topic-pill${!topicFilter ? ' on' : ''}`} onClick={() => setTopicFilter('')}>Tutti</button>
+          <div className="orch-topics" role="group" aria-label={t('chat.orch.topicsAria')} data-testid="orchestrator-topics">
+            <button type="button" className={`orch-topic-pill${!topicFilter ? ' on' : ''}`} onClick={() => setTopicFilter('')}>{t('chat.orch.topicsAll')}</button>
             {topics.map(tp => (
               <button key={tp} type="button" className={`orch-topic-pill${topicFilter === tp ? ' on' : ''}`} onClick={() => setTopicFilter(topicFilter === tp ? '' : tp)}>{tp}</button>
             ))}
