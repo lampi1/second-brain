@@ -745,9 +745,18 @@ button.lc-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 1
 .composer-hint { flex: none; display: flex; align-items: center; gap: 6px; height: 24px; font-size: 11px; color: var(--text-4); white-space: nowrap; }
 .send { width: 26px; height: 26px; flex: none; border-radius: var(--r-m); border: 0; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; cursor: pointer; animation: popIn var(--dur-fast) var(--ease); }
 .send:hover { background: var(--accent-strong); }
-.composer-stop { width: 26px; height: 26px; flex: none; border-radius: var(--r-m); border: 1px solid color-mix(in srgb, var(--red) 45%, transparent); background: var(--red-bg); color: var(--red); display: grid; place-items: center; cursor: pointer; transition: background-color var(--dur-fast), color var(--dur-fast); }
-.composer-stop:hover { background: var(--red); color: #fff; }
-.composer-stop:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+/* native reply preview chip above the composer */
+.composer-reply {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 5px 8px 5px 10px; border-radius: var(--r-m);
+  background: var(--surface-2); border: 1px solid var(--border); border-left: 2.5px solid var(--accent);
+  font-size: 11.5px; color: var(--text-2); animation: popIn var(--dur-fast) var(--ease);
+}
+.orchestrator-tile .composer-reply { background: color-mix(in srgb, var(--violet) 7%, var(--surface-2)); border-color: var(--orchestrator-line); border-left-color: var(--violet); }
+.composer-reply-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-reply-text b { font-weight: 600; color: var(--text); margin-right: 4px; }
+.composer-reply-clear { flex: none; width: 20px; height: 20px; border: 0; border-radius: var(--r-s); background: none; color: var(--text-3); display: grid; place-items: center; cursor: pointer; }
+.composer-reply-clear:hover { background: var(--surface-3); color: var(--text); }
 /* message hover reply button & multi-topic badges */
 .msg-user, .msg-assistant { position: relative; }
 .msg-reply-btn {
@@ -764,22 +773,36 @@ button.lc-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 1
   padding: 1px 7px; border-radius: 99px; background: var(--violet-bg); color: var(--violet);
   font: 600 10.5px var(--font); letter-spacing: 0.03em;
 }
-/* Orchestrator inline search bar & topic filter pills */
+/* Orchestrator engine pill, subbar, inline search bar & #topic filter pills */
+.orch-engine-pill {
+  display: inline-flex; align-items: center; gap: 4px; flex: none;
+  height: 20px; padding: 0 7px; border-radius: var(--r-s);
+  background: var(--surface-2); border: 1px solid var(--border);
+  font: 500 11px var(--mono); color: var(--text-2); white-space: nowrap;
+}
+.orch-subbar {
+  display: flex; flex-direction: column; gap: 6px;
+  margin: 6px -12px -8px; padding: 7px 12px;
+  background: color-mix(in srgb, var(--bg) 55%, var(--surface)); border-top: 1px solid var(--orchestrator-line);
+}
 .orch-search-bar {
-  display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 4px 8px;
+  display: flex; align-items: center; gap: 6px; padding: 4px 8px;
   border-radius: var(--r-m); background: var(--orchestrator-input); border: 1px solid var(--orchestrator-line-2); color: var(--text-3);
 }
+.orch-search-bar:focus-within { border-color: color-mix(in srgb, var(--violet) 65%, transparent); }
 .orch-search-bar input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text); font: 12.5px var(--font); }
 .orch-search-bar input::-webkit-search-cancel-button { display: none; }
+.orch-search-count { flex: none; font: 500 11px var(--mono); color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .orch-search-clear { width: 20px; height: 20px; border: 0; border-radius: var(--r-s); background: none; color: var(--text-3); display: grid; place-items: center; cursor: pointer; }
 .orch-search-clear:hover { background: var(--surface-3); color: var(--text); }
-.orch-topics { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.orch-topics { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 4px; scrollbar-width: none; }
+.orch-topics::-webkit-scrollbar { display: none; }
 .orch-topic-pill {
-  height: 21px; padding: 0 8px; border-radius: 99px; border: 1px solid var(--orchestrator-line); background: none;
-  color: var(--text-3); font: 500 11px var(--font); cursor: pointer; transition: background-color var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast);
+  flex: none; height: 22px; padding: 0 8px; border-radius: var(--r-s); border: 1px solid transparent; background: none;
+  color: var(--text-3); font: 500 11.5px var(--font); cursor: pointer; transition: background-color var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast);
 }
-.orch-topic-pill:hover { color: var(--text); border-color: var(--orchestrator-line-2); }
-.orch-topic-pill.on { background: var(--violet-bg); border-color: color-mix(in srgb, var(--violet) 45%, transparent); color: var(--violet); font-weight: 600; }
+.orch-topic-pill:hover { color: var(--text); background: var(--surface-2); }
+.orch-topic-pill.on { background: var(--violet-bg); border-color: color-mix(in srgb, var(--violet) 40%, transparent); color: var(--violet); font-weight: 600; }
 .queued { display: flex; flex-wrap: wrap; gap: 4px; }
 .queued-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; height: 26px; padding: 0 3px 0 8px; border-radius: var(--r-m); background: var(--surface-2); border: 1px dashed var(--border-3); font-size: 12px; }
 .queued-k { color: var(--accent); font-weight: 600; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; flex: none; }
@@ -805,11 +828,12 @@ button.lc-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 1
 .orchestrator-tile { background: var(--orchestrator-bg); border-color: var(--orchestrator-line); }
 .orchestrator-tile.focused { border-color: var(--orchestrator-line-2); }
 .orchestrator-tile.paired:not(.pair-hot):not(.focused) { border-color: var(--orchestrator-line); }   /* the Orchestrator keeps its violet edge; the pair shows in the stripe */
-.orchestrator-tile .tile-head { border-color: var(--orchestrator-line); }
-.orchestrator-name { color: var(--violet); font-size: 13.5px; }
+.orchestrator-tile .tile-head { padding: 8px 12px; border-color: var(--orchestrator-line); background: color-mix(in srgb, var(--surface) 75%, var(--orchestrator-bg)); }
+.orchestrator-name { color: var(--violet); font-size: 13.5px; font-weight: 650; letter-spacing: -0.01em; }
 .orchestrator-tile .md strong { color: var(--violet); }
-.orchestrator-tile .bubble { background: color-mix(in srgb, var(--violet) 9%, transparent); border-color: var(--orchestrator-line); }
-.orchestrator-tile .composer-box { background: var(--orchestrator-input); border-color: var(--orchestrator-line-2); }
+.orchestrator-tile .bubble { background: color-mix(in srgb, var(--violet) 10%, var(--surface)); border-color: var(--orchestrator-line); border-radius: var(--r-l); }
+.orchestrator-tile .composer { padding: 8px 10px 10px; border-top: 1px solid var(--orchestrator-line); background: color-mix(in srgb, var(--surface) 60%, var(--orchestrator-bg)); }
+.orchestrator-tile .composer-box { background: var(--orchestrator-input); border-color: var(--orchestrator-line-2); border-radius: var(--r-l); }
 .orchestrator-tile .composer-box:focus-within { border-color: color-mix(in srgb, var(--violet) 70%, transparent); box-shadow: 0 0 0 3px var(--violet-bg); }
 .orchestrator-tile .tile-requests { padding-top: 2px; flex: 0 1 auto; min-height: 120px; } /* a long decision scrolls inside, the header stays */
 .decision {

@@ -6,7 +6,8 @@ import { BRAIN_PAGES, type BrainPageId } from '../brain';
 import { badges, WARN_SECTIONS } from '../lib/notify';
 import { useApp } from '../store/store';
 import { useTasks } from '../store/tasks';
-import { ui } from '../store/ui';
+import { clampSidebarWidth, DEFAULT_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, setPrefs, ui } from '../store/ui';
+import { schedule, suspendViews } from '../lib/viewports';
 import { go, showOverview } from '../actions';
 import {
   IconBook, IconBrain, IconChess, IconChart, IconGrid, IconHistory, IconLayers, IconList, IconMap, IconMenu, IconMic, IconSettings, IconSparkle, IconTerminal, IconTicket,
@@ -38,7 +39,13 @@ function Badge({ n, warn }: { n: number; warn?: boolean }) {
 
 export function Sidebar() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [resizing, setResizing] = useState(false);
+  const [winW, setWinW] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1280));
   const menuWrap = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ x: number; w: number; release: () => void } | null>(null);
+  const savedWidth = ui.use(s => s.prefs.sidebarWidth);
+  const width = clampSidebarWidth(savedWidth ?? DEFAULT_SIDEBAR_WIDTH, winW);
+  const maxW = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, Math.floor(winW * 0.42)));
   const saved = ui.use(s => s.prefs.workProfile);
   const composition = workProfile(saved, BRAIN_PAGES.map(page => page.id));
   const show = (id: BrainPageId) => !composition || composition.pageIds.includes(id);
@@ -59,6 +66,14 @@ export function Sidebar() {
   const menuAlerts = proposals + (tasksOn ? tasksUnread : 0);
 
   useEffect(() => {
+    const onResize = () => setWinW(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => () => { drag.current?.release(); drag.current = null; }, []);
+
+  useEffect(() => {
     if (!menuOpen) return;
     const onDown = (e: MouseEvent) => { if (menuWrap.current && !menuWrap.current.contains(e.target as Node)) setMenuOpen(false); };
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); setMenuOpen(false); } };
@@ -67,12 +82,24 @@ export function Sidebar() {
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
   }, [menuOpen]);
 
+  const resize = (next: number) => {
+    setPrefs({ sidebarWidth: clampSidebarWidth(next, window.innerWidth) });
+    schedule();
+  };
+  const endDrag = () => {
+    if (!drag.current) return;
+    drag.current.release();
+    drag.current = null;
+    setResizing(false);
+    schedule();
+  };
+
   const waitingBadge = <span className="nav-badge amber" data-testid="nav-badge-waiting" aria-label={t('dialogs.sidebar.waiting', { count: waiting })}>{waiting}</span>;
   const workingBadge = <span className="nav-badge" data-testid="nav-badge-working" aria-label={t('dialogs.sidebar.working', { count: working })}>{working > 99 ? '99+' : working}</span>;
   const homeBadge = working || waiting ? <>{working ? workingBadge : null}{waiting ? waitingBadge : null}</> : null;
 
   const labelOf = (id: BrainPageId, fallback: string) =>
-    id === 'agenti' ? t('catalog.title') : id === 'impara' ? 'Giornale & Fonti' : fallback;
+    id === 'agenti' ? t('catalog.title') : id === 'impara' ? t('dialogs.sidebar.news') : fallback;
 
   const menuItem = (id: BrainPageId) => {
     const p = BRAIN_PAGES.find(x => x.id === id);
@@ -99,11 +126,11 @@ export function Sidebar() {
   const homeOn = page === 'home';
 
   return (
-    <nav className="sidebar" aria-label={t('dialogs.sidebar.label')} data-testid="sidebar">
+    <nav className={`sidebar${resizing ? ' is-resizing' : ''}`} style={{ width }} aria-label={t('dialogs.sidebar.label')} data-testid="sidebar">
       <div className="sidebar-head" ref={menuWrap}>
         <button type="button" className={`nav-menu-btn ${menuOpen ? 'on' : ''}`}
-          aria-expanded={menuOpen} aria-haspopup="menu" aria-label="Menu navigazione"
-          data-tip="Menu pagine" data-testid="nav-menu-btn"
+          aria-expanded={menuOpen} aria-haspopup="menu" aria-label={t('dialogs.sidebar.menuLabel')}
+          data-tip={t('dialogs.sidebar.menuTip')} data-testid="nav-menu-btn"
           onClick={() => setMenuOpen(o => !o)}>
           <IconMenu size={16} />
           {menuAlerts > 0 && <span className="nav-menu-dot" aria-hidden="true" />}
@@ -117,14 +144,14 @@ export function Sidebar() {
           {homeBadge}
         </button>
         {menuOpen && (
-          <div className="nav-menu-pop" role="menu" aria-label="Menu sezioni" data-testid="nav-menu">
+          <div className="nav-menu-pop" role="menu" aria-label={t('dialogs.sidebar.menuLabel')} data-testid="nav-menu">
             <div className="nav-title" data-testid="nav-group-work">{t('dialogs.sidebar.work')}</div>
             {WORK_PAGES.map(menuItem)}
             <div className="nav-sep" />
-            <div className="nav-title" data-testid="nav-group-leisure">Svago</div>
+            <div className="nav-title" data-testid="nav-group-leisure">{t('dialogs.sidebar.leisure')}</div>
             {LEISURE_PAGES.map(menuItem)}
             <div className="nav-sep" />
-            <div className="nav-title" data-testid="nav-group-system">Sistema</div>
+            <div className="nav-title" data-testid="nav-group-system">{t('dialogs.sidebar.system')}</div>
             {SYSTEM_PAGES.map(menuItem)}
             {extraPages.map(menuItem)}
           </div>
@@ -133,6 +160,24 @@ export function Sidebar() {
       <div className="nav-group nav-scroll">
         <SidebarTree />
       </div>
+      <div className="sidebar-resize" role="separator" tabIndex={0} aria-label={t('dialogs.sidebar.width')} aria-orientation="vertical"
+        aria-valuemin={MIN_SIDEBAR_WIDTH} aria-valuemax={maxW} aria-valuenow={width} data-testid="sidebar-resize"
+        onPointerDown={event => {
+          if (event.button !== 0) return;
+          drag.current?.release();
+          drag.current = { x: event.clientX, w: width, release: suspendViews() };
+          setResizing(true);
+          event.currentTarget.setPointerCapture(event.pointerId);
+          event.preventDefault();
+        }}
+        onPointerMove={event => { if (drag.current) resize(drag.current.w + event.clientX - drag.current.x); }}
+        onPointerUp={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); endDrag(); }}
+        onLostPointerCapture={endDrag} onPointerCancel={endDrag}
+        onDoubleClick={() => { setPrefs({ sidebarWidth: null }); schedule(); }}
+        onKeyDown={event => {
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); resize(width + (event.key === 'ArrowRight' ? 20 : -20)); }
+          else if (event.key === 'Home') { event.preventDefault(); setPrefs({ sidebarWidth: null }); schedule(); }
+        }} />
     </nav>
   );
 }

@@ -52,7 +52,7 @@ import { ThoughtText } from './CorrectThought';
 import { correctedThoughts, parseCorrection } from '../lib/correction';
 import { agents } from '../store/agents';
 import { guideChatId, visibleGuideItems } from '../../modules/ai-first/presentation';
-import { quoteInDraft } from './ChatInput';
+import { replyToMessage } from './ChatInput';
 
 type Tool = Extract<ChatItem, { kind: 'tool' }>;
 
@@ -358,7 +358,7 @@ function ReplyButton({ text }: { text: string }) {
   if (readOnly || !chatId || !text.trim()) return null;
   const excerpt = text.replace(/\s+/g, ' ').trim().slice(0, 180);
   return (
-    <button type="button" className="msg-reply-btn" onClick={() => { quoteInDraft(chatId, excerpt); }}
+    <button type="button" className="msg-reply-btn" onClick={() => { replyToMessage(chatId, excerpt); }}
       aria-label={t('chat.reply.aria')} data-tip={t('chat.reply.tip')} data-testid="msg-reply">
       ↩ {t('chat.reply.label')}
     </button>
@@ -489,7 +489,7 @@ export function turnActivity(items: readonly ChatItem[] | undefined): 'scrive' |
   return 'pensa';
 }
 
-function itemMatches(item: ChatItem, q: string, topic: string): boolean {
+export function itemMatches(item: ChatItem, q: string, topic: string): boolean {
   const txt = 'text' in item && typeof item.text === 'string' ? item.text : item.kind === 'tool' ? `${item.name} ${item.summary}` : '';
   if (topic) {
     const tag = 'text' in item && typeof item.text === 'string' ? topicOfText(item.text)?.topic : null;

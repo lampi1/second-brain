@@ -58,7 +58,7 @@ import { TaskContext } from './TaskContext';
 import { InWindowLine } from './QuestionsWindow';
 import { RunHereCtx } from './CodeBlock';
 import { childRequestsFor, requestHost, type ChildRequest } from '../lib/child-requests';
-import { IconAlert, IconArrowLeft, IconChat, IconColumns, IconGlobe, IconInfo, IconMaximize, IconMore, IconStop, IconX } from './Icons';
+import { HarnessMark, IconAlert, IconArrowLeft, IconChat, IconColumns, IconGlobe, IconInfo, IconMaximize, IconMore, IconStop, IconX } from './Icons';
 import { IconButton, Kbd, StatePill, useSize } from './ui';
 import { rolePurpose } from '../lib/role-text';
 import { useSteady } from '../lib/steady';
@@ -259,12 +259,21 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
           {actions}
         </div>
         <div className="bench-plate">
-          <div className="bench-prow"><span className="bench-area">{areaOf(chat) || t('product.noArea')}</span><SkillChips chat={chat} />{longContext && <ContextMeter chat={chat} warn={warn} />}</div>
+          <div className="bench-prow">
+            <span className="bench-area">{areaOf(chat) || folder || t('product.noArea')}</span>
+            {folder && areaOf(chat) && folder.toLowerCase() !== areaOf(chat)!.toLowerCase() && (
+              <span className="bench-folder" title={chat.cwd}>{folder}</span>
+            )}
+            {perm && <span className="th-badge bench-perm">{perm}</span>}
+            <SkillChips chat={chat} />
+            {longContext && <ContextMeter chat={chat} warn={warn} />}
+          </div>
           <h3 className="th-title" title={(chat.agent?.purpose&&rolePurpose(chat.agent.id,chat.agent.purpose))||chat.title}>
             {renaming ? <TitleInput chat={chat} onDone={()=>setRenaming(false)}/> : <button ref={expansionButton} type="button" className="strip-name" aria-expanded={false} aria-controls={`chat-work-${chatId}`} data-tip={t('product.expand')} onClick={()=>setChatExpanded(chatId,true)} data-testid={`chat-expand-${chatId}`}>{topic || name}</button>}
           </h3>
           <span className="bench-now">{topic && <span className="bench-role" data-testid={`chat-topic-${chatId}`}>{name}</span>}<span className="chat-strip-line">{busyShown?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.plan?.phase==='proposed'?t('tree.plan.ready'):chat.lastText.slice(0,140)}</span></span>
-          <div className="bench-meta"><StripMeta chat={chat} workMs={work} /></div>
+          {chat.run && <div className="bench-est"><StripEstimate chat={chat} busy={busy || chat.state === 'waiting'} workMs={work} compact /></div>}
+          <div className="bench-meta"><HarnessMark harness={chat.harness} size={12} /><StripMeta chat={chat} workMs={work} /></div>
         </div>
       </header> : !embedded && <header className="tile-head">
         <div className="th-row">

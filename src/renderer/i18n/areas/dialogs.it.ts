@@ -161,6 +161,12 @@ export const dialogsIt = {
   'dialogs.sidebar.waiting': (p: { count: number }) => `${p.count} ti aspettano`,
   'dialogs.sidebar.working': (p: { count: number }) => p.count === 1 ? '1 agente al lavoro' : `${p.count} agenti al lavoro`,
   'dialogs.sidebar.new': (p: { count: number }) => `${p.count} nuove`,
+  'dialogs.sidebar.width': 'Larghezza barra laterale',
+  'dialogs.sidebar.menuLabel': 'Menu navigazione',
+  'dialogs.sidebar.menuTip': 'Menu pagine',
+  'dialogs.sidebar.leisure': 'Svago',
+  'dialogs.sidebar.system': 'Sistema',
+  'dialogs.sidebar.news': 'Giornale & Fonti',
 
   // NeedsLane
   'dialogs.needsLane.label': (p: { count: number }) => `Ti aspettano: ${p.count}`,

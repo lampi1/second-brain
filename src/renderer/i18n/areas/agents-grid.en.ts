@@ -39,5 +39,7 @@ export const agentsGridEn: typeof agentsGridIt = {
   'agentsGrid.successNote': ({ n, min }: { n: number; min: number }) => `verified: ${n} of ${min} needed`,
   'agentsGrid.successHelp': ({ min }: { min: number }) => `The share of ended jobs with a verified outcome, yours or an independent review's, that succeeded; a partial counts half. Below ${min} verified outcomes no percentage: only how many of ${min}. Different from Performance, which also weighs the Orchestrator's and reviewers' votes.`,
   'agentsGrid.costHelp': 'The median cost of an ended run: half the runs cost less, half more. Only runs whose engine reports a cost count.',
+  'agentsGrid.medianTime': 'Time',
+  'agentsGrid.medianTimeFull': 'Median execution time',
   'agentsGrid.noRuns': 'No verified success yet: the first one moves it towards Lv 2.',
 };

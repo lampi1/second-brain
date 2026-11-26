@@ -50,4 +50,11 @@ describe('strip figures', () => {
     // no figures yet: the model alone; an effort only asked for is not shown as if it ran
     expect(render(chat({ model: 'claude-sonnet-5-5', effort: 'low', costUsd: 0 } as Partial<ChatSummary>), null)).toMatch(/^<span class="strip-model"[^>]*>Sonnet 5\.5<\/span>$/);
   });
+  it('shows the estimate immediately even before elapsed work time or cost arrives', () => {
+    withEstimate(12 * MIN, 0.35);
+    const html = render(chat({ costUsd: 0 }), null);
+    expect(html).toContain('data-testid="chat-meta-c"');
+    expect(html).toMatch(/~12 min/);
+    expect(html).toMatch(/~0,35\s\$/);
+  });
 });

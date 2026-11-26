@@ -33,6 +33,13 @@ export interface Place { page: 'mappa' | 'esplora' | BrainPageId; arg?: string |
 export type AgentView = 'chat' | 'split' | 'browser';
 export const DEFAULT_SPLIT = 0.42;
 export const clampSplit = (n: number): number => Math.min(0.75, Math.max(0.25, n));
+export const DEFAULT_SIDEBAR_WIDTH = 224;
+export const MIN_SIDEBAR_WIDTH = 180;
+export const MAX_SIDEBAR_WIDTH = 460;
+export const clampSidebarWidth = (n: number, viewportW = typeof window !== 'undefined' ? window.innerWidth : 1280): number => {
+  const cap = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, Math.floor(viewportW * 0.42)));
+  return Math.round(Math.min(cap, Math.max(MIN_SIDEBAR_WIDTH, n)));
+};
 
 export interface Prefs {
   /** the work profile's id (shared/work-profiles.ts): which Brain pages the sidebar shows; absent = all of them */
@@ -47,6 +54,8 @@ export interface Prefs {
   agentSplit:Record<string,number>;
   /** parents whose delegated children are folded, in the Grindhouse and the sidebar tree alike (lib/chat-tree.ts) */
   treeCollapsed:Record<string,boolean>;
+  /** left sidebar width in px (null = DEFAULT_SIDEBAR_WIDTH), dragged via its right edge handle */
+  sidebarWidth?: number | null;
   density: Density;
   theme: Theme;
   /** the Orchestrator widget bottom-right (ADR 0028): expanded or the collapsed bar; the expanded size (null = the default);
@@ -113,7 +122,7 @@ export interface QWin { open: boolean; first: string | null; call: number; shown
 
 const PREFS_KEY = 'sb.prefs.v1';
 export const defaultPrefs: Prefs = {
-  appearance:readAppearance(null),chatPanelsV:2,chatExpanded:{},agentView:{},agentSplit:{},treeCollapsed:{},
+  appearance:readAppearance(null),chatPanelsV:2,chatExpanded:{},agentView:{},agentSplit:{},treeCollapsed:{},sidebarWidth:null,
   density: 'comfortable', theme: 'dark', orchestratorOpen: true, orchestratorSize: null, orchestratorSizeV: DEFAULT_V, orchestratorSeenAt: 0,
   newChat: { harness: 'claude', cwd: '', model: '', effort: '', permissionMode: '' }, lastFocus: null, usagePinned: ['claude'],
 };
@@ -133,8 +142,8 @@ const flags=(raw:unknown):Record<string,boolean>=>raw&&typeof raw==='object'&&!A
 const ID=/^[a-zA-Z0-9_-]{1,120}$/;
 const record=(raw:unknown):[string,unknown][]=>raw&&typeof raw==='object'&&!Array.isArray(raw)?Object.entries(raw).filter(([id])=>ID.test(id)).slice(-1000):[];
 /** The remembered agent-window views and splits: valid ids and values only, the latest 1000. */
-const views=(raw:unknown):Record<string,AgentView>=>Object.fromEntries(record(raw).filter((e):e is [string,AgentView]=>e[1]==='chat'||e[1]==='split'||e[1]==='browser'));
-const splits=(raw:unknown):Record<string,number>=>Object.fromEntries(record(raw).filter((e):e is [string,number]=>typeof e[1]==='number'&&Number.isFinite(e[1])).map(([id,n])=>[id,clampSplit(n)]));
+const views=(raw:unknown):Record<string,AgentView>=>Object.fromEntries(record(raw).filter((e): e is [string,AgentView]=>e[1]==='chat'||e[1]==='split'||e[1]==='browser'));
+const splits=(raw:unknown):Record<string,number>=>Object.fromEntries(record(raw).filter((e): e is [string,number]=>typeof e[1]==='number'&&Number.isFinite(e[1])).map(([id,n])=>[id,clampSplit(n)]));
 
 /** The remembered prefs, each field checked; `at` = now, the unread count's start when none was saved. */
 export function loadPrefs(raw: string | null, at = Date.now()): Prefs {
@@ -155,6 +164,7 @@ export function loadPrefs(raw: string | null, at = Date.now()): Prefs {
       agentView:{...Object.fromEntries(Object.keys(flags(browserOpen)).filter(id=>flags(browserOpen)[id]).map(id=>[id,'split' as const])),...views(p.agentView)},
       agentSplit:splits(p.agentSplit),
       treeCollapsed:flags(p.treeCollapsed),
+      sidebarWidth: typeof p.sidebarWidth === 'number' && Number.isFinite(p.sidebarWidth) ? Math.round(Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, p.sidebarWidth))) : null,
       density: p.density === 'compact' ? 'compact' : 'comfortable',
       theme: p.theme === 'light' || p.theme === 'dark' ? p.theme : 'system',
       newChat: { ...defaultPrefs.newChat, ...(p.newChat ?? {}) },

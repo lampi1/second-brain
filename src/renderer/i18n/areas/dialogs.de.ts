@@ -163,6 +163,12 @@ export const dialogsDe: typeof dialogsIt = {
   'dialogs.sidebar.waiting': (p: { count: number }) => p.count === 1 ? '1 wartet auf dich' : `${p.count} warten auf dich`,
   'dialogs.sidebar.working': (p: { count: number }) => p.count === 1 ? '1 Agent arbeitet' : `${p.count} Agenten arbeiten`,
   'dialogs.sidebar.new': (p: { count: number }) => `${p.count} neu`,
+  'dialogs.sidebar.width': 'Breite der Seitenleiste',
+  'dialogs.sidebar.menuLabel': 'Navigationsmenü',
+  'dialogs.sidebar.menuTip': 'Seitenmenü',
+  'dialogs.sidebar.leisure': 'Freizeit',
+  'dialogs.sidebar.system': 'System',
+  'dialogs.sidebar.news': 'Zeitung & Quellen',
 
   // NeedsLane
   'dialogs.needsLane.label': (p: { count: number }) => `Wartend: ${p.count}`,

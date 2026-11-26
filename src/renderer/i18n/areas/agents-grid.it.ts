@@ -40,5 +40,7 @@ export const agentsGridIt = {
   'agentsGrid.successNote': ({ n, min }: { n: number; min: number }) => `verificati: ${n} su ${min} necessari`,
   'agentsGrid.successHelp': ({ min }: { min: number }) => `La quota dei lavori conclusi con un esito verificato, tuo o di una revisione indipendente, che sono riusciti; un parziale vale mezzo. Sotto ${min} esiti verificati nessuna percentuale: solo quanti sono su ${min}. Diversa da Performance, che pesa anche i voti dell’Orchestrator e dei revisori.`,
   'agentsGrid.costHelp': 'Il costo mediano di un lavoro concluso: metà dei lavori è costata meno, metà di più. Conta solo i lavori di cui il motore riporta il costo.',
+  'agentsGrid.medianTime': 'Tempo',
+  'agentsGrid.medianTimeFull': 'Tempo mediano di esecuzione',
   'agentsGrid.noRuns': 'Nessun lavoro riuscito verificato ancora: il primo lo porta verso il Lv 2.',
 };

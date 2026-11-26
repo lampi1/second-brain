@@ -59,7 +59,7 @@ function EstimateHelp({ view, agent, summary }: { view: RunEstimateView; agent: 
 
 /** A strip's estimate: dashed and labelled «stima» so it never reads as the run's own time or cost. */
 /** workMs = the strip's own work time so far (waits excluded, like the estimate's figures): the time left counts against it. */
-export function EstimateChip({ chat, view, summary, busy, workMs }: { chat: ChatSummary; view: RunEstimateView | undefined; summary: AccuracySummary | null; busy: boolean; workMs: number | null }) {
+export function EstimateChip({ chat, view, summary, busy, workMs, compact }: { chat: ChatSummary; view: RunEstimateView | undefined; summary: AccuracySummary | null; busy: boolean; workMs: number | null; compact?: boolean }) {
   const e = view?.estimate;
   if (!view || !e || !chat.run) return null;
   const est = estimateText(e);
@@ -70,8 +70,8 @@ export function EstimateChip({ chat, view, summary, busy, workMs }: { chat: Chat
   const left = live ? (over ? t('estimate.over') : t('estimate.left', { d: minutes(Math.max(0, e.timeMs! - workMs!)) })) : null;
   const actual = ended && view.actual?.timeMs != null ? minutes(view.actual.timeMs) : null;
   const tone = ended && view.hit !== null ? (view.hit ? ' est-held' : ' est-missed') : over ? ' over' : '';
-  const text = ended && actual ? `${est.time ?? est.cost} → ${actual}` : [figures, t('estimate.similar', { n: e.n })].join(' · ');
-  return <span className={`th-estimate${tone}`} data-testid={`chat-estimate-${chat.id}`} data-path={e.path} data-hit={view.hit ?? undefined}>
+  const text = ended && actual ? `${est.time ?? est.cost} → ${actual}` : compact ? figures : [figures, t('estimate.similar', { n: e.n })].join(' · ');
+  return <span className={`th-estimate${tone}${compact ? ' is-compact' : ''}`} data-testid={`chat-estimate-${chat.id}`} data-path={e.path} data-hit={view.hit ?? undefined}>
     <span className="sr-only">{t('estimate.aria', { text: [text, left].filter(Boolean).join(', ') })}</span>
     <span aria-hidden="true" className="th-estimate-label">{t('estimate.label')}</span>
     <span aria-hidden="true" className="th-estimate-text">{text}</span>
@@ -82,8 +82,8 @@ export function EstimateChip({ chat, view, summary, busy, workMs }: { chat: Chat
 }
 
 /** The strip's chip with the shared read (one hook per strip; the read itself is shared). */
-export function StripEstimate({ chat, busy, workMs }: { chat: ChatSummary; busy: boolean; workMs: number | null }) {
+export function StripEstimate({ chat, busy, workMs, compact }: { chat: ChatSummary; busy: boolean; workMs: number | null; compact?: boolean }) {
   const data = useRunEstimates();
   if (!chat.run || !data) return null;
-  return <EstimateChip chat={chat} view={data.runs[chat.run.runId]} summary={accuracySummary(data.accuracy)} busy={busy} workMs={workMs} />;
+  return <EstimateChip chat={chat} view={data.runs[chat.run.runId]} summary={accuracySummary(data.accuracy)} busy={busy} workMs={workMs} compact={compact} />;
 }

@@ -28,7 +28,8 @@ import { HarnessMark } from './Icons';
 import { updatedWhen } from './JudgingSwitch';
 import { now as clockNow } from '../lib/clock';
 import { HelpTip } from './HelpTip';
-import { formatCost } from '../lib/format';
+import { formatCost, minutes } from '../lib/format';
+import { rolePurpose } from '../lib/role-text';
 import { useApp } from '../store/store';
 import { isBusy } from '../store/state';
 
@@ -74,27 +75,30 @@ function Costs({ id, metrics, wins, loaded }: { id: string; metrics: AgentMetric
 
 const pct = (v: number) => new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: 0 }).format(v);
 
-/** Clean zero-token RPG level & XP bar (no competing Bayesian Performance % gauge). */
+/** Clean zero-token RPG level & XP bar spanning full width (no competing Bayesian Performance % gauge). */
 const NONE: AgentStanding = { runs: 0, wins: 0, xp: 0, level: 1, levelAt: 0, nextAt: 6, progress: 0, performance: null, spread: null, evaluated: 0, minRuns: 5,
   sources: { human: 0, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 0, decision: 0, chain: 0, self: 0 } };
 function Standing({ id, standing: s, reviewedAt = null }: { id: string; standing: AgentStanding | null; reviewedAt?: number | null }) {
   const xp = s ? Math.floor(s.xp) : 0;
   const left = s && s.nextAt !== null ? Math.max(1, Math.ceil(s.nextAt - s.xp)) : 0;
+  const nextLabel = !s ? t('catalog.unknown') : s.wins === 0 && s.xp === 0 ? t('agentsGrid.noRuns') : s.nextAt === null ? t('agentsGrid.levelTop') : t('agentsGrid.levelNext', { left, next: s.level + 1 });
   return <div className="catalog-standing" data-testid={`catalog-standing-${id}`}>
     <section className="catalog-level" aria-label={t('agentsGrid.level')} data-testid={`catalog-level-${id}`} data-level={s?.level}>
-      <h4>{t('agentsGrid.level')}
-        <HelpTip title={t('agentsGrid.levelHelpTitle')} wide testid={`catalog-level-help-${id}`}>
-          <p>{t('agentsGrid.levelHelp1')}</p><p>{t('agentsGrid.levelHelp2')}</p>
-          {id === 'orchestrator' ? <p>{t('agentsGrid.levelHelpOrchestrator')}</p> : <p>{t('levels.verified')}</p>}
-          <p>{t('agentsGrid.levelHelp3')}</p>
-          {s && <p className="catalog-help-now">{t('agentsGrid.levelHelpEx', { xp, wins: s.wins, runs: s.runs, level: s.level, next: s.nextAt === null ? null : s.level + 1, left })}</p>}
-        </HelpTip></h4>
+      <div className="catalog-level-head">
+        <h4>{t('agentsGrid.level')}
+          <HelpTip title={t('agentsGrid.levelHelpTitle')} wide testid={`catalog-level-help-${id}`}>
+            <p>{t('agentsGrid.levelHelp1')}</p><p>{t('agentsGrid.levelHelp2')}</p>
+            {id === 'orchestrator' ? <p>{t('agentsGrid.levelHelpOrchestrator')}</p> : <p>{t('levels.verified')}</p>}
+            <p>{t('agentsGrid.levelHelp3')}</p>
+            {s && <p className="catalog-help-now">{t('agentsGrid.levelHelpEx', { xp, wins: s.wins, runs: s.runs, level: s.level, next: s.nextAt === null ? null : s.level + 1, left })}</p>}
+          </HelpTip></h4>
+        <small className="catalog-level-next">{nextLabel}</small>
+      </div>
       <p className="catalog-level-value">{s ? <><b>{t('agentsGrid.levelShort', { n: s.level })}</b> <span>{t('agentsGrid.levelTitle', { n: s.level })}</span>
         <span className="catalog-level-wins" data-testid={`catalog-level-wins-${id}`} title={t('agentsGrid.levelWins', { n: s.wins })}> · {t('agentsGrid.levelXp', { n: xp })}</span></> : <span aria-hidden="true">—</span>}</p>
       <div className="catalog-level-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={s ? Math.round(s.progress * 100) : undefined}
         aria-label={s && s.nextAt !== null ? t('agentsGrid.levelNext', { left, next: s.level + 1 }) : t('agentsGrid.levelTop')}>
         <i style={{ width: `${s ? Math.round(s.progress * 100) : 0}%` }} /></div>
-      <small>{!s ? t('catalog.unknown') : s.wins === 0 && s.xp === 0 ? t('agentsGrid.noRuns') : s.nextAt === null ? t('agentsGrid.levelTop') : t('agentsGrid.levelNext', { left, next: s.level + 1 })}</small>
       {reviewedAt !== null && <small className="catalog-updated" data-testid={`catalog-updated-${id}`} title={t('catalog.updated.tip')}>{t('catalog.updated', { when: updatedWhen(reviewedAt, clockNow()) })}</small>}
     </section>
   </div>;
@@ -122,13 +126,12 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine: _engine, la
   }, [flipped]);
   const stats = metrics?.all, standing = loaded ? metrics?.standing ?? NONE : null;
   const ended = loaded ? completedRuns(metrics) : null;
-  const open = loaded ? metrics?.open ?? 0 : null;
   const unknown = t('catalog.unknown');
-  const rate = stats?.successRate, cost = stats?.costPerRun.median;
+  const rate = stats?.successRate, cost = stats?.costPerRun.median, execTime = stats?.timeToDone.execution;
   const sample = (n: number) => loaded ? t('catalog.samples', { n, total: ended ?? 0 }) : unknown;
-  const values: Record<'runs' | 'open' | 'success' | 'cost', Value> = {
+  const values: Record<'runs' | 'time' | 'success' | 'cost', Value> = {
     runs: { text: ended?.toLocaleString(locale()) ?? null },
-    open: { text: open?.toLocaleString(locale()) ?? null },
+    time: { text: execTime?.value != null ? minutes(execTime.value) : null, samples: sample(execTime?.n ?? 0) },
     // the one success definition (ADR 0186): verified verdicts only; under MIN_SUCCESS_SAMPLE the count, «troppo pochi»
     success: !loaded || !rate?.n || rate.value === null ? { text: null, samples: sample(rate?.n ?? 0) }
       : enoughVerdicts(rate) ? { text: pct(rate.value), samples: sample(rate.n) }
@@ -147,26 +150,36 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine: _engine, la
   const last = lastStart === null ? unknown : new Date(lastStart).toLocaleString(locale());
   const prompt = profile.instructions.trim();
   const engines = levelEngines(levelsOf(profile, cardPresets(profile, null)));
-  return <article className="catalog-card bm-flip" data-testid={`catalog-card-${profile.id}`} data-state={state} data-flipped={flipped}
+  const purpose = rolePurpose(profile.id, profile.purpose);
+  const isOrch = profile.id === 'orchestrator';
+  return <article className={`catalog-card bm-flip${isOrch ? ' is-orchestrator' : ''}`} data-testid={`catalog-card-${profile.id}`} data-state={state} data-flipped={flipped}
     style={{ '--row-index': Math.min(index, 8), '--tone': characterTone(characterOf(profile.id)) } as CSSProperties}>
     <div className="bm-flip-inner">
       <div className="bm-face bm-face-front" inert={flipped} aria-hidden={flipped || undefined} data-testid={`catalog-front-${profile.id}`}>
         {(profile.userLocked || state !== 'active') && <div className="catalog-front-top">
           {profile.userLocked && <span className="catalog-origin">{origin}</span>}
           {state !== 'active' && <span className="catalog-badge" data-state={state}>
-            <i aria-hidden="true" />{trial ? t('studio.trial') : t('agentsGrid.working')}</span>}
+            <i aria-hidden="true" />{trial ? t('studio.trial') : t('agentsGrid.workingCount', { n: busy })}</span>}
         </div>}
         <header className="catalog-hero">
           <span className="catalog-hero-avatar" data-person={person ? true : undefined}>
             {person ? <AgentSprite id={person} state="idle" restless talk height={128} label={t('product.avatar', { name: profile.name })} tip={t('sprite.tip')} />
               : <AgentAvatar avatar={profile.avatar} name={profile.name} size={104} />}</span>
-          <h3><button ref={front} type="button" onClick={() => flip(true)} aria-expanded={flipped} aria-controls={backId} aria-describedby={`${backId}-f`} data-testid={`catalog-flip-${profile.id}`}>{profile.name}</button></h3>
+          <div className="catalog-hero-info">
+            <div className="catalog-hero-title">
+              <h3><button ref={front} type="button" onClick={() => flip(true)} aria-expanded={flipped} aria-controls={backId} aria-describedby={`${backId}-f`} data-testid={`catalog-flip-${profile.id}`}>{profile.name}</button></h3>
+              <span className="catalog-front-engines" aria-label={t('rolePage.engines')}>
+                {engines.map(h => <HarnessMark key={h} harness={h} size={14} />)}
+              </span>
+            </div>
+            {purpose && <p className="catalog-purpose">{purpose}</p>}
+          </div>
           <span id={`${backId}-f`} className="sr-only">{t('bm.card.flip', { name: profile.name })}</span>
         </header>
         <Standing id={profile.id} standing={standing} reviewedAt={reviewedAt} />
         <dl className="catalog-stats">
           <Metric label={t('agentsGrid.runs')} full={t('catalog.runs')} value={values.runs} unknown={unknown} />
-          <Metric label={t('agentsGrid.open')} full={t('catalog.open')} value={values.open} unknown={unknown} />
+          <Metric label={t('agentsGrid.medianTime')} full={t('agentsGrid.medianTimeFull')} value={values.time} unknown={unknown} />
           <Metric label={t('agentsGrid.success')} full={t('catalog.success')} value={values.success} unknown={unknown} testid={`catalog-success-${profile.id}`}
             help={<HelpTip label={t('catalog.success')} testid={`catalog-success-help-${profile.id}`}>{t('agentsGrid.successHelp', { min: MIN_SUCCESS_SAMPLE })}</HelpTip>} />
           <Metric label={t('agentsGrid.cost')} full={t('catalog.cost')} value={values.cost} unknown={unknown}

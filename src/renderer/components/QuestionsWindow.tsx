@@ -16,8 +16,8 @@ import { focusChat, openPlanOf, reqKey } from '../actions';
 import { qwinStats } from '../lib/questions';
 import { commandsOfTurn, orchestratorIdOf } from '../lib/orchestrator-route';
 import { sameList } from '../store/state';
-import { answer, app, useApp } from '../store/store';
-import { newCardOpening, parkQuestions, setOpenCard, ui } from '../store/ui';
+import { answer, app, send, useApp } from '../store/store';
+import { newCardOpening, parkQuestions, setOpenCard, toast, ui } from '../store/ui';
 import { answerLater, openQueue, requestPostponed } from '../lib/later';
 import { HarnessMark, IconArrowRight, IconChevronDown, IconChevronRight, IconQuestion, IconX } from './Icons';
 import { ago } from '../lib/format';
@@ -50,6 +50,19 @@ function commandsFirst<T extends { type: string; chatId: string }>(asks: readonl
 type Ask = PendingRequest | PlanAsk | DurableAsk;
 const isHost = (ask: Ask): ask is DurableAsk => isDurable(ask);
 const isDurable = (ask: Ask): ask is DurableAsk => ask.type === 'work' || ask.type === 'lesson';
+
+/** Pause the card (collapse without answering/rejecting) and ask the Orchestrator to explain it in chat first. */
+function requestExplainFirst(ask: Ask, title: string, who: string, onCollapse: () => void): void {
+  const orchId = orchestratorIdOf(app.get());
+  if (!orchId) { toast(t('chat.questions.explainNoOrch'), 'info'); return; }
+  const prompt = !isDurable(ask) && ask.type === 'command'
+    ? t('chat.command.explainPrompt', { cmd: (ask.command?.code ?? ask.detail).split('\n')[0]?.trim().slice(0, 180) || title })
+    : t('chat.questions.explainPrompt', { title: title.slice(0, 220), who });
+  if (send(orchId, prompt) === 'empty') return;
+  onCollapse();
+  setOpenCard(null);
+  toast(t('chat.questions.explainSent'), 'info');
+}
 
 export function OrchestratorAsks() {
   const hidden = ui.use(s => s.hidden, sameList);
@@ -129,6 +142,8 @@ function AskRow({ ask, open, later, onToggle, onClose }: { ask: Ask; open: boole
   const name = useApp(s => isHost(ask) ? ask.title : (s.chats[ask.chatId]?.isOrchestrator ? 'Orchestrator' : (s.chats[ask.chatId]?.agent?.name || s.chats[ask.chatId]?.title || 'Chat')));
   const harness = useApp(s => s.chats[ask.chatId]?.harness ?? 'claude');
   const isOrchestrator = useApp(s => isHost(ask) || !!s.chats[ask.chatId]?.isOrchestrator);
+  // never queue an explanation onto the same Orchestrator that is currently blocked waiting on this very card
+  const canExplain = useApp(s => { const oid = orchestratorIdOf(s); return oid !== null && (isDurable(ask) || ask.chatId !== oid); });
   const now = useNow(30_000);
   const k = reqKey(ask);
   const yn = quickYesNo(ask);
@@ -143,6 +158,7 @@ function AskRow({ ask, open, later, onToggle, onClose }: { ask: Ask; open: boole
     setSent(true);
     void answer(ask, { kind: 'question', answers: { [yn.question]: label } }).then(ok => { if (!ok) setSent(false); });
   };
+  const onExplain = () => requestExplainFirst(ask, title, name, onClose);
   // the row's colour rule says what it is (ADR 0311): violet a question of the Orchestrator or a plan, red a
   // permission or a command to run, amber anything else that waits for a decision
   const kind = !isDurable(ask) && (ask.type === 'permission' || ask.type === 'command') ? 'perm' : isOrchestrator || (!isDurable(ask) && ask.type === 'plan') ? 'orch' : 'decide';
@@ -170,16 +186,19 @@ function AskRow({ ask, open, later, onToggle, onClose }: { ask: Ask; open: boole
           <button type="button" className="oask-yn y" disabled={sent} onClick={() => quick(yn.yes)} data-testid="orchestrator-ask-yes">{t('chat.questions.yes')}</button>
           <button type="button" className="oask-yn n" disabled={sent} onClick={() => quick(yn.no)} data-testid="orchestrator-ask-no">{t('chat.questions.no')}</button>
         </>}
+        {!open && canExplain && (
+          <button type="button" className="oask-chev oask-explain-icon" onClick={onExplain} aria-label={t('chat.questions.explainFirst')} data-tip={t('chat.questions.explainFirstTip')} data-testid="orchestrator-ask-explain"><IconQuestion size={13} /></button>
+        )}
         <button type="button" className="oask-chev" onClick={onToggle} aria-label={open ? t('chat.questions.close') : t('chat.questions.expand')} data-testid="orchestrator-ask-chev">{open ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}</button>
         {/* ✕ = «Ci penso dopo» (the owner, 2026-11-12): the row folds into «N da rispondere dopo» */}
         {!later && <button type="button" className="oask-chev oask-x" onClick={onLater} aria-label={t('chat.questions.later')} data-tip={t('chat.questions.laterTip')} data-testid="orchestrator-ask-later"><IconX size={13} /></button>}
       </div>
-      {open && <AskCard ask={ask} name={name} harness={harness} onLater={onLater} />}
+      {open && <AskCard ask={ask} name={name} harness={harness} onLater={onLater} onExplain={canExplain ? onExplain : undefined} />}
     </div>
   );
 }
 
-function AskCard({ ask, name, harness, onLater }: { ask: Ask; name: string; harness: Harness; onLater: () => void }) {
+function AskCard({ ask, name, harness, onLater, onExplain }: { ask: Ask; name: string; harness: Harness; onLater: () => void; onExplain?: () => void }) {
   const [keysEl, setKeysEl] = useState<HTMLSpanElement | null>(null);
   const k = reqKey(ask);
   // what the Orchestrator passes on in the user's words (ADR 0274, 0275): a plan, an engine question (a Strategist's
@@ -211,6 +230,11 @@ function AskCard({ ask, name, harness, onLater }: { ask: Ask; name: string; harn
       </WriteViaOrchestrator.Provider>
       <div className="oask-foot">
         <span className="qwin-keys" ref={setKeysEl} />
+        {onExplain && (
+          <button type="button" className="btn btn-ghost btn-s oask-foot-explain" onClick={onExplain} data-testid="qwin-explain-first" data-tip={t('chat.questions.explainFirstTip')}>
+            <IconQuestion size={12} /> {t('chat.questions.explainFirst')}
+          </button>
+        )}
         <span className="sp" />
         {!isOrchestratorChat(ask) && <button type="button" className="btn btn-ghost btn-s" onClick={() => focusChat(ask.chatId)} data-testid="qwin-open-chat">{t('chat.questions.openChat')} <IconArrowRight size={12} /></button>}
         <button type="button" className="btn btn-ghost btn-s" onClick={onLater} data-testid="qwin-later" data-tip={t('chat.questions.laterTip')}>{t('chat.questions.later')} <Kbd>Esc</Kbd></button>

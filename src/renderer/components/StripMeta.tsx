@@ -19,14 +19,16 @@ export function StripMeta({ chat, workMs }: { chat: ChatSummary; workMs: number 
   const name = modelWithEffort(chat), why = engineWhy(chat);
   // the tip says it whole: on a narrow strip the text is cut
   const model = <span className="strip-model" data-testid={`strip-model-${chat.id}`} data-tip={`${name}. ${why ?? t('aw.modelTip')}`}>{name}</span>;
-  if (workMs === null && costNow === null) return model;
   const est = estimate ? estimateText(estimate) : null;
+  const hasActual = workMs !== null || costNow !== null;
+  const hasEstOnly = !hasActual && !!(est?.time || est?.cost);
+  if (!hasActual && !hasEstOnly) return model;
   const overTime = !!estimate && estimate.timeMs !== null && workMs !== null && workMs > estimate.timeMs;
   const overCost = !!estimate && estimate.costUsd !== null && costNow !== null && costNow > estimate.costUsd * 1.5;
-  const withEstimate = (workMs !== null && !!est?.time) || (costNow !== null && !!est?.cost);
+  const withEstimate = hasEstOnly || (workMs !== null && !!est?.time) || (costNow !== null && !!est?.cost);
   return <>{model}<span className="strip-meta" data-testid={`chat-meta-${chat.id}`} data-tip={t(withEstimate ? 'aw.metaTipEst' : 'aw.metaTip')}>
-    {workMs !== null && <span className={overTime ? 'over' : undefined}>{minutes(workMs)}{est?.time && <i> / {est.time}</i>}</span>}
-    {costNow !== null && <span className={overCost ? 'over' : undefined}>{chatCost(chat)}{est?.cost && <i> / {est.cost}</i>}</span>}
+    {workMs !== null ? <span className={overTime ? 'over' : undefined}>{minutes(workMs)}{est?.time && <i> / {est.time}</i>}</span> : est?.time ? <span><i>{est.time}</i></span> : null}
+    {costNow !== null ? <span className={overCost ? 'over' : undefined}>{chatCost(chat)}{est?.cost && <i> / {est.cost}</i>}</span> : est?.cost ? <span><i>{est.cost}</i></span> : null}
     {(overTime || overCost) && <span className="sr-only" data-testid={`chat-over-${chat.id}`}>{t('aw.overTip')}</span>}
   </span></>;
 }

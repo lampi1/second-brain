@@ -215,8 +215,8 @@ function WindowCommand({ req, chatTitle, testBase, withContext, prod, armed, bus
         </div>
         <pre className="ask-cmd cmd-code" data-testid={`${testBase}-code`}>{code}</pre>
       </div>
-      {/* the chat's message open, its last reasoning piece folded under it (the owner, 2026-11-11) */}
-      {withContext && <AskContext req={req} defaultOpen testBase={testBase} noVisuals thinking="none" label={t('genui.decision.chatText')} />}
+      {/* keep command cards concise (1-line summary + command box); full chat prose stays one click away */}
+      {withContext && <AskContext req={req} defaultOpen={false} testBase={testBase} noVisuals thinking="none" label={t('genui.decision.chatText')} />}
       {withContext && <AskThought req={req} testBase={testBase} />}
     </DecisionCard>
   );

@@ -20,7 +20,7 @@ import { setFocused, ui } from '../store/ui';
 import { t } from '../i18n';
 import { pairHover, usePair } from '../lib/pairs';
 import { awaitingCard, clearOrchestratorNow, go } from '../actions';
-import { ItemList, topicOfText, turnActivity, Typing } from './ChatItems';
+import { ItemList, itemMatches, topicOfText, turnActivity, Typing } from './ChatItems';
 import { SpriteCtx } from './AgentSprite';
 import { useOwnPicture } from '../lib/agent-images';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
@@ -112,6 +112,11 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
     }
     return out.slice(-8);
   }, [items]);
+  const searchMatchCount = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase(), tp = topicFilter.trim();
+    if (!q && !tp) return null;
+    return (items ?? []).filter(it => itemMatches(it, q, tp)).length;
+  }, [items, searchQuery, topicFilter]);
   const openSearch = () => { setSearchOpen(true); requestAnimationFrame(() => searchInput.current?.focus()); };
   const closeSearch = () => { setSearchOpen(false); setSearchQuery(''); };
   // the Orchestrator's input has the default focus (once the chat exists)
@@ -153,9 +158,12 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
         <div className="th-row">
           <AgentAvatar avatar={chat.agent?.avatar} name={chat.agent?.name||chat.title} size={24}/>
           {renaming ? <TitleInput chat={chat} onDone={() => setRenaming(false)} /> : <h3 className="th-title orchestrator-name" onDoubleClick={() => setRenaming(true)}>{chat.agent?.name||chat.title}</h3>}
+          <span className="orch-engine-pill" data-tip={t('dialogs.orchestrator.engineTip', { name: engineName(chat.harness) })}>
+            <HarnessMark harness={chat.harness} size={12} /><span>{engineName(chat.harness)}</span>
+          </span>
           <StatePill chat={chat} testid="orchestrator-state" />
           <span className="sp" />
-          <IconButton label="Cerca nei messaggi (Ctrl+F)" aria-pressed={searchOpen} className={searchOpen ? 'on' : ''} onClick={() => (searchOpen ? closeSearch() : openSearch())} testid="orchestrator-search"><IconSearch size={14} /></IconButton>
+          <IconButton label={t('chat.orch.searchTip')} aria-pressed={searchOpen} className={searchOpen ? 'on' : ''} onClick={() => (searchOpen ? closeSearch() : openSearch())} testid="orchestrator-search"><IconSearch size={14} /></IconButton>
           <AwayButton />
           <RemoteButton chat={chat} reveal={() => { setRemoteHidden(false); setRemoteOpen(v => !v); }} />
           {/* the plans from the Orchestrator's head too (ADR 0301): they open where the user talks to it */}
@@ -166,26 +174,33 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
         </div>
         {/* one quiet line: its model, what it started today with the cost, its details (ADR 0287: its name is said once) */}
         <div className="orch-meta"><ModelChip chat={chat} profileId={ORCHESTRATOR_ROLE_ID} testid="orchestrator-model" />{chat.title.trim() !== (chat.agent?.name || 'Orchestrator') && chat.title.trim() !== 'Orchestrator' && <span className="chat-topic">{chat.title}</span>}<TallyLine chat={chat} /><AgentIdentity chat={chat}/></div>
-        {searchOpen && (
-          <div className="orch-search-bar" data-testid="orchestrator-search-bar">
-            <IconSearch size={13} />
-            <input ref={searchInput} type="search" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); closeSearch(); } }}
-              placeholder={t('chat.orch.searchPlaceholder')} aria-label={t('chat.orch.searchAria')} data-testid="orchestrator-search-input" />
-            {searchQuery && <button type="button" className="orch-search-clear" onClick={() => setSearchQuery('')} aria-label={t('chat.orch.searchClear')}><IconX size={11} /></button>}
-            <button type="button" className="orch-search-clear" onClick={closeSearch} aria-label={t('chat.orch.searchClose')}><IconX size={12} /></button>
-          </div>
-        )}
-        {topics.length > 1 && (
-          <div className="orch-topics" role="group" aria-label={t('chat.orch.topicsAria')} data-testid="orchestrator-topics">
-            <button type="button" className={`orch-topic-pill${!topicFilter ? ' on' : ''}`} onClick={() => setTopicFilter('')}>{t('chat.orch.topicsAll')}</button>
-            {topics.map(tp => (
-              <button key={tp} type="button" className={`orch-topic-pill${topicFilter === tp ? ' on' : ''}`} onClick={() => setTopicFilter(topicFilter === tp ? '' : tp)}>{tp}</button>
-            ))}
-          </div>
-        )}
         <AwayLine />
         {!remoteHidden && <RemoteLine chat={chat} forceOpen={remoteOpen} dismiss={() => { setRemoteHidden(true); setRemoteOpen(false); }} />}
+        {(searchOpen || topics.length > 1) && (
+          <div className="orch-subbar">
+            {searchOpen && (
+              <div className="orch-search-bar" data-testid="orchestrator-search-bar">
+                <IconSearch size={13} />
+                <input ref={searchInput} type="search" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); closeSearch(); } }}
+                  placeholder={t('chat.orch.searchPlaceholder')} aria-label={t('chat.orch.searchAria')} data-testid="orchestrator-search-input" />
+                {searchQuery.trim() && searchMatchCount !== null && (
+                  <span className="orch-search-count" data-testid="orchestrator-search-count">{t('chat.orch.searchCount', { n: searchMatchCount })}</span>
+                )}
+                {searchQuery && <button type="button" className="orch-search-clear" onClick={() => setSearchQuery('')} aria-label={t('chat.orch.searchClear')}><IconX size={11} /></button>}
+                <button type="button" className="orch-search-clear" onClick={closeSearch} aria-label={t('chat.orch.searchClose')}><IconX size={12} /></button>
+              </div>
+            )}
+            {topics.length > 1 && (
+              <div className="orch-topics" role="group" aria-label={t('chat.orch.topicsAria')} data-testid="orchestrator-topics">
+                <button type="button" className={`orch-topic-pill${!topicFilter ? ' on' : ''}`} onClick={() => setTopicFilter('')}>#{t('chat.orch.topicsAll').toLowerCase()}</button>
+                {topics.map(tp => (
+                  <button key={tp} type="button" className={`orch-topic-pill${topicFilter === tp ? ' on' : ''}`} onClick={() => setTopicFilter(topicFilter === tp ? '' : tp)}>#{tp}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <div className="th-sub sr-only" data-testid="orchestrator-sub">
           <span className="th-engine" data-tip={t('dialogs.orchestrator.engineTip', { name: engineName(chat.harness) })} aria-label={t('dialogs.orchestrator.engineTip', { name: engineName(chat.harness) })} role="img" data-engine={chat.harness} data-testid="orchestrator-engine"><HarnessMark harness={chat.harness} size={14} /></span>
           <span className="th-sub-text">{[!['Orchestrator', 'Orchestrator'].includes(chat.title.trim()) ? chat.title : '', modelWithEffort(chat), chatCost(chat)].filter(Boolean).join(' · ')}</span>

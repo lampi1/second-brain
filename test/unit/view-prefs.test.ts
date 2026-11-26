@@ -4,7 +4,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { applyViewPrefs, setViewPrefs, viewPrefs } from '../../src/renderer/lib/view-prefs';
 import { settingsSections, SETTINGS_SECTION_IDS } from '../../src/renderer/lib/settings-sections';
-import { ui } from '../../src/renderer/store/ui';
+import { clampSidebarWidth, loadPrefs, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, ui } from '../../src/renderer/store/ui';
 import { WORK_PROFILES } from '../../src/shared/work-profiles';
 
 describe('view prefs from an agent', () => {
@@ -29,6 +29,18 @@ describe('view prefs from an agent', () => {
     expect(viewPrefs().workProfile).toBe(id);
     applyViewPrefs(JSON.stringify({ workProfile: null }));
     expect(viewPrefs().workProfile).toBeNull();
+  });
+});
+
+describe('sidebar width preference', () => {
+  it('clamps to min, max and 42% viewport cap and sanitizes persisted values', () => {
+    expect(clampSidebarWidth(100, 1440)).toBe(MIN_SIDEBAR_WIDTH);
+    expect(clampSidebarWidth(900, 1440)).toBe(MAX_SIDEBAR_WIDTH);
+    expect(clampSidebarWidth(400, 800)).toBe(336);
+    expect(loadPrefs(JSON.stringify({ sidebarWidth: 320 })).sidebarWidth).toBe(320);
+    expect(loadPrefs(JSON.stringify({ sidebarWidth: 40 })).sidebarWidth).toBe(MIN_SIDEBAR_WIDTH);
+    expect(loadPrefs(JSON.stringify({ sidebarWidth: 999 })).sidebarWidth).toBe(MAX_SIDEBAR_WIDTH);
+    expect(loadPrefs(JSON.stringify({ sidebarWidth: 'wide' })).sidebarWidth).toBeNull();
   });
 });
 

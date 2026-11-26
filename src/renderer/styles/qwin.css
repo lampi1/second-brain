@@ -176,6 +176,8 @@
 .oask-yn.n { color: var(--text-2); }
 .oask-yn:hover:not(:disabled) { border-color: var(--border-3); }
 .oask-yn:disabled { opacity: .5; cursor: default; }
+.oask-explain-icon { color: var(--violet); opacity: .82; }
+.oask-explain-icon:hover { opacity: 1; background: var(--violet-bg); color: var(--violet); }
 .oask-chev { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: var(--r-s); background: none; color: var(--text-3); cursor: pointer; }
 .oask-chev:hover { background: var(--surface-3); color: var(--text); }
 .oask-card { border-top: 1px solid var(--border); padding: 10px 12px 8px; font-size: var(--fs-l); line-height: 1.5; }
@@ -192,10 +194,11 @@
    scrolls in a box of its own: the rows' own scroll reads the card from its first line to its last. */
 .oask-card .dc-actions { margin: 0; padding: 0; }
 .oask-card .ctx-body { max-height: none; overflow: visible; }
-.oask-card .dc-q, .oask-card .wq-q { font-size: 17px; line-height: 1.35; }
-.oask-card .dc-ctx, .oask-card .wq-lead { font-size: var(--fs-l); line-height: 1.55; color: var(--text); max-width: 72ch; }
+.oask-card .dc-q, .oask-card .wq-q { font-size: 16px; line-height: 1.35; }
+.oask-card .dc-ctx, .oask-card .wq-lead { font-size: var(--fs-m); line-height: 1.55; color: var(--text); max-width: 72ch; }
 .oask-card .dc-evidence { background: none; border: 0; border-top: 1px solid var(--border); border-radius: 0; padding: 12px 0 0; }
-.oask-foot { display: flex; align-items: center; gap: 8px; padding-top: 8px; margin-top: 8px; border-top: 1px solid var(--border); }
+.oask-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding-top: 8px; margin-top: 8px; border-top: 1px solid var(--border); }
+.oask-foot-explain { color: var(--violet); }
 /* the keys still work (1-9, arrows, Enter, Esc); their legend only repeated the numbers on the options */
 .oask-foot .qwin-keys { display: none; }
 .dc-via-input { font-size: 12px; color: var(--text-3); }
