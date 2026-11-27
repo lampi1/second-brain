@@ -17,7 +17,6 @@ import { allowsClass, COMMAND_TOOLS, commandsReadOnly, readOnlyCommand, toolClas
 import { readOnlyTools } from '../agents/read-tools';
 import { gateRequest, runtimePluginName } from '../agents/role-gate';
 import { autoPermit } from './auto-permit';
-import { heldForUser } from './delegated-holds';
 import { loadPolicy, policyCovers, policyRead, POLICY_FILE } from './permit-policy';
 import { AWAY_PARKED, AWAY_PLAN_NOTE, recommendedAnswers } from '../../shared/away';
 import { askingPlan, PLAN_APPROVED, type IntakeSource, type PlanIntake } from '../../shared/strategy';
@@ -595,10 +594,9 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       message: `This role may only run commands that read (shell-read): ${shown} was refused. Use a reading command, or report what you need to your parent.` };
   }
 
-  /** ADR 0103, 0254: the app answers a permission request itself (chats/auto-permit.ts): everything passes but what the
-   *  user's brain rules hold (permissions.json: refused visibly with the rule's reason, or sent to the user), what
-   *  the user's own role limits keep for them and, in every chat on every engine but the maintenance research (which
-   *  runs no commands), the three writes that always wait for the user (delegated-holds.ts, ADR 0355, 0356). Each request left to the user logs why. */
+  /** ADR 0103, 0254: the app answers a permission request itself (chats/auto-permit.ts): everything passes by default
+   *  except what the user's brain rules hold (permissions.json: refused visibly with the rule's reason, or sent to the
+   *  user) and the user's own role limits. Each request left to the user logs why. */
   private permitDecision(r: Rec, req: Omit<PendingRequest, 'chatId'>, whole = false): GateDecision {
     const policy = loadPolicy(this.opts.brainRoot?.() ?? null);
     if (policy.state === 'broken' && r.policyWarned !== policy.error) {
@@ -629,9 +627,6 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       return toUser(v.reason);
     }
     if (v.kind === 'allow') {
-      // no heldBy: the phone answers only what a rule of the user's holds
-      const hold = !r.s.research ? heldForUser(whole ? { ...req, whole } : req, { cwd: r.s.cwd, readScripts: this.readScripts(r) }) : null;
-      if (hold) { req.noAlways = true; delete req.alwaysRules; return toUser(`${hold.kind}: ${hold.why}`); }
       log.info('chats', 'auto-permit allowed', { chat: r.s.id, data: { tool: req.tool } });
       return { kind: 'allow', policy: 'auto-permit' };
     }

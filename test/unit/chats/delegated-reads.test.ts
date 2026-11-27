@@ -52,7 +52,7 @@ const HELD = ['sqlcmd -S srv -Q "update t set a=1"', './deploy.sh --env producti
 const TOOLS: (ToolClass[] | undefined)[] = [undefined, ['read'], ['read', 'shell-read', 'web'], ['read', 'edit', 'shell']];
 
 describe('a delegated chat (#472)', () => {
-  it.each(['claude', 'codex', 'cursor', 'opencode'] as Harness[])('%s: reads run with no panel and the three writes wait, whatever the contract names, shared or isolated', async harness => {
+  it.each(['claude', 'codex', 'cursor', 'opencode'] as Harness[])('%s: allows all commands by default without a brain policy, whatever the contract names, shared or isolated', async harness => {
     for (const tools of TOOLS) for (const own of [false, true]) {
       const isolated = own ? tmp() : undefined;
       const f = fixture(isolated ? { prepareDelegation: async p => ({ cwd: isolated, parentRunId: p.run?.runId, parentTaskVersion: p.run?.taskVersion }) } : {});
@@ -61,17 +61,13 @@ describe('a delegated chat (#472)', () => {
       const where = `${tools ?? 'role'} ${own ? 'own copy' : 'shared'}`;
       expect(f.m.agentPolicy(c.id)?.tools ?? null, where).toBeNull();
       for (const tool of ['Bash', 'Command']) {
-        for (const r of READS) expect(f.ask(r, tool), `${where}: ${r}`).toBe('allow');
-        for (const h of HELD) expect(f.ask(h, tool), `${where}: ${h}`).toBe('user');
+        for (const r of [...READS, ...HELD]) expect(f.ask(r, tool), `${where}: ${r}`).toBe('allow');
       }
-      const left = f.m.pending().filter(p => p.chatId === c.id);
-      expect(left).toHaveLength(HELD.length * 2);
-      // never «always», and not answerable from the phone as a rule of the user's would be
-      for (const p of left) { expect(p.noAlways).toBe(true); expect(p.alwaysRules).toBeUndefined(); expect(p.heldBy).toBeUndefined(); }
+      expect(f.m.pending().filter(p => p.chatId === c.id)).toHaveLength(0);
     }
   });
 
-  it('the rules of the brain are unchanged: they refuse first, with their own message', async () => {
+  it('the rules of the brain decide what is refused or held for the user', async () => {
     const f = fixture({ brainRoot: () => path.join(__dirname, '..', '..', 'fixtures', 'brain-policy') });
     await f.child('claude', ['read', 'shell-read']);
     for (const r of READS) expect(f.ask(r), r).toBe('allow');
@@ -80,13 +76,10 @@ describe('a delegated chat (#472)', () => {
     expect(f.ask('x', 'mcp__Gmail__send_message')).toBe('user');
   });
 
-  // ADR 0356 (owner, 2026-11-25: «permessi uguali su ogni harness: tutto automatico tranne scritture DB, release su nodi di
-  // produzione e scritture Azure, che aspettano Esegui»): the three wait in every chat, not only a delegated one
-  it.each(['claude', 'codex', 'cursor', 'opencode', 'antigravity'] as Harness[])('%s: a chat that is not delegated runs its reads and leaves the three writes to the user too', async harness => {
+  it.each(['claude', 'codex', 'cursor', 'opencode', 'antigravity'] as Harness[])('%s: a chat that is not delegated allows commands by default and leaves enforcement to brain rules', async harness => {
     const f = fixture();
     await f.m.create({ harness, cwd: f.dir, prompt: 'x' }, 'user');
-    for (const r of READS) expect(f.ask(r), r).toBe('allow');
-    for (const h of HELD) expect(f.ask(h), h).toBe('user');
+    for (const r of [...READS, ...HELD]) expect(f.ask(r), r).toBe('allow');
   });
 
   it('a limit the parent really has still goes down: the user\'s own plan mode', async () => {
@@ -98,16 +91,16 @@ describe('a delegated chat (#472)', () => {
     expect(f.m.agentPolicy(c.id)).toEqual({ tools: null, ceiling: 'plan' });
   });
 
-  it('run_code (Code Mode) meets the same: a read runs, the three writes wait', async () => {
+  it('run_code (Code Mode) follows the same rule: free by default, held when a brain policy asks', async () => {
     const f = fixture(), c = await f.child('claude', ['read']);
-    for (const command of READS) expect((await f.m.decideFor(c.id, 'Bash', { command })).kind, command).toBe('allow');
-    for (const command of HELD) {
-      const stop = new AbortController();
-      const verdict = f.m.decideFor(c.id, 'Bash', { command }, { signal: stop.signal });
-      await vi.waitFor(() => expect(f.m.pending().some(p => p.chatId === c.id)).toBe(true));
-      stop.abort();
-      expect((await verdict).kind).not.toBe('allow');
-    }
+    for (const command of [...READS, ...HELD]) expect((await f.m.decideFor(c.id, 'Bash', { command })).kind, command).toBe('allow');
+    const g = fixture({ brainRoot: () => path.join(__dirname, '..', '..', 'fixtures', 'brain-policy') });
+    const gc = await g.child('claude', ['read']);
+    const stop = new AbortController();
+    const verdict = g.m.decideFor(gc.id, 'mcp__Gmail__send_message', { to: 'a@b.c' }, { signal: stop.signal });
+    await vi.waitFor(() => expect(g.m.pending().some(p => p.chatId === gc.id)).toBe(true));
+    stop.abort();
+    expect((await verdict).kind).not.toBe('allow');
   });
 
   it('a saved allow list stays at load when it cannot be told from the role; a damaged policy, the ceiling and an orphan keep theirs', async () => {
@@ -186,15 +179,12 @@ describe('a delegated chat (#472)', () => {
     const info = vi.spyOn(log, 'info');
     const reasons = () => info.mock.calls.filter(c => c[1] === 'the gate leaves a request to the user').map(c => String((c[2]?.data as { reason?: string })?.reason));
     const f = fixture();
-    await f.child('claude', ['read']);
-    for (const h of HELD) f.ask(h);
-    expect(reasons()).toEqual([expect.stringMatching(/^db-write: /), expect.stringMatching(/^prod-release: /), expect.stringMatching(/^cloud-write: /)]);
     // a class the chat was not given, and the limit of a chat
     await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' }, 'user', { owner: plainOwner('claude', null), instructions: 'i', policy: { tools: { allow: ['read'] }, ceiling: null } });
     f.ask('npm test');
     await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' }, 'user', { owner: plainOwner('claude', null), instructions: 'i', policy: { tools: null, ceiling: 'default' } });
     f.ask('npm test');
-    expect(reasons().slice(3)).toEqual(['tool class not given to the chat: shell', 'the chat\'s limit: default']);
+    expect(reasons()).toEqual(['tool class not given to the chat: shell', 'the chat\'s limit: default']);
     // the user's brain rule
     const g = fixture({ brainRoot: () => path.join(__dirname, '..', '..', 'fixtures', 'brain-policy') });
     await g.child('claude');
