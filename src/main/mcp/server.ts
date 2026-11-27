@@ -86,9 +86,11 @@ export interface Mount {
   who?: (params: Record<string, string>, sessionId: string) => string | undefined;
   /** HTTP DELETE with Mcp-Session-Id: the client ended its session (answered 204). Without it DELETE is 405. */
   onSessionEnd?: (params: Record<string, string>, sessionId: string) => void;
-  /** every tool of this mount carries _meta anthropic/alwaysLoad: Claude Code puts its schema in the prompt and never
-   *  defers it behind ToolSearch (ADR 0371 point 2: 29 «input schema was not in your prompt» in 20 hours) */
-  alwaysLoad?: boolean;
+  /** the tools of this mount that carry _meta anthropic/alwaysLoad: Claude Code puts their schemas in the prompt and
+   *  never defers them behind ToolSearch (ADR 0371 point 2: 29 «input schema was not in your prompt» in 20 hours).
+   *  The names a chat cannot work without (its role's required tools), never the whole list: every other schema stays
+   *  deferred and costs nothing until used. true = every tool (tests, a mount of one tool). */
+  alwaysLoad?: boolean | ((params: Record<string, string>) => Iterable<string>);
 }
 
 export interface McpServerOptions {
@@ -266,7 +268,9 @@ export class McpServer {
         }
         case 'ping': return ok(id, {});
         case 'tools/list':
-          return ok(id, { tools: (await this.toolsOf(mount, ctx)).map(t => toolListEntry(mount.alwaysLoad ? { ...t, meta: { ...t.meta, [ALWAYS_LOAD]: true } } : t, ctx.params)) });
+          const loads = typeof mount.alwaysLoad === 'function' ? new Set(mount.alwaysLoad(ctx.params)) : null;
+          const marked = (name: string): boolean => mount.alwaysLoad === true || !!loads?.has(name);
+          return ok(id, { tools: (await this.toolsOf(mount, ctx)).map(t => toolListEntry(marked(t.name) ? { ...t, meta: { ...t.meta, [ALWAYS_LOAD]: true } } : t, ctx.params)) });
         case 'tools/call': {
           const name = typeof p.name === 'string' ? p.name : '';
           const tool = (mount.callTools ? await mount.callTools({ params: ctx.params, sessionId: ctx.sessionId }) : await this.toolsOf(mount, ctx)).find(t => t.name === name);

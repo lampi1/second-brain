@@ -105,8 +105,9 @@ ${SCREENSHOT_HINT}`;
   mcp.mount('/mcp/chat/:chatId/:token', {
     // the browser's instructions only for a chat that has browser tools
     name: 'browser-chat', instructions: params => browserAccess(params.chatId ?? '') === 'none' ? CHAT_HINTS : `${INSTRUCTIONS}\n${CHAT_HINTS}`,
-    // the role tools (agent_report, plan_propose, agent_delegate…) are in every role's prompt from its first turn (ADR 0371)
-    alwaysLoad: true,
+    // the role's required tools (agent_report, plan_propose, agent_delegate…: shared/role-tools.ts) are in its prompt from
+    // its first turn; every other tool stays behind ToolSearch (ADR 0371 point 2)
+    alwaysLoad: params => chatToolRequired(params.chatId ?? ''),
     tools: ({ params }) => {
       const id = params.chatId ?? '';
       const list = chatToolsFor(id);

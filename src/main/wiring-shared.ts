@@ -70,14 +70,14 @@ export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appC
   const code = { repo: () => source.repo(), inRepo: (dir: string) => source.inRepo(dir) };
   // /mcp/app: test agents (acts for the Orchestrator); /mcp/app/o/<id>/<token>: the Orchestrator's own, so the tools know
   // the caller. Only an open Orchestrator with its own token answers (the token lives only here and in its config).
-  // alwaysLoad (ADR 0371): the app's own tools are never deferred behind ToolSearch, for every role and the Orchestrator
-  mcp.mount('/mcp/app', { name: 'app', instructions, alwaysLoad: true, tools: appControlTools({ ...deps, code }).map(as) });
+  mcp.mount('/mcp/app', { name: 'app', instructions, tools: appControlTools({ ...deps, code }).map(as) });
   if (orchestratorTokens) {
     const full = (chatId?: string) => appControlTools({ ...deps, code: { ...code, pull: () => source.pull() } }, chatId).map(as);
     const required = new Set(ORCHESTRATOR_APP_REQUIRED);
     const compactLogged = new Set<string>();
     mcp.mount('/mcp/app/o/:chatId/:token', {
-      name: 'app', instructions, alwaysLoad: true, authorize: orchestratorEndpointAuth(orchestratorTokens, () => deps.chats.list()), who: p => p.chatId,
+      // the Orchestrator's essential app tools are in its prompt from its first turn; the rest behind ToolSearch (ADR 0371)
+      name: 'app', instructions, alwaysLoad: () => ORCHESTRATOR_APP_REQUIRED, authorize: orchestratorEndpointAuth(orchestratorTokens, () => deps.chats.list()), who: p => p.chatId,
       tools: c => {
         const id = c.params.chatId ?? '';
         const list = full(id);
