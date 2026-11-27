@@ -18,8 +18,10 @@ invisible continuation, with the same divider)
    deterministic first, in this order: his own `[Topic]` or `#topic` tag; the message he answered with «Rispondi» (the
    composer's `> quote`; a quote that names one topic only, like a line of a recap, goes to that one); a chat title, plan,
    project folder or topic label his words name; failing a whole name, the one topic his telling words (stems, no
-   generic words) share most with; a short follow-up of his last message within 15 minutes (a «sì» in a conversation
-   going on answers it, never another chat's waiting question); the open question of another chat that a short answer
+   generic words) share most with; a short answer within 15 minutes of the conversation's last exchange goes to that
+   exchange's topic (a «sì» answers the Orchestrator's last proposal, never another chat's waiting question), sure only
+   when that exchange is on his own last message's topic: after a chat's mail or the app's news on another topic it is
+   a guess; the open question of another chat that a short answer
    out of the blue answers (a real question only, never a permission request; a delegated child's question counts for
    its root). A message that matches
    nothing opens a new topic named from its own first telling words. Only when the rules are not sure (two topics named,
@@ -27,15 +29,16 @@ invisible continuation, with the same divider)
    the open topics (`OneShotService` light run, purpose `topic`, 40 output tokens, never in tests). It never holds the
    turn: the message goes at once with the rules' choice and the model's later answer moves it (when the answer comes
    before the message's item exists, the item appears with it); a move by the user is never undone by the model. A
-   provisional topic its only message left (moved by the model or the user) is dropped, never left as an empty open
-   topic.
+   provisional topic (opened by the app's guess, never by his tag or move) that its only message left is dropped,
+   never left as an empty open topic; a topic whose marks the store's cap may have trimmed is never taken for empty.
 2. **The topic is stored on the message**: `ChatItem.topic` / `topicBy` (contract first,
    `src/shared/contract/chats.ts`), the list in `<userData>/orchestrator-topics.json`
    (`agents/orchestrator-topic-store.ts`: labels, chats per topic, a 120-character gist per topic, and a fingerprint of
    each message's first 160 characters with its time and item id, so a message read back from a transcript under
    another id finds its topic again and two equal short messages keep one each; never message text, never secrets; an
    unreadable file is never overwritten). Moving a message moves it and the replies to it only (up to the next message,
-   his or a chat's mail); a chat's result moves alone. Typed IPC:
+   his or a chat's mail); a chat's result moves alone; his moves of a chat's mail or result are marked too and come
+   back after a restart. Typed IPC:
    `orchestrator:topics`, `orchestrator:setTopic`, event `orchestrator:topicsChanged`.
 3. **The chats' news and results take the topic of the chat they belong to**: a chat the Orchestrator starts or assigns
    during a turn joins that turn's topic; a child is its root's; the chat's mail (`from`), its result notice (`resultReady`
@@ -57,13 +60,15 @@ invisible continuation, with the same divider)
    size: the first message rolls it when it is over the budget. The brief is kept as the divider's note, as for a cold
    continuation. Claude keeps its own compaction and day compaction (it gets the brief whenever its context starts
    again); Codex and the API engines are not rolled; never under Remote Control. If the new engine does not start, the
-   chat goes back to its old session and its hand-off note (`handoffs/<id>.md`) to what it was.
+   chat goes back to its old session and its hand-off note (`handoffs/<id>.md`) to the bytes it had, even a note the
+   app cannot parse; so does a rollover stopped after the old session closed (a question or a turn came meanwhile).
 6. **The lean prompt stays lean**: the role loses its `[Topic]` line; nothing is added to it. The brief rides only on a
    fresh context's first message.
 7. **UI: data and a small hook only** (`renderer/lib/orchestrator-topics.ts`): the existing pills keep their `string[]`
    API (`useOrchestratorTopics(...).labels`, the stored open topics plus the old `[Topic]` prefixes), the existing
-   `.msg-topic` chip becomes a native list to move a message (and its replies) to another open topic in one click
-   (`TopicChip.tsx`), and the search over the Orchestrator's messages by text and topic is one shared function
+   `.msg-topic` chip becomes, in its own look, the app's Select (`TopicChip.tsx`, `Select.tsx`) to move a message (and
+   its replies) to another open topic: a click or a key only opens the list and only a pick moves it (a native select
+   changes on a bare arrow key while closed), and the search over the Orchestrator's messages by text and topic is one shared function
    (`shared/orchestrator-topics.ts` `searchMessages`, `matchesSearch`), used by the view's filter and the hook.
 
 ## Measurement
@@ -74,7 +79,7 @@ rollover rule and brief (`test/unit/chats/orchestrator-tokens.test.ts`):
 
 | | before | after |
 |---|---|---|
-| input tokens, whole day | 10.9M | 5.40M (−51%) |
+| input tokens, whole day | 10.9M | 5.41M (−50%) |
 | per turn p50 | 263k | 150k (−43%) |
 | per turn p90 | 550k | 242k (−56%) |
 | per turn max | 831k | 323k |
