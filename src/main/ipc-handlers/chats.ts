@@ -89,6 +89,16 @@ export function chatsHandlers({ s, activity, orchestrator, clip }: HandlerContex
     'clipboard:image': a => readClipboardImage(clip, Array.isArray(a?.seen) ? a.seen.filter((t): t is string => typeof t === 'string').slice(0, 20) : []),
     'later:set': a => s.later.set(a?.on === true),
     'orchestrator:held': () => s.heldNews?.get() ?? { items: [] },
+    // the Orchestrator's topics (ADR 0369): read, and the user's one-click move of a message
+    'orchestrator:topics': a => {
+      if (typeof a?.chatId !== 'string' || !a.chatId || a.chatId.length > 100) throw new Error('chatId required');
+      return s.chats.topicsOf?.(a.chatId) ?? { chatId: a.chatId, topics: [] };
+    },
+    'orchestrator:setTopic': a => {
+      if (typeof a?.chatId !== 'string' || typeof a.itemId !== 'string' || typeof a.topic !== 'string' || a.chatId.length > 100 || a.itemId.length > 200 || a.topic.length > 200) throw new Error('Richiesta non valida.');
+      if (!s.chats.setItemTopic) throw new Error('Gli argomenti non sono disponibili qui.');
+      return s.chats.setItemTopic(a.chatId, a.itemId, a.topic);
+    },
     'orchestrator:heldSeen': a => { if (typeof a?.chatId !== 'string' || !a.chatId || a.chatId.length > 100) throw new Error('chatId required'); return s.heldNews?.seen(a.chatId) ?? { items: [] }; },
   };
 }

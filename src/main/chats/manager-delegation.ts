@@ -20,7 +20,7 @@ import { finishPlan, afterReport } from '../../shared/strategy';
 import { APP_EVENT_LABEL } from './orchestrator-wake';
 import type { SubmissionReceipt, TurnEndInfo, Rec } from './manager-types';
 import { clearTimeout, sameChildResult, uniqueChildResults, turnReply, turnErrors, lastAnswer, sysItem, ORCHESTRATOR_OUTPUT_MAX, CHILD_RESULTS_MS, CHILD_RESULTS_CAP, supersededResult } from './manager-helpers';
-import { ManagerContinuity } from './manager-continuity';
+import { ManagerTopics } from './manager-topics';
 import { reportInText } from './text-report';
 import { toolCliHint } from './tool-cli';
 import { isUserActionRequest, sameCommand, userActionAnswer, userActionMessage, userDecisionMessage, userStepParams, type UserActionInput } from './user-action';
@@ -31,7 +31,7 @@ const AWAIT_RUN_MAX_MS = 12 * 60 * 60_000;
 import type { Answer, PendingRequest } from '../../shared/contract';
 
 /** Delegation and reports: a child's agent_report to its parent, a root chat's to the Orchestrator, turn ends that settle them. */
-export abstract class ManagerDelegation extends ManagerContinuity {
+export abstract class ManagerDelegation extends ManagerTopics {
 
   /** Unknown or partial observations are not evidence that a provider has no work left behind. */
   protected override unsettledChildren(r: Rec): boolean {

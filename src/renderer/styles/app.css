@@ -773,6 +773,7 @@ button.lc-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 1
   padding: 1px 7px; border-radius: 99px; background: var(--violet-bg); color: var(--violet);
   font: 600 10.5px var(--font); letter-spacing: 0.03em;
 }
+.msg-topic-pick { appearance: none; border: 0; cursor: pointer; } /* the chip that moves a message to another topic (ADR 0369) */
 /* Orchestrator engine pill, subbar, inline search bar & #topic filter pills */
 .orch-engine-pill {
   display: inline-flex; align-items: center; gap: 4px; flex: none;

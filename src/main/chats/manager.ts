@@ -19,7 +19,7 @@
 // without this module knowing it. Wired in src/main/wiring.ts.
 // The class is built in layers, one concern per file (ADR 0200), each an abstract class extending the one before:
 // manager-core.ts (state, items) → -persistence (chats.json, runs) → -sessions (engines) → -checkpoints → -requests
-// (questions, permissions) → -continuity (hand-offs, cold notes) → -delegation (reports) → -lifecycle (stop, archive,
+// (questions, permissions) → -continuity (hand-offs, cold notes) → -topics (the Orchestrator's topics, ADR 0369) → -delegation (reports) → -lifecycle (stop, archive,
 // auto-close) → -work (assignments, user events, plans) → -sink (session reports) → -remote (Remote Control) → this file: the ChatService entry
 // points (list, create, send and deliver, set). Shapes in manager-types.ts, constants in manager-helpers.ts.
 import crypto from 'node:crypto';
@@ -30,6 +30,7 @@ import { checkImages } from './images';
 import { errText, log } from '../log';
 import type { ChatService } from '../services';
 import { coldPrompt } from './handoff';
+import { ROLLOVER_NOTE } from './orchestrator-rollover';
 import { cut, isUuid, nextId } from './session';
 import { updateActivity } from '../update/activity';
 import { PLAIN_LAUNCH } from './warm';
@@ -357,6 +358,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     if (r.s.run?.startedBy === 'app' && r.s.run.reviewOf && r.s.run.taskContract?.reportExpected && !r.s.work) r.s.work = { status: 'assigned', updatedAt: now };
     // the Orchestrator opened it while answering the user's own message: the user waits for what it finds (#123)
     if (by === 'agent' && !delegator && r.s.run?.startedBy === 'orchestrator') r.userWaits = this.orchestratorAnswering();
+    if (by === 'agent' && !delegator && !req.orchestrator) this.linkToTurn(r); // ADR 0369: it joins the turn's topic
     // checked again where the chat joins the list: chats created at once (agent_delegate's children) awaited in between
     if (uniqueOk) r.s.title = this.uniqueTitle(r.s.title);
     this.chats.set(id, r);
@@ -474,6 +476,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     const hint = !resumed && !liveOnly ? this.taskHint(r, text, source) + (r.s.isOrchestrator && from === undefined && ownerSource(source) && !appText ? this.whereHint(r, phone) + this.openAsksHint() : '') : '';
     // a new assignment from the Orchestrator: whether the user waits for it is decided again (#123)
     if (from !== undefined && !r.s.parentId && !r.s.isOrchestrator && r.s.run?.startedBy === 'orchestrator' && source?.kind === 'chat' && source.chatId === this.openOrchestrator()?.s.id) r.userWaits = this.orchestratorAnswering();
+    if (from !== undefined && !r.s.parentId && !r.s.isOrchestrator && source?.kind === 'chat' && source.chatId === this.openOrchestrator()?.s.id) this.linkToTurn(r);
     if (!this.admission) return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint, phoneVia, relayed);
     // the user's own message never waits (ADR 0036): what waited for this chat goes first, now, then this one
     if (!resumed && from === undefined) {
@@ -626,9 +629,18 @@ export class ChatManager extends ManagerRemote implements ChatService {
     if (this.closedByUser(r) && (resumed || from !== undefined)) throw new Error(CLOSED_BY_USER);
     this.needAgentMay(r, from); // again: the engine may have been released while the message waited in the queue
     if (r.s.closedAt) this.unarchive(r); // a message (the user's, or an agent's through app_send_to_chat) reopens it
-    // a cold chat (ADR 0031): after the cache expired the message goes on in a fresh session from its note
+    // the Orchestrator's topics (ADR 0369): the user's own message gets its topic now, a chat's mail or the app's news
+    // the topic of the chat it is about; an idle ACP Orchestrator past its budget, or switching topic, rolls over
+    const userItemId = nextId('u');
+    const ownWords = r.s.isOrchestrator && !from && !resumed && !!t && (!t.startsWith('[') || splitMode(t).mode !== null);
+    const topic = ownWords ? this.assignTopic(r, userItemId, t) : null;
+    const news = r.s.isOrchestrator && !ownWords && !resumed ? this.newsTopic(t, from) : undefined;
     let lapT = Date.now();
-    const cold = await this.coldSwitch(r);
+    const roll = topic ? await this.orchestratorRollover(r, topic.topic) : null;
+    lap.rolloverMs = Date.now() - lapT;
+    // a cold chat (ADR 0031): after the cache expired the message goes on in a fresh session from its note
+    lapT = Date.now();
+    const cold = roll ? null : await this.coldSwitch(r);
     lap.coldMs = Date.now() - lapT;
     const hadEngine = !!r.session;
     lapT = Date.now();
@@ -639,8 +651,10 @@ export class ChatManager extends ManagerRemote implements ChatService {
       if (liveOnly && engineOf(r.s.harness)?.kind !== 'claude' && (r.session.busy || r.s.state !== 'idle')) throw new Error('La chat sta lavorando: la posta resta da leggere fino al prossimo turno.');
     } catch (e) {
       if (cold) this.coldUndo(r, cold); // the note stays for the next message
+      if (roll) this.rolloverUndo(r, roll);
       throw e;
     }
+    if (roll) this.rolloverDone(r, roll);
     if (cold) this.coldDone(r, cold); // the fresh session started: the divider goes above the message
     // a message into the old session makes the note stale (a turn cut before its result would leave it "fresh")
     else if (r.coldNoteAt) { r.coldNoteAt = undefined; this.persist(); }
@@ -652,7 +666,10 @@ export class ChatManager extends ManagerRemote implements ChatService {
     const fromPhone = !!phoneVia && from === undefined && !resumed;
     const phoneVoice = fromPhone && !!phoneVia?.voice;
     if (fromPhone) r.turnFromPhone = true; else if (!this.midTurn(r)) delete r.turnFromPhone;
-    this.addItem(r, { kind: 'user', id: nextId('u'), at: Date.now(), text: t, ...(imgs.length ? { images: imgs.length } : {}), ...(thumbs.length ? { thumbs } : {}), ...(from ? { from: from.slice(0, 80) } : {}), ...(fromPhone ? { via: 'phone' as const, ...(phoneVoice ? { voice: true } : {}) } : {}) }, false);
+    // the topic brief of a fresh context leaves this message out (it is sent right after it)
+    const briefTopic = topic?.topic;
+    if (topic) r.turnTopic = topic.topic; else if (news && !this.midTurn(r)) r.turnTopic = news;
+    this.addItem(r, { kind: 'user', id: userItemId, at: Date.now(), text: t, ...(imgs.length ? { images: imgs.length } : {}), ...(thumbs.length ? { thumbs } : {}), ...(from ? { from: from.slice(0, 80) } : {}), ...(fromPhone ? { via: 'phone' as const, ...(phoneVoice ? { voice: true } : {}) } : {}), ...(topic ? { topic: topic.topic, topicBy: topic.by } : news ? { topic: news, topicBy: 'chat' as const } : {}) }, false);
     r.activeAt = Date.now();
     if (r.jobNew) this.startJob(r, t || `[${imgs.length} immagini]`);
     const continuation = cold?.h ?? (r.continuationPending ? this.handoffs.read(r.s.id, r.continuationPending) : null);
@@ -681,6 +698,10 @@ export class ChatManager extends ManagerRemote implements ChatService {
     // a changed text is checked once per engine start (as before this, never mid-session: a catalog edit would resend it)
     const role = roleText && (!r.rolePrimed || (!r.roleChecked && r.rolePrimed.sig !== roleSig)) ? roleText : '';
     r.roleChecked = true;
+    // a fresh Orchestrator context (ADR 0369): the per-topic brief after the role text, on every engine; only once the
+    // conversation has something to carry (a rollover, or earlier messages read back)
+    const carries = !!roll || r.items.some(i => i.kind === 'user' && i.id !== userItemId && !i.from);
+    const brief = r.s.isOrchestrator && role && briefTopic && carries ? `${roll ? `${ROLLOVER_NOTE}\n\n` : ''}${this.topicBriefFor(r, briefTopic, userItemId)}\n\n` : '';
     // the reply language (ADR 0120): with the role text, and once on the first turn after the user changed it
     const wantLang = this.opts.replyLang?.(), langHint = replyLangTurn(wantLang, role ? undefined : r.replyLang, !!role);
     // a spoken turn: a reply made to be heard (voice-reply.ts); a new context (role text again, another session) gets
@@ -709,7 +730,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
       runtimePerformance.runtime(chatId, r.s.harness, hadEngine, hadEngine && r.session.busy);
       // what the user did not type goes in the app's envelope to a Claude engine (ADR 0261): a project's prompt hooks
       // (AI-DLC's human-turn record) never take it for the user's turn; the user's own text goes as it is
-      const composed = `${role}${this.compactToolHint(r)}${warning}${body}${hint}${langHint}${voiceHint}${phoneHint}${awayHint}`;
+      const composed = `${role}${brief}${this.compactToolHint(r)}${warning}${body}${hint}${langHint}${voiceHint}${phoneHint}${awayHint}`;
       r.session.send(forEngine(composed, { claude: engineOf(r.s.harness)?.kind === 'claude', relayed }), imgs);
       r.sentTo = r.session;
       if (awayHint) { if (awayOn) r.awayTold = session; else delete r.awayTold; }

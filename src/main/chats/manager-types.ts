@@ -1,5 +1,7 @@
 // The shapes behind ChatManager (manager.ts): its options, the per-chat record (Rec) and the small records its layers
 // pass around. Split out of manager.ts (ADR 0200); only the chat manager's files import Rec.
+import type { OrchestratorTopicService } from '../agents/orchestrator-topic-service';
+import type { RolloverPolicy } from './orchestrator-rollover';
 import type { OptionMap } from '../../shared/yes-no';
 import type { ChatCommand, ChatItem, ChatSummary, CursorReasoning, Effort, HandoffInfo, Harness, Lang, NewChat, PendingRequest, PermissionMode, RunInfo, SeenModel } from '../../shared/contract';
 import type { Emitter } from '../ipc';
@@ -181,6 +183,13 @@ export interface ChatManagerOptions {
   /** Code Mode (ADR 0331): whether this role's card has it on (read at each engine start); roleId undefined = a chat
    *  with no role (off); absent = off */
   codeMode?: (roleId: string | undefined) => boolean;
+  /** the Orchestrator's topics (ADR 0369): each of the user's messages gets one, the chats' news and results theirs,
+   *  and an ACP Orchestrator rolls into a fresh session seeded with the per-topic brief. Absent = no topics, no rollover */
+  topics?: OrchestratorTopicService;
+  /** the essentials of the user's me.md and now.md for the per-topic brief (agents/orchestrator-brief.ts brainEssentials) */
+  orchestratorEssentials?: () => string;
+  /** the rollover thresholds of an engine kind (tests); absent = ROLLOVER_POLICY (chats/orchestrator-rollover.ts) */
+  rolloverPolicy?: (kind: string) => RolloverPolicy | null;
   /** the brain's product PreToolUse guard (rules/runtime.ts) for a run_code internal call: the reason it refuses it,
    *  null = no say. Absent = no product brain. */
   productGuard?: (call: { chatId: string; sessionId: string; tool: string; input: unknown }) => string | null;
@@ -258,6 +267,9 @@ export interface Rec {
   turnFromUser?: boolean;
   /** the Orchestrator: a message from the paired phone started or joined its current turn (the reply goes back to it) */
   turnFromPhone?: boolean;
+  /** the Orchestrator (ADR 0369): the topic of its current or last turn (the user's message, a chat's news); its replies
+   *  take it. Never persisted: after a restart the transcript's marks give each message its topic again */
+  turnTopic?: string;
   turnOutcomeDelivery?: boolean;
   /** the user's message being sent came from the paired phone (sendFromPhone): its text, so only that delivery is marked
    *  📱 and takes the phone reply line; voice = a transcribed voice note */
@@ -463,6 +475,12 @@ export interface Rec {
 export interface ColdStep {
   h: HandoffInfo; old: string | null; at: number; idleMin: number; notePath: string;
   prev: { forkFrom: Rec['forkFrom']; costTotalUsd: Rec['costTotalUsd']; contextTokens: number | undefined; contextMaxTokens: number | undefined; coldNoteAt: number | undefined; after: Rec['after']; ctxSince: Rec['ctxSince'] };
+}
+/** An Orchestrator's rollover into a fresh session (ADR 0369, manager-topics.ts): why, the session it left, the brief's
+ *  note, and what to put back when the new engine does not start. */
+export interface RolloverStep {
+  reason: 'budget' | 'topic'; old: string | null; at: number; contextTokens: number; notePath: string;
+  prev: { sessionId: string | null; contextTokens: number | undefined; contextMaxTokens: number | undefined; costTotalUsd: Rec['costTotalUsd']; ctxSince: Rec['ctxSince']; after: Rec['after']; rolePrimed: Rec['rolePrimed'] };
 }
 /** what a root chat's clean result tells the Orchestrator (onCleanReport) */
 export interface CleanReportNote { chatId: string; title: string; role: string; summary: string; at: number }
