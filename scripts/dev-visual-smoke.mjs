@@ -114,9 +114,8 @@ try {
   await page.getByTestId('plan-map-tree-plan').waitFor();
   await page.getByTestId('tile-chat-tree-plan').scrollIntoViewIfNeeded();
   await capture('plan-compact');
-  const ready = page.getByTestId('tile-orchestrator').getByTestId('result-ready').filter({
-    has: page.locator('[data-testid="chatref-open"][data-chat-id="tree-plan"]'),
-  });
+  // the thin result row (ResultRow.tsx, ADR 0367) names its source chat on the row itself
+  const ready = page.getByTestId('tile-orchestrator').locator('[data-testid="result-ready"][data-chat-id="tree-plan"]');
   await ready.getByTestId('result-ready-toggle').click();
   const result = ready.getByTestId('canonical-result');
   await result.waitFor();
@@ -139,7 +138,10 @@ try {
     const w = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:') && !w.webContents.getURL().includes('#overlay'));
     w.webContents.setZoomFactor(1); w.setSize(1600, 1100);
   });
-  await page.getByTestId('nav-memoria').click();
+  // Memoria by its shortcut G Y (the sidebar's pages live behind its menu button now; test/e2e/helpers.ts goPage)
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press('g');
+  await page.keyboard.press('y');
   await page.getByTestId('bm-memory-page').waitFor();
   await page.getByTestId('mh-tab-file').click();
   await page.getByTestId('mb-page').waitFor();

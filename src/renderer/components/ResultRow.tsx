@@ -35,7 +35,7 @@ export function ResultRow({ item, body }: { item: Sys; body: (text: string) => R
   const avatar = source?.agent?.avatar ?? (r.roleId ? { kind: 'character' as const, value: r.roleId } : undefined);
   const full = r.full || sysText(item);
   return (
-    <div className={`oc-evt-wrap${open ? ' oc-open' : ''}`} data-testid="result-ready">
+    <div className={`oc-evt-wrap${open ? ' oc-open' : ''}`} data-testid="result-ready" data-chat-id={sourceId}>
       <button type="button" className={`oc-evt${r.waited ? ' oc-ok' : ''}`} onClick={() => setOpen(o => !o)} aria-expanded={open} data-testid="result-ready-toggle"
         title={r.line || undefined}>
         {r.waited ? <IconCheck size={14} /> : <AgentAvatar avatar={avatar} name={r.role} size={18} />}

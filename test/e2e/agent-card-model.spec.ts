@@ -17,7 +17,9 @@ test('the result row has icons; Andamento is under Brain', async () => {
     const row = page.getByTestId('result-ready').first();
     await expect(row).toBeVisible();
     await expect(row.getByTestId('result-synthesize')).toBeVisible();
-    await expect(row.getByTestId('chatref-open')).toHaveAttribute('title', /.+/);
+    // → agent lives in the unfolded body of the thin row (ADR 0367), named by its aria-label
+    await row.getByTestId('result-ready-toggle').click();
+    await expect(row.getByTestId('chatref-open')).toHaveAttribute('aria-label', /.+/);
     await shot(page, 'result-ready-icons');
 
     // a command for the user: free text instead of «Non serve», sent to the chat at once

@@ -32,6 +32,8 @@ describe('a result from another agent', () => {
     const out = html(createElement(ResultRow, { item, body: (t: string) => createElement('div', { className: 'full' }, t) }));
     expect(out).toContain('data-testid="head"');
     expect(out).toContain('Air refactoring · PaymentService');
+    // the row names its source chat even folded (the smoke script and e2e find it by it)
+    expect(out).toContain('data-testid="result-ready" data-chat-id="c1"');
     expect(out).toContain('>Branch pushato, 2 test da sistemare</span>');
     expect(out).toContain('aria-expanded="false"');
     expect(out).not.toContain('Dettagli lunghi');
