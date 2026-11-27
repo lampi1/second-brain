@@ -330,6 +330,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   key is gone (ADR 0291).
 
 ### Fixed
+- Faster app (ADR 0368): permissions allowed by auto-permit no longer fill the coordination journal (old rows are
+  cleaned in the background), the work driver reads only open requests (42.7 ms → 0.3 ms per tick in the bench), a pre-turn
+  checkpoint on a clean tree is one `git status` instead of seven git processes, each timer has its own stall label, Stop
+  ends within 1 s on every engine and shows at once, and a message to the Orchestrator interrupts a turn started by app news.
 - A connector that keeps failing (refused login, program that won't start, timeouts) is held back with a growing wait
   instead of being retried at every chat, and one feed card says what to do, with «Accedi» when it needs a login (ADR 0370).
 - Strategist chats on Cursor with Gemini delegate again: that engine sends nested objects and lists as null, so a

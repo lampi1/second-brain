@@ -342,6 +342,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0363](0363-one-concept-the-plan.md) One concept, the Plan: it replaces the project maps and the work maps — accepted
 - [0364](0364-safe-reads-are-read-whole-lines.md) Safe reads are read as whole lines: loops, functions, chains, PowerShell pipes, a script's own folder — accepted
 - [0365](0365-nested-arguments-as-json-text.md) A nested argument may come as its JSON text; a null where a value was wanted is named in the error — accepted
+- [0368](0368-main-process-speed-journal-checkpoint-stop.md) The journal reads only open requests, a clean tree's checkpoint is HEAD, a stop ends within a second — accepted
 - [0370](0370-small-brain-edits-and-broken-connectors.md) The Orchestrator applies small brain edits itself; a connector that keeps failing is held back with one notice — accepted
 
 ## Replaced

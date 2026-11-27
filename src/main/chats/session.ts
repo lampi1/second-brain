@@ -73,6 +73,10 @@ export interface SessionPatch {
   /** true while a resume replays the session's past as items (ACP session/load, Codex thread/resume, an HTTP model's
    *  history), false after: those items are no answer of the engine, so they never end its cold start. Sent alone. */
   replaying?: boolean;
+  /** Just before a result: how many of the messages sent into the ending turn the engine still holds as turns of their
+   *  own (Claude: queued_turn_count); the others it read inside the turn. Absent = every message sent into a turn runs
+   *  as a turn of its own (ACP). The manager learns from it whose the next turn is (ADR 0368). Sent alone. */
+  queuedTurns?: number;
   state?: ChatState;
   /** true: the reply is complete and the engine only closes the turn (Claude: the model stopped with no tool call, or
    *  the result came, while Stop hooks run or the CLI's idle is late); false: it works again. The state does not change:
