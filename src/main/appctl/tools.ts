@@ -270,7 +270,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const tools: ToolDef[] = [
     guideTool(guideDeps),
     ...(authed() ? [{ name: 'app_voice_diagnostics', description: 'Read local content-free voice diagnostics: rolling recognition/synthesis timing samples, stale events, cancellations and failures. No audio or transcript content. Coverage explicitly excludes end-to-end latency and accuracy. Unknown values stay null; small-sample p95 is not a reliability claim.', inputSchema: obj(), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }, run: () => { if (!authed()) throw new Error('Authenticated Orchestrator required'); return { diagnostics: voiceDiagnostics() }; } }] : []),
-    ...(d.config && authed() ? [configTool({ ...d.config, brain: d.brain, callerId: callerId!, userAsked: () => configAsked(callerId!), saidYesTo: () => answeredText(callerId!, Date.now() - CONFIG_ASK_MIN * 60_000) })] : []),
+    ...(d.config && authed() ? [configTool({ ...d.config, brain: d.brain, callerId: callerId!, userAsked: strict => configAsked(callerId!, strict === true), saidYesTo: () => answeredText(callerId!, Date.now() - CONFIG_ASK_MIN * 60_000) })] : []),
     ...(d.workflows && authed() ? workflowTools(d.workflows, id => d.chats.list().some(c => c.id === id && !c.parentId && !c.isOrchestrator), id => d.chats.list().find(c => c.id === id), d.away) : []),
     ...(d.agentLearning ? [learnTool(d, callerId, authed())] : []),
     ...(d.agentLearning && authed() ? [toolDef(lessonReviewTool(d.agentLearning))] : []),
@@ -894,14 +894,14 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
 
   /** app_config's proof (ADR 0149): the user typed to this very Orchestrator in the last minutes, and its latest
    *  message is that one (not app news or an agent's mail, which also land as 'user' items) */
-  function configAsked(orchestratorId: string): boolean {
+  function configAsked(orchestratorId: string, strict = false): boolean {
     const typed = lastTyped(orchestratorId), answered = lastAnswered(orchestratorId);
     if (typed === undefined && answered === undefined) return false;
     const said = d.chats.items(orchestratorId).filter(i => i.kind === 'user');
     const last = said.at(-1), own = said.filter(i => ownItem(i, t => splitMode(t).mode !== null)).at(-1);
     const chat = d.chats.list().find(c => c.id === orchestratorId);
     // his own latest item, told apart from the app's news and agents' mail (ADR 0371): 0 = none of his yet
-    return userAsked({ typed, answered, lastUserItem: last?.at, lastOwnItem: own?.at ?? 0, lastResult: chat?.lastResult?.at, now: Date.now(), freshMs: CONFIG_ASK_MIN * 60_000, turnMs: CONFIG_TURN_MIN * 60_000 });
+    return userAsked({ typed, answered, lastUserItem: last?.at, lastOwnItem: own?.at ?? 0, lastResult: chat?.lastResult?.at, now: Date.now(), freshMs: CONFIG_ASK_MIN * 60_000, turnMs: CONFIG_TURN_MIN * 60_000, strict });
   }
 
   /** Fast mode (ADR 0296): the Orchestrator's latest message is a «[fast]» one, so this turn answers alone: no chat is

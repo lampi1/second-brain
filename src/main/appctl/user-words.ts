@@ -4,7 +4,9 @@
 // the app's news, mail and other main-side sends land as 'user' items too; an answer given by the app («Modalità
 // notte»), by the Orchestrator for a work chat or by a parent for its child never passes here. In memory only (a
 // restart forgets it: the user asks again). ADR 0371: a delivery that waited for the engine still counts, and in the
-// first minutes app news or an agent's mail landing after his ask does not void it. Used by main/ipc-handlers/chats.ts (note) and appctl/tools.ts (configAsk).
+// first minutes app news or an agent's mail landing after his ask does not void it, except for a change that widens
+// what agents may do (strict: permissions, autonomy, protected settings, connectors, role text): then nothing but his own
+// words since, as before. Used by main/ipc-handlers/chats.ts (note) and appctl/tools.ts (configAsk).
 import { isNativeQuestion } from '../../shared/yes-no';
 import type { Answer, PendingRequest } from '../../shared/contract';
 
@@ -63,17 +65,22 @@ export interface AskProof {
   /** the end of the chat's last turn (ChatSummary.lastResult.at) */
   lastResult?: number;
   now: number; freshMs: number; turnMs: number;
+  /** a change that widens what agents may do (ADR 0371): nothing but his own words since the proof, ever; an agent's
+   *  mail or the app's news after it voids it, whatever the time (his late-landing item still counts) */
+  strict?: boolean;
 }
 /** How long the user's typed message may take to land as its item: a delivery waits for the engine to start (a cold
  *  or released engine: ~10 s on Antigravity), a recall check or the mail ahead of it (ADR 0371 point 1: his message
  *  landed 9 s after Enter and app_config refused it 8 times). */
 export const TYPED_DELIVERY_MS = 2 * 60_000;
-/** A 'user' item the user wrote: not an agent's mail (from), not the app's news or resume ("[…", unless a mode prefix). */
+/** A 'user' item the user typed on the PC: not an agent's mail (from), not a phone message (via 'phone': text from the
+ *  phone is a clarification, never an ok), not the app's news or resume ("[…", unless a mode prefix). */
 export function ownItem(i: { kind: string; text?: string; from?: string; via?: string }, isMode: (t: string) => boolean = () => false): boolean {
   return i.kind === 'user' && !i.from && i.via !== 'phone' && (!(i.text ?? '').startsWith('[') || isMode(i.text ?? ''));
 }
 /** Is this the user's ask? Their own typed message or their yes. In the first freshMs (10 minutes) it holds whatever
- *  app news or an agent's mail landed after it: the Orchestrator works on his behalf (the owner, 2026-11-27, ADR 0371).
+ *  app news or an agent's mail landed after it: the Orchestrator works on his behalf (the owner, 2026-11-27, ADR 0371);
+ *  never for a strict change (p.strict), which holds only while nothing but his own words came since.
  *  Past that, only while nothing else spoke to the chat since and it is still the same turn it started or answered (no
  *  turn ended since, at most turnMs: a long piece of work they asked for keeps its ask). */
 export function userAsked(p: AskProof): boolean {
@@ -89,7 +96,7 @@ export function userAsked(p: AskProof): boolean {
     const age = p.now - at;
     if (age < 0) return false;
     // without telling his items from the rest, anything after the proof voids it (the rule before ADR 0371)
-    if (age <= p.freshMs && (known || quiet)) return true;
+    if (age <= p.freshMs && (quiet || known && !p.strict)) return true;
     return quiet && age <= p.turnMs && (p.lastResult === undefined || p.lastResult < at);
   });
 }

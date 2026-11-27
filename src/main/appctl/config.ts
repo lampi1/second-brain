@@ -15,10 +15,12 @@
 // - profile: Settings → Il mio profilo (the managed fields of the brain's me.md: name, role, language, main work, reply
 //   style) via the same save as the page (ADR 0207), its revision checked; undo = set the "before" value back;
 // - later: «Rispondi dopo».
-// Every change needs the user's own typed message to this Orchestrator, or their «Sì» to one of its native questions,
-// with nothing else written to it since (userAsked: appctl/user-words.ts), in the last minutes or still in the turn it
-// started (the owner, 2026-11-01: «ti devo sempre scrivere in chat le parole esatte»), so neither app news, an agent's
-// mail, quoted text nor a turn they woke can change a setting; the Orchestrator's own tools and permission ceiling stay the user's click. Secrets are never read or written.
+// Every change needs the user's own typed message to this Orchestrator, or their «Sì» to one of its native questions
+// (userAsked: appctl/user-words.ts), in the last minutes or still in the turn it started (the owner, 2026-11-01: «ti
+// devo sempre scrivere in chat le parole esatte»). In its first minutes app news or an agent's mail after it do not void
+// it (ADR 0371); a strict change (STRICT_AGENT_KEYS, a protected setting, connectors, undo, the profile: what widens
+// what agents may do) holds only with nothing but his own words since, so neither app news, an agent's mail, quoted
+// text nor a turn they woke can make it; the Orchestrator's own tools and permission ceiling stay the user's click. Secrets are never read or written.
 // Mounted only on the authenticated Orchestrator endpoint by appctl/tools.ts.
 import type { ChangeBy, SettingChange, SettingDef, SettingRequestResult, Settings } from '../../shared/contract';
 import type { AgentCatalog, AgentDraft, AgentProfile, AgentVersion } from '../../shared/agents';
@@ -38,8 +40,9 @@ import type { ToolDef } from './tools';
 export interface ViewPrefsRead { theme: string; density: string; workProfile: string | null; orchestratorOpen: boolean; workProfiles: { id: string; title: string }[] }
 export interface ConfigDeps {
   callerId: string;
-  /** the user wrote to this Orchestrator in the last few minutes (their ask, not an agent's) */
-  userAsked(): boolean;
+  /** the user wrote to this Orchestrator in the last few minutes (their ask, not an agent's); strict: and nothing but
+   *  his own words came since (ADR 0371: a change that widens what agents may do) */
+  userAsked(strict?: boolean): boolean;
   /** what the user's last «Sì» to this Orchestrator was about, when recent (user-words.ts answeredText); null = none */
   saidYesTo?(): { text: string; used(): void } | null;
   /** a change that is not applied stays «da applicare» on its own panel (pending-config.ts, ADR 0361) */
@@ -75,6 +78,8 @@ export const CONFIG_TURN_MIN = 120;
 const AREAS = ['setting', 'view', 'agent', 'connector', 'profile', 'later'] as const;
 const PROFILE_FIELDS = ['name', 'role', 'language', 'mainWork', 'replyStyle'] as const;
 /** The role card's fields an edit may set (name, summary and character are the role's own, fixed) */
+/** A role's fields whose change widens what its agents may do or read as their rules: strict proof (ADR 0371). */
+export const STRICT_AGENT_KEYS: readonly string[] = ['instructions', 'skills', 'launches', 'tools', 'permissionCeiling', 'codeMode'];
 export const AGENT_FIELDS = ['instructions', 'engine', 'model', 'effort', 'maxContext', 'skills', 'launches', 'tools', 'permissionCeiling', 'presets', 'levels', 'engineOrder', 'codeMode', 'fast'] as const;
 const VIEW_FIELDS = ['theme', 'density', 'workProfile'] as const;
 
@@ -195,7 +200,12 @@ const roleView = (p: AgentProfile, presets: FullPresets, levels?: FullLevels) =>
   ...(p.engineOrder?.length ? { engineOrder: p.engineOrder } : {}), instructions: p.instructions.length > 400 ? `${p.instructions.slice(0, 400)}… (${p.instructions.length} chars)` : p.instructions });
 
 export function configTool(d: ConfigDeps): ToolDef {
-  const asked = (what: string) => { if (!d.userAsked()) throw new Error(`bloccato: cambia ${what} solo quando l'utente te lo chiede: un suo messaggio o un suo «Sì» a una tua domanda, senza altri messaggi dopo, negli ultimi ${CONFIG_ASK_MIN} minuti o nello stesso turno; chiediglielo con una domanda Sì/No`); };
+  const asked = (what: string, strict = false) => {
+    if (d.userAsked(strict)) return;
+    throw new Error(strict
+      ? `bloccato: ${what} allarga ciò che gli agenti possono fare: lo cambi solo su un suo messaggio o un suo «Sì» a una tua domanda, senza nessun altro messaggio dopo (né di agenti né dell'app), negli ultimi ${CONFIG_ASK_MIN} minuti o nello stesso turno; chiediglielo con una domanda Sì/No`
+      : `bloccato: cambia ${what} solo quando l'utente te lo chiede: un suo messaggio o un suo «Sì» a una tua domanda, negli ultimi ${CONFIG_ASK_MIN} minuti (anche se dopo sono arrivati messaggi di agenti o dell'app) o nello stesso turno senza altri messaggi dopo; chiediglielo con una domanda Sì/No`);
+  };
   const role = (id: unknown): AgentProfile => {
     const p = d.agents?.list().profiles.find(x => x.id === id);
     if (!p) throw new Error(`ruolo sconosciuto: ${String(id)} (ruoli: ${d.agents?.list().profiles.map(x => x.id).join(', ') ?? 'nessuno'})`);
@@ -252,7 +262,7 @@ export function configTool(d: ConfigDeps): ToolDef {
       }
       case 'add': {
         if (!m.agentSave) throw new Error('non disponibile');
-        asked('i connettori');
+        asked('i connettori', true);
         const draft = draftFrom();
         const r = m.agentSave(held(draft.def));
         const s = m.state().servers.find(x => x.id === r.id);
@@ -265,7 +275,7 @@ export function configTool(d: ConfigDeps): ToolDef {
       case 'remove': {
         if (!m.agentRemove) throw new Error('non disponibile');
         const s = find(a.server);
-        asked('i connettori');
+        asked('i connettori', true);
         const r = m.agentRemove(s.id);
         log.info('appctl', 'Orchestrator removed an MCP server', { chat: d.callerId, data: { server: s.id } });
         tell(`L’Orchestrator ha tolto il server MCP «${s.label}»`, 'tolto con i suoi token e gli accessi dei ruoli: «Annulla» lo rimette com’era', r.undo);
@@ -273,7 +283,7 @@ export function configTool(d: ConfigDeps): ToolDef {
       }
       case 'undo': {
         if (!m.undo) throw new Error('non disponibile');
-        asked('i connettori');
+        asked('i connettori', true);
         m.undo(String(a.changeId ?? ''));
         log.info('appctl', 'Orchestrator undid a connector change', { chat: d.callerId });
         return { undone: a.changeId };
@@ -283,14 +293,14 @@ export function configTool(d: ConfigDeps): ToolDef {
         const s = find(a.server);
         // a test starts the server's command: the user's ask, like a change, and never before their «Attiva»
         if (s.awaiting) throw new Error(`«${s.label}» aspetta «Attiva»: ${ACTIVATE}`);
-        asked('i connettori');
+        asked('i connettori', true);
         const after = (await m.test(s.id)).servers.find(x => x.id === s.id);
         const t = after?.lastTest;
         return t ? (t.ok ? { server: s.id, ok: true, tools: t.tools.length, reading: t.tools.filter(x => x.readOnly).length, ms: t.ms } : { server: s.id, ok: false, error: t.error }) : { server: s.id, ok: false };
       }
       case 'set': {
         const s = find(a.server);
-        asked('i connettori');
+        asked('i connettori', true);
         const key = String(a.key ?? '');
         if (key === 'access') {
           const v = a.value;
@@ -345,13 +355,13 @@ export function configTool(d: ConfigDeps): ToolDef {
       const reason = typeof a.reason === 'string' ? a.reason.slice(0, 300) : undefined;
       /** The proof of a change (ADR 0361): the user's ask as always, or their recent «Sì» to a card that names this very
        *  change. Else it is not applied and stays «da applicare» on a panel the app writes. */
-      const proven = (c: HeldChange, what: string, words: ChangeWords) => {
-        if (d.userAsked()) return;
+      const proven = (c: HeldChange, what: string, words: ChangeWords, strict = false) => {
+        if (d.userAsked(strict)) return;
         const yes = d.saidYesTo?.() ?? null;
         // one yes, one change: the proof is spent with it
         if (yes !== null && names(yes.text, words)) { yes.used(); return; }
         const why = 'serviva un tuo messaggio, o un tuo Sì a un pannello che nomina questa modifica';
-        if (!d.held) { asked(what); return; }
+        if (!d.held) { asked(what, strict); return; }
         const h = d.held.hold({ ...c, chatId: d.callerId, text: words.text, ...(words.full !== undefined ? { full: words.full } : {}), why, ...(reason ? { reason } : {}) });
         throw new ToolRefusal(`bloccato: ${why}. Non persa: è «da applicare» (${h.id}) su un pannello dell'app, il suo Sì la applica da solo. Non richiederla e non fargli un'altra domanda; digli in una riga che il pannello lo aspetta.`);
       };
@@ -373,7 +383,7 @@ export function configTool(d: ConfigDeps): ToolDef {
           }
           if (action === 'history') return d.brain.settingsHistory(20).map(c => ({ id: c.id, at: new Date(c.at).toISOString(), by: c.by, key: c.key, before: c.before, after: c.after, ...(c.undone ? { undone: true } : {}) }));
           if (action === 'undo') {
-            asked('le impostazioni');
+            asked('le impostazioni', true);
             const ch = d.brain.undoSetting(String(a.changeId ?? ''), 'agent', { chatId: d.callerId, direct: true });
             log.info('appctl', 'Orchestrator undid a setting change', { chat: d.callerId, data: { key: ch.key } });
             return { undone: a.changeId, change: { id: ch.id, key: ch.key, value: ch.after } };
@@ -383,8 +393,9 @@ export function configTool(d: ConfigDeps): ToolDef {
           if (!ok.ok) throw new Error(ok.error);
           const held: HeldChange = { area: 'setting', key, value: ok.value };
           // folders where Codex runs on its own are checked as they are now, at his own click in Impostazioni: never held
-          if (defOf(key)?.type === 'repo-paths') asked('le impostazioni');
-          else proven(held, 'le impostazioni', settingWords(key, ok.value, d.agents?.list()));
+          // a protected key (autonomy, budgets, the brain's folder, the rules to the chats…) is strict (ADR 0371)
+          if (defOf(key)?.type === 'repo-paths') asked('le impostazioni', true);
+          else proven(held, 'le impostazioni', settingWords(key, ok.value, d.agents?.list()), defOf(key)?.protected === true);
           const r = d.brain.requestSetting(key, a.value, { by: 'agent', chatId: d.callerId, ...(reason ? { reason } : {}), direct: true });
           // refused by its own check after the proof: it stays «da applicare» with the reason (ADR 0361 point 8)
           if ('error' in r) return refused(held, settingWords(key, ok.value, d.agents?.list()), new Error(r.error));
@@ -414,7 +425,7 @@ export function configTool(d: ConfigDeps): ToolDef {
           if (action === 'get') return (a.agentId ? [role(a.agentId)] : ag.list().profiles).map(p => roleView(p, presetsOf(p), ag.levelsOf?.(p)));
           if (action === 'history') return d.agents.history(role(a.agentId).id).slice(-10).map(v => ({ version: v.version, at: new Date(v.at).toISOString(), author: v.author, reason: v.reason, state: v.state, ...(v.changed ? { changed: v.changed } : {}), ...(v.amended ? { amended: v.amended.map(x => x.reason) } : {}) }));
           if (action === 'undo') {
-            asked('i ruoli');
+            asked('i ruoli', true);
             const p = d.agents.restore(role(a.agentId).id, Number(a.version));
             log.info('appctl', 'Orchestrator restored a role version', { chat: d.callerId, data: { role: p.id, version: p.activeVersion } });
             return { agentId: p.id, activeVersion: p.activeVersion };
@@ -431,7 +442,7 @@ export function configTool(d: ConfigDeps): ToolDef {
           const value = key === 'presets' ? presetsValue(a.value, old, presetsOf(old).base) : key === 'levels' ? levelsValue(a.value, old) : key === 'model' && (a.value === '' || a.value === 'null') ? null : a.value;
           const held: HeldChange = { area: 'agent', key, agentId: old.id, value };
           const words = agentWords(old, key, value, d.agents.list());
-          proven(held, 'i ruoli', words);
+          proven(held, 'i ruoli', words, STRICT_AGENT_KEYS.includes(key));
           let p: AgentProfile;
           try { p = d.agents.save(changedDraft(old, key, value), old.id, roleReason(reason)); } catch (e) { return refused(held, words, e); }
           d.held?.applied(held);
@@ -467,7 +478,7 @@ export function configTool(d: ConfigDeps): ToolDef {
           if (p.locked.includes(key as (typeof PROFILE_FIELDS)[number])) throw new Error(`il campo ${key} di me.md ha una forma che l'app non cambia da sola: usa la skill brain-edit`);
           const ok = key === 'mainWork' ? Array.isArray(a.value) && a.value.every(x => typeof x === 'string') : typeof a.value === 'string';
           if (!ok) throw new Error(key === 'mainWork' ? 'mainWork: array of lines' : `${key}: text`);
-          asked('il profilo');
+          asked('il profilo', true);
           const after = await d.profile.save({ revision: p.revision, fields: { [key]: a.value } });
           log.info('appctl', 'Orchestrator changed the profile', { chat: d.callerId, data: { key } });
           return { changed: key, before: (fields as Record<string, unknown>)[key], after: (after as unknown as Record<string, unknown>)[key], undo: 'set it back with the "before" value' };

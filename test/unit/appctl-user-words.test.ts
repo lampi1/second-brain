@@ -76,4 +76,9 @@ describe('#492 point 1: his own direct message is the ask for a role card (ADR 0
     expect(ownItem({ kind: 'user', text: '[evento app] qualcosa' })).toBe(false);
     expect(ownItem({ kind: 'user', text: 'resettami le card di conseguenza' })).toBe(true);
   });
+  it('a strict change (it widens what agents may do) holds only with nothing but his words since; his late item still counts', () => {
+    expect(ask({ typed: now - 3 * MIN, lastOwnItem: now - 3 * MIN + 9_000, lastUserItem: now - MIN, strict: true })).toBe(false);
+    expect(ask({ answered: now - 2 * MIN, lastOwnItem: now - 5 * MIN, lastUserItem: now - MIN, strict: true })).toBe(false);
+    expect(ask({ typed: now - 3 * MIN, lastOwnItem: now - 3 * MIN + 9_000, lastUserItem: now - 3 * MIN + 9_000, strict: true })).toBe(true);
+  });
 });
