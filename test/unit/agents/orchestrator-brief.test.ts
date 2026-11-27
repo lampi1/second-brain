@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ChatItem, OrchestratorTopic } from '../../../src/shared/contract';
-import { BRIEF_END, BRIEF_LIMITS, BRIEF_START, brainEssentials, topicBrief } from '../../../src/main/agents/orchestrator-brief';
+import { BRIEF_END, BRIEF_LIMITS, BRIEF_START, brainEssentials, clip, topicBrief } from '../../../src/main/agents/orchestrator-brief';
 import { cleanTopic, itemTopic, searchMessages, taggedTopic, topicLabels } from '../../../src/shared/orchestrator-topics';
 import { tmp } from '../chats/helpers';
 
@@ -25,7 +25,7 @@ const items: ChatItem[] = [
 
 describe('the per-topic brief', () => {
   it('carries the current topic only, the others in one line, the open items and the essentials', () => {
-    const b = topicBrief({ topic: 'Restyle UI', items, topics, essentials: 'me.md:\nDavide, dark mode only',
+    const b = topicBrief({ topic: 'Restyle UI', items, topics, essentials: 'me.md:\nSam, dark mode only',
       chats: [{ id: 'c-air', title: 'Fix air', state: 'running', topic: 'Air 401' }, { id: 'c-ui', title: 'Restyle', state: 'idle', waiting: true, topic: 'Restyle UI' }] });
     expect(b.startsWith(BRIEF_START)).toBe(true);
     expect(b.endsWith(BRIEF_END)).toBe(true);
@@ -36,11 +36,31 @@ describe('the per-topic brief', () => {
     expect(b).toContain('- «Air 401»: last: "controlla perché air risponde 401"; chats: Fix air (running)');
     expect(b).not.toContain('Vecchio'); // closed topics stay out
     expect(b).toContain('- Restyle: waits for the user («Restyle UI»)');
-    expect(b).toContain('Davide, dark mode only');
+    expect(b).toContain('Sam, dark mode only');
     // a long reply is cut, the [Topic] tag dropped
     const reply = b.split('\n').find(l => l.startsWith('- you:'))!;
-    expect(reply.length).toBeLessThanOrEqual(BRIEF_LIMITS.exchangeChars + 8);
+    expect(reply.length).toBeLessThanOrEqual(BRIEF_LIMITS.latestChars + 8);
     expect(reply).not.toContain('[Restyle UI]');
+  });
+
+  it('keeps the end of a long reply, where the Orchestrator\'s proposal or question is, and more of the latest one', () => {
+    const long = (n: number): string => `${'Ho guardato i file del tema e i token css. '.repeat(n)}Propongo 3/4/6px per gli angoli: procedo?`;
+    const its: ChatItem[] = [
+      { kind: 'user', id: 'u1', at: NOW, text: 'angoli più tondi', topic: 'Restyle UI' },
+      { kind: 'assistant', id: 'a1', at: NOW + 1, text: `${long(30)} (prima)`, topic: 'Restyle UI' },
+      { kind: 'user', id: 'u2', at: NOW + 2, text: 'e i bordi?', topic: 'Restyle UI' },
+      { kind: 'assistant', id: 'a2', at: NOW + 3, text: long(40), topic: 'Restyle UI' },
+    ];
+    const rows = topicBrief({ topic: 'Restyle UI', items: its, topics, chats: [] }).split('\n').filter(l => l.startsWith('- you:'));
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.endsWith('procedo? (prima)')).toBe(true);
+    expect(rows[1]!.endsWith('Propongo 3/4/6px per gli angoli: procedo?')).toBe(true);
+    expect(rows[1]!.startsWith('- you: Ho guardato i file del tema')).toBe(true);
+    expect(rows[0]!.length).toBeLessThanOrEqual(BRIEF_LIMITS.exchangeChars + 8);
+    expect(rows[1]!.length).toBeLessThanOrEqual(BRIEF_LIMITS.latestChars + 8);
+    expect(rows[1]!.length).toBeGreaterThan(BRIEF_LIMITS.exchangeChars + 8);
+    expect(clip('breve', 10)).toBe('breve');
+    expect(clip('a'.repeat(50) + 'FINE', 20)).toMatch(/^a{5} … a{8}FINE$/);
   });
 
   it('drops the app\'s envelope from his words and says when a topic is new', () => {
@@ -52,10 +72,10 @@ describe('the per-topic brief', () => {
 
   it('reads me.md and now.md essentials, bounded, without front matter or comments', () => {
     const root = tmp('brief-brain');
-    fs.writeFileSync(path.join(root, 'me.md'), '---\ntitle: me\n---\n<!-- hidden -->\n# Davide\n\nLanguage: it\n' + 'riga lunga\n'.repeat(400));
+    fs.writeFileSync(path.join(root, 'me.md'), '---\ntitle: me\n---\n<!-- hidden -->\n# Sam\n\nLanguage: it\n' + 'riga lunga\n'.repeat(400));
     fs.writeFileSync(path.join(root, 'now.md'), '- second-brain · restyle · prossimo: radii\n');
     const e = brainEssentials(root);
-    expect(e).toContain('me.md:\n# Davide\nLanguage: it');
+    expect(e).toContain('me.md:\n# Sam\nLanguage: it');
     expect(e).toContain('now.md:\n- second-brain · restyle · prossimo: radii');
     expect(e).not.toContain('hidden');
     expect(e).not.toContain('title: me');
