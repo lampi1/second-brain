@@ -131,7 +131,6 @@ test('a Strategist asks, proposes a plan approved on its map and shows one line 
     await openAsk(page, `${LEAD}/plan@`);
     await page.getByTestId('qwin-plan-map').click();
     await expect(page.getByTestId('pl-do-approve')).toBeVisible();
-    await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
     await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
     await shot(page, 'strategist-plan-proposed-light');
   } finally { await app.close(); }

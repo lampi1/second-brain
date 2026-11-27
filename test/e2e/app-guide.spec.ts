@@ -39,14 +39,17 @@ test('outline: controls with positions, chat strips by title only, a filter for 
 });
 
 test('a view change from an agent applies valid fields only', async () => {
-  type Sb = { __sbSetView: (j: string) => { ok: boolean; view: { theme: string } }; __sbView: () => { theme: string } };
-  const refused = await page.evaluate(() => (window as unknown as Sb).__sbSetView(JSON.stringify({ theme: 'light', orchestratorSize: { w: 1, h: 1 } })));
+  type Sb = { __sbSetView: (j: string) => { ok: boolean; view: { density: string } }; __sbView: () => { density: string } };
+  const refused = await page.evaluate(() => (window as unknown as Sb).__sbSetView(JSON.stringify({ density: 'compact', orchestratorSize: { w: 1, h: 1 } })));
   expect(refused.ok).toBe(false);
-  expect(await page.evaluate(() => (window as unknown as Sb).__sbView().theme)).toBe('dark');
+  expect(await page.evaluate(() => (window as unknown as Sb).__sbView().density)).toBe('comfortable');
+  // no theme any more: the app is dark only (ADR 0366), so the field is refused like any unknown one
+  expect((await page.evaluate(() => (window as unknown as Sb).__sbSetView(JSON.stringify({ theme: 'light' })))).ok).toBe(false);
   await app.evaluate(({ BrowserWindow }) => {
     const w = BrowserWindow.getAllWindows().find(x => x.webContents.getURL().includes('index.html') && !x.webContents.getURL().includes('#overlay'));
-    w?.webContents.send('ui:command', { action: 'prefs', value: JSON.stringify({ theme: 'light' }) });
+    w?.webContents.send('ui:command', { action: 'prefs', value: JSON.stringify({ density: 'compact' }) });
   });
-  await expect.poll(() => page.evaluate(() => (window as unknown as Sb).__sbView().theme)).toBe('light');
-  await shot(page, 'app-guide-light');
+  await expect.poll(() => page.evaluate(() => (window as unknown as Sb).__sbView().density)).toBe('compact');
+  await shot(page, 'app-guide-compact');
+  await page.evaluate(() => (window as unknown as Sb).__sbSetView(JSON.stringify({ density: 'comfortable' })));
 });

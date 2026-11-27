@@ -49,7 +49,6 @@ test('a role takes the user\'s own picture, keeps it across a restart, and "Imma
 
   const second = await launchDemo({ userData, width: 1440, height: 1000 });
   try {
-    await second.page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
     await second.page.emulateMedia({ colorScheme: 'light' });
     await openAgents(second.page, 'scout');
     const hero = second.page.locator('.ad-hero');

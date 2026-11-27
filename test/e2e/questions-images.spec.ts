@@ -35,7 +35,7 @@ function png(w: number, h: number, rgb: [number, number, number]): Buffer {
   return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`a question shows its images, large on a click · ${scheme}`, async () => {
     const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-'));
     const ev = path.join(userData, 'evidence', 'qimg');

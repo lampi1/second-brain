@@ -32,7 +32,7 @@ function png(w: number, h: number, rgb: [number, number, number]): Buffer {
 }
 
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`a yes/no question with its brief: the context is all inside the card · ${scheme}`, async () => {
     test.setTimeout(120_000);
     const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-decision-'));
@@ -80,8 +80,7 @@ for (const scheme of ['dark', 'light'] as const) {
     await expect(page.locator('.qwin .gu-yn')).toHaveCount(0);
     await page.mouse.move(2, 2);
     await page.waitForTimeout(400);
-    await shot(page, scheme === 'dark' ? 'qdecision-window' : 'qdecision-light');
-    if (scheme === 'light') { await app.close(); return; }
+    await shot(page, 'qdecision-window');
 
     // T: write an answer; Esc goes back to the buttons
     await card.focus();

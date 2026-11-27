@@ -59,13 +59,12 @@ test('Lingua nel menu dell\'ingranaggio: same options as Settings, live, saved, 
   await expect(page.locator('html')).toHaveAttribute('lang', 'it');
   await expect.poll(() => language(brainRoot)).toBe('italiano');
 
-  await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
+  // dark only (ADR 0366): a light system scheme changes nothing
   await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await shot(page, 'lang-switch-narrow-light');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await setSize(app, 1600, 1000);
   await button.click();
-  await shot(page, 'lang-switch-menu-light');
+  await shot(page, 'lang-switch-menu');
   await app.close();
   fs.rmSync(brainRoot, { recursive: true, force: true });
 });

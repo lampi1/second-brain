@@ -50,23 +50,18 @@ test('Impostazioni: groups, theme live, messaging always available, no model com
   // Chat-to-chat transport has no switch; engine launch controls stay separate.
   await expect(s.getByTestId('st-cross-switch')).toHaveCount(0);
 
-  // theme: applied at once
-  const theme = s.getByTestId('st-theme-select');
-  await theme.scrollIntoViewIfNeeded();
-  await choose(theme, 'light');
-  await expect(page.locator('html[data-theme="light"]')).toHaveCount(1);
-  await page.mouse.move(2, 2);
-  await shot(page, 'settings-light');
-  await choose(theme, 'dark');
+  // no theme choice: the app is dark only (ADR 0366)
+  await expect(s.getByTestId('st-theme-select')).toHaveCount(0);
   await expect(page.locator('html[data-theme="dark"]')).toHaveCount(1);
   // the keyboard (a segmented choice is a radio group, ADR 0207): the arrows move and choose, the focus follows
-  await theme.locator('[role="radio"][aria-checked="true"]').focus();
-  await page.keyboard.press('ArrowLeft');
-  await expect(page.locator('html[data-theme="light"]')).toHaveCount(1);
-  await expect(theme).toHaveAttribute('data-value', 'light');
-  await expect(theme.locator('[data-value="light"]')).toBeFocused();
+  const density = s.getByTestId('st-density-select');
+  await density.scrollIntoViewIfNeeded();
+  await density.locator('[role="radio"][aria-checked="true"]').focus();
   await page.keyboard.press('ArrowRight');
-  await expect(page.locator('html[data-theme="dark"]')).toHaveCount(1);
+  await expect(density).toHaveAttribute('data-value', 'compact');
+  await expect(density.locator('[data-value="compact"]')).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(density).toHaveAttribute('data-value', 'comfortable');
 
   // Ctrl+, from the chats
   await page.getByTestId('page-back').click();
@@ -119,10 +114,8 @@ test('spending limits and the MCP port retired with their values kept; Windows n
   await space.scrollIntoViewIfNeeded();
   await expect(space).toContainText((await get()).brainRoot ?? 'Non collegato');
   await expect(space.getByRole('button', { name: 'Collega cartella', exact: true })).toBeVisible();
-  await choose(s.getByTestId('st-theme-select'), 'light');
-  await expect(page.locator('html[data-theme="light"]')).toHaveCount(1);
   await space.scrollIntoViewIfNeeded();
-  await shot(page, 'settings-space-light');
+  await shot(page, 'settings-space');
   expect((await get()).budget).toEqual(budget);
   await app.close();
 });

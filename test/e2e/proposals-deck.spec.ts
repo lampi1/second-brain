@@ -24,7 +24,6 @@ async function openDeck(page: Page): Promise<void> {
   await expect(page.getByTestId('proposals-deck')).toBeVisible();
 }
 async function theme(page: Page, scheme: 'dark' | 'light'): Promise<void> {
-  await page.evaluate(t => window.sb.invoke('settings:set', { theme: t }), scheme);
   await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
   await page.waitForTimeout(250);
 }

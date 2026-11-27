@@ -13,7 +13,7 @@ async function goLearning(page: Page) {
   await page.keyboard.press('j');
 }
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`honest statistics on the Agenti and Apprendimento pages (${scheme})`, async () => {
     test.setTimeout(150_000);
     const { app, page } = await launchDemo({ scheme, height: 1600, config: { theme: scheme } });

@@ -19,7 +19,6 @@ function fixtureBrain(): string {
 }
 
 async function theme(page: Page, scheme: 'dark' | 'light') {
-  await page.evaluate(t => window.sb.invoke('settings:set', { theme: t }), scheme);
   await page.emulateMedia({ colorScheme: scheme });
   await page.waitForTimeout(250);
 }

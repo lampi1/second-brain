@@ -149,7 +149,7 @@ function fixture() {
   return { userData, ev, brain, repo };
 }
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`file viewer overlay: over the page, contents, search, code, history, full screen, side-by-side compare, before/after · ${scheme}`, async () => {
     const { userData, ev, brain, repo } = fixture();
     const { app, page } = await launchDemo({ scheme, userData, width: 1920, height: 1080, config: { theme: scheme }, env: { SB_BRAIN: brain } });

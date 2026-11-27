@@ -2,7 +2,7 @@
 // opens the editor and a draft survives page navigation; an edit (a skill, the tier) is a new version (the skill makes it) that
 // survives a restart; "Ripristina predefinito" brings the shipped role back. Screenshots dark and light.
 import { expect, test } from '@playwright/test';
-import { choose, launchDemo, openAgents, shot } from './helpers';
+import { choose, goPage, launchDemo, openAgents, shot } from './helpers';
 
 test('a role page opens its editor on Modifica and the draft survives page navigation', async () => {
   const { app, page } = await launchDemo();
@@ -15,7 +15,7 @@ test('a role page opens its editor on Modifica and the draft survives page navig
     await expect(page.getByTestId('agent-editor')).toBeVisible(); // openAgents chose Modifica il ruolo
     await shot(page, 'role-page-dark');
     await page.getByTestId('agent-instructions').fill('Cerca prima nel repository, poi sul web.');
-    await page.getByTestId('nav-task').click();
+    await goPage(page, 'task'); // out of ☰ (ADR 0366): G O
     await openAgents(page, 'scout');
     await expect(page.getByTestId('agent-instructions')).toHaveValue('Cerca prima nel repository, poi sul web.');
     await shot(page, 'role-editor-dark');

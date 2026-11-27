@@ -31,10 +31,9 @@ const MSG = [
   '```',
 ].join('\n');
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`code blocks: Copia everywhere, Esegui on shell blocks, output and outcome to the chat (${scheme})`, async () => {
     const { app, page } = await launchDemo({ scheme });
-    if (scheme === 'light') await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
     await say(app, 'qa', MSG);
     await page.getByTestId('chat-max-qa').click();
     const tile = page.getByTestId('maximized');
@@ -101,10 +100,9 @@ const MAIL = [
 /** What the block holds: the lines between the fences. */
 const MAIL_TEXT = MAIL.split('\n').slice(2, -1).join('\n');
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`a text for colleagues shows formatted and Copia copies HTML + markdown (${scheme})`, async () => {
     const { app, page } = await launchDemo({ scheme });
-    if (scheme === 'light') await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
     await say(app, 'qa', MAIL);
     await page.getByTestId('chat-max-qa').click();
     const block = page.getByTestId('maximized').getByTestId('codeblock').last();

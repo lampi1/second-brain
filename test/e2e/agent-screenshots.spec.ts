@@ -53,7 +53,7 @@ function fixture() {
   return { userData, ev };
 }
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`reports in the file viewer show their images, large on a click · ${scheme}`, async () => {
     const { userData, ev } = fixture();
     const { app, page } = await launchDemo({ scheme, userData, config: { theme: scheme } });
@@ -135,7 +135,7 @@ test('a chat message with a screenshot path shows it inline; a click opens it la
   } finally { await app.close(); }
 });
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`a question with before/after screenshots, in the app's type scale · ${scheme}`, async () => {
     const { userData, ev } = fixture();
     const { app, page } = await launchDemo({ scheme, userData, config: { theme: scheme } });
