@@ -25,7 +25,9 @@ export interface FeedEvent {
  *  `activate`: the server waits for the user's «Attiva» (mcpservers:activate), shown with exactly what it runs */
 export type FeedAction = { kind: 'agent-undo'; undo: AgentUndo } | { kind: 'agent-proposals' } | { kind: 'brain-undo'; ids: string[] } | { kind: 'connector-undo'; undo: string; activate?: { server: string; runs: string } }
   /** levels-undo: the Orchestrator changed a role's model lists (app_config, #468): agents:save with these lists back, when the card is still at that revision */
-  | { kind: 'levels-undo'; agentId: string; expectedRevision: number; levels: RoleLevels };
+  | { kind: 'levels-undo'; agentId: string; expectedRevision: number; levels: RoleLevels }
+  /** connector-login: a connector marked «needs-login» after its refusals in a row (ADR 0370): «Accedi» = mcpservers:login */
+  | { kind: 'connector-login'; server: string };
 
 // ---- DevOps (src/main/tasks): the user's Azure DevOps, read by the brain's read-only scripts, never written
 

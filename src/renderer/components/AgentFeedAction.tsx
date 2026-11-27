@@ -1,7 +1,8 @@
 // Human-click actions for role feed entries (Annulla on an applied change, the way to Memoria → Proposte, Annulla on a
 // maintenance pass the app ran by itself: brainmodel:rollback of each of its changes, newest first, ADR 0102; Annulla on
 // a connector change the Orchestrator made: mcpservers:undo, and «Attiva» of a server it added or re-pointed,
-// mcpservers:activate, shown with exactly what it starts, ADR 0207); typed IPC
+// mcpservers:activate, shown with exactly what it starts, ADR 0207; «Accedi» on a connector marked needs-login,
+// mcpservers:login, ADR 0370); typed IPC
 // only, never agent mail as approval. Used by the feed cards (NotificationCenter.tsx) and the morning block.
 import { useState } from 'react';
 import type { FeedAction } from '@shared/contract';
@@ -36,6 +37,7 @@ export function AgentFeedAction({ action }: { action?: FeedAction }) {
     try {
       if (action.kind === 'brain-undo') { await undoChanges(action.ids); setDone(true); }
       else if (action.kind === 'connector-undo') { await sb.invoke('mcpservers:undo', { undo: action.undo }); setDone(true); }
+      else if (action.kind === 'connector-login') { await sb.invoke('mcpservers:login', { id: action.server }); setDone(true); return; }
       else if (action.kind === 'levels-undo') {
         // the role's lists back as they were (#468), unless the card changed since: then the user looks at it first
         const p = (await sb.invoke('agents:list', undefined)).profiles.find(x => x.id === action.agentId);
@@ -48,6 +50,7 @@ export function AgentFeedAction({ action }: { action?: FeedAction }) {
     } catch (e) { setError(String(e)); }
     finally { setBusy(false); }
   };
+  if (action.kind === 'connector-login') return <><button type="button" className="btn btn-primary" disabled={busy || done} onClick={() => void click()} data-testid="feed-action-connector-login">{t(done ? 'hub.loginDone' : busy ? 'hub.logging' : 'hub.login')}</button>{error && <span role="alert">{error}</span>}</>;
   const label = t(action.kind === 'agent-proposals' ? 'appText.feedAction.review' : done ? 'appText.feedAction.undone' : action.kind === 'brain-undo' || action.kind === 'connector-undo' || action.kind === 'levels-undo' ? 'appText.feedAction.undo' : 'appText.feedAction.undoChange');
   if (action.kind === 'connector-undo' && action.activate) {
     const act = action.activate;
