@@ -481,7 +481,9 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     // A plan of this chat that waits for the user's approval: a report now would close the job before he chose
     // (ADR 0371 point 3: agent_report right after plan_propose closed the plan). Night mode approves it by itself.
     const plan = self?.plan;
-    if (plan && !plan.stopped && (plan.phase === 'proposed' || plan.phase === 'revising')) throw new ToolRefusal(PLAN_WAITS_REFUSAL);
+    // only a plan on his page now: in «revising» he already answered (a change, a doubt) and may have said to drop it
+    // and report («lascia perdere, dimmi cosa hai trovato»), so the report goes
+    if (plan && !plan.stopped && plan.phase === 'proposed') throw new ToolRefusal(PLAN_WAITS_REFUSAL);
     // A long output is refused, saying where its detail goes (ADR 0371 point 7, the owner: «output corto, il dettaglio
     // in un file»): the limit is in the tool's description, so the first call keeps to it.
     if (typeof a.output === 'string' && a.output.trim().length > REPORT_OUTPUT_MAX) throw new ToolRefusal(`agent_report refused: ${tooLong('output', a.output.trim().length, REPORT_OUTPUT_MAX)}`);
