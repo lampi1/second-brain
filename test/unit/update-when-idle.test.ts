@@ -39,18 +39,35 @@ describe('#492 point 8: «Aggiorna» waits for the chats at work (ADR 0371)', ()
     busy = 0; c.pass(UPDATE_POLL_MS); c.fire();
     expect(events).toEqual(['3', '1', 'go']);
     expect(w.waiting).toBe(false);
-    // the maximum: still 2 at work after 20 minutes, the user decides; nothing more is armed
+    // the maximum: still 2 at work after 20 minutes, the user is asked, and it still goes by itself when they end (#492
+    // review: no «Controlla» needed after the question)
     events.length = 0; busy = 2;
     w.begin(false, on);
     c.pass(UPDATE_WAIT_MAX_MS); c.fire();
     expect(events).toEqual(['2', '2 timed out']);
-    expect(c.armed).toBeNull();
+    expect(w.timedOut).toBe(true);
+    expect(c.armed).not.toBeNull();
+    busy = 0; c.pass(UPDATE_POLL_MS); c.fire();
+    expect(events).toEqual(['2', '2 timed out', 'go']);
     // forced, or nobody at work: at once
     expect(w.begin(true, on)).toBe('go');
     busy = 0;
     expect(w.begin(false, on)).toBe('go');
     expect(waitingText(3)).toContain('le 3 chat al lavoro');
-    expect(timedOutText(3)).toMatch(/3 chat lavorano ancora: «Aggiorna ora» le interrompe/);
+    expect(timedOutText(3)).toMatch(/3 chat lavorano ancora: «Aggiorna ora» le interrompe.*aggiorno da solo appena finiscono/);
+  });
+
+  it('(review) a hold (the Orchestrator\'s code update running) is waited for, even forced and with nobody at work', () => {
+    const c = timers();
+    let held = true;
+    const events: string[] = [];
+    const w = new UpdateWhenIdle({ busy: () => 0, hold: () => held, schedule: c.schedule, now: c.now });
+    const on = { go: () => events.push('go'), waiting: (n: number) => events.push(String(n)) };
+    expect(w.begin(false, on)).toBe('wait');
+    c.fire();
+    held = false; c.fire();
+    expect(events).toEqual(['0', '0', 'go']);
+    expect(waitingText(0)).toMatch(/aggiornamento del codice in corso/);
   });
 
   it('the service: 3 chats at work → no pull, «waiting» with how many; they end → the update runs; «Aggiorna ora» → at once', async () => {
@@ -85,5 +102,45 @@ describe('#492 point 8: «Aggiorna» waits for the chats at work (ADR 0371)', ()
     await s.updateNow({ now: true });
     expect(pulls.length).toBeGreaterThan(0);
     expect(s.state().source.state).toBe('done');
+  });
+
+  it('(review) the Orchestrator\'s pull during the wait: no error; the update waits for it, then relaunches on the code it pulled', async () => {
+    const repo = tmp(), userData = tmp();
+    fs.mkdirSync(path.join(repo, 'scripts'));
+    fs.writeFileSync(path.join(repo, 'scripts', 'pull.mjs'), '');
+    const c = timers();
+    let busy = 2, release: (r: PullResult) => void = () => {};
+    const pulls: string[][] = [];
+    vi.spyOn(AppSourceService.prototype as unknown as { runPull(repo: string, extra: string[]): Promise<PullResult> }, 'runPull')
+      .mockImplementation((_repo: string, extra: string[]) => {
+        pulls.push(extra);
+        // the Orchestrator's own pull (the first with no flags) ends when the test says; «Aggiorna»'s check and pull find
+        // nothing new: it was pulled
+        const first = !extra.length && pulls.filter(x => !x.length).length === 1;
+        return first ? new Promise<PullResult>(res => { release = res; }) : Promise.resolve({ ok: true, message: '', upToDate: true });
+      });
+    vi.spyOn(AppSourceService.prototype as unknown as { refresh(): Promise<AppSourceState> }, 'refresh').mockImplementation(async function (this: AppSourceService) { return this.state(); });
+    const relaunched: number[] = [];
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    try {
+      const s = new AppSourceService({ userData, releasesBase: tmp(), running: 'dev', stable: false, appRepo: () => null, devRepo: repo,
+        emit: () => {}, restart: () => {}, relaunch: () => { relaunched.push(1); }, node: 'node', busyChats: () => busy, schedule: c.schedule, now: c.now });
+      await s.updateNow();
+      expect(s.state().source.state).toBe('waiting');
+      const orchestratorPull = s.pull();   // app_update_code while «Aggiorna» waits
+      // the chats end while the code update runs: «Aggiorna» waits for it, no error
+      busy = 0; c.fire();
+      expect(s.state().source).toMatchObject({ state: 'waiting', message: waitingText(0) });
+      // a click meanwhile is no error either
+      await expect(s.updateNow()).resolves.toMatchObject({ source: { state: 'waiting' } });
+      release({ ok: true, message: '', upToDate: false, from: 'a', to: 'b' });
+      await orchestratorPull;
+      c.fire();
+      for (let i = 0; i < 50 && s.state().source.state !== 'restarting'; i++) await Promise.resolve();
+      expect(s.state().source.state).toBe('restarting');
+      vi.runAllTimers();
+      expect(relaunched).toEqual([1]);
+      expect(pulls).toEqual([[], ['--check'], []]);
+    } finally { vi.useRealTimers(); }
   });
 });
