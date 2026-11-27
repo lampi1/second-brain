@@ -475,6 +475,6 @@ export abstract class ManagerSink extends ManagerLadder {
     // the turn that reported is over: its result goes now, after the chat shows as finished (#123)
     if (r.heldResult && p.state && p.state !== 'running' && p.state !== 'starting' && !this.midTurn(r)) this.releaseResult(r);
     // the Orchestrator's turn ended: a later turn the CLI starts by itself is not the user's (#123)
-    if (r.s.isOrchestrator && r.turnFromUser && p.state && p.state !== 'running' && p.state !== 'starting' && !this.midTurn(r)) r.turnFromUser = false;
+    if (r.s.isOrchestrator && r.turnFromUser && p.state && p.state !== 'running' && p.state !== 'starting' && !this.midTurn(r)) { r.turnFromUser = false; this.updated(r); } // the summary says it too (ADR 0368)
   }
 }

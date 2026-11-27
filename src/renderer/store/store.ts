@@ -24,7 +24,7 @@ import { now as clockNow } from '../lib/clock';
 import { costHistory } from '../lib/live-costs';
 import { errText } from '../lib/ipc-error';
 import { whereNow } from '../lib/where';
-import { lowPriorityTurn, Stops } from './stopping';
+import { lowPriorityTurn, Stops, STOP_SHOWN_MS } from './stopping';
 
 export const app = createStore<AppState>(initialState, { batch: true });
 /** How often streamed text reaches the screen (startStore): one frame, so words show as they come. */
@@ -40,15 +40,16 @@ const undoableCloses = new Set<string>();
 /** Chats whose Stop the user pressed: shown stopped at once, main's running ignored until it ends the turn (stopping.ts). */
 const stops = new Stops();
 
-export function dispatch(a: Action): void {
+/** stopSettled: a Stop shown as stopped is over (stopping.ts): the chat counts as coming from busy, so its queue goes
+ *  even when the reducer finds nothing new (the shown idle equals main's idle). */
+export function dispatch(a: Action, stopSettled = false): void {
   const prev = app.get();
   if (a.type === 'chat:updated' && undoableCloses.has(a.chat.id) && !a.keep) a = { ...a, keep: true };
   // a Stop shown: main's running is the turn still ending; once it settles the queue goes as after any turn's end
-  let stopSettled = false;
-  if (a.type === 'chat:updated') { const v = stops.view(a.chat, Date.now()); stopSettled = v.settled; if (v.chat !== a.chat) a = { ...a, chat: v.chat }; }
+  if (a.type === 'chat:updated') { const v = stops.view(a.chat, Date.now()); stopSettled ||= v.settled; if (v.chat !== a.chat) a = { ...a, chat: v.chat }; }
   const next = reduce(prev, a);
-  if (next === prev) return;
-  app.set(next);
+  if (next === prev && !stopSettled) return;
+  if (next !== prev) app.set(next);
   if (a.type === 'chat:removed') forgetChat(a.chatId);
   if (a.type === 'chat:updated') {
     // reopened (Riapri, Annulla, an agent's reopen): a closed chat let go of its items (state.ts), they come back now
@@ -269,7 +270,7 @@ export function send(chatId: string, text: string, images: readonly ImageAttachm
     const id = `q:${++localN}`;
     dispatch({ type: 'queue', chatId, msg: { id, text: own, ...(images.length ? { images } : {}), ...voice } });
     // the Orchestrator busy on the app's own news (ADR 0368): his message goes first, it interrupts that turn now
-    if (c?.isOrchestrator && isBusy(c) && !c.pending && !stops.active(chatId, Date.now()) && lowPriorityTurn(app.get().items[chatId])) void sendQueuedNow(chatId, id);
+    if (c && isBusy(c) && !c.pending && !stops.active(chatId, Date.now()) && lowPriorityTurn(c, app.get().items[chatId])) void sendQueuedNow(chatId, id);
     return 'queued';
   }
   // the notes waiting for this chat ride on the user's message
@@ -489,10 +490,16 @@ export async function dismissCommand(req: PendingRequest, reply?: string): Promi
  *  ended within a second). Set straight on the state, not through dispatch: this idle is no turn's end, the queue waits. */
 export async function stop(chatId: string): Promise<void> {
   const c = app.get().chats[chatId];
-  if (c && isBusy(c)) { stops.mark(chatId, Date.now()); app.set(reduce(app.get(), { type: 'chat:updated', chat: { ...c, state: 'idle' } })); }
+  if (c && isBusy(c)) {
+    stops.mark(c, Date.now());
+    app.set(reduce(app.get(), { type: 'chat:updated', chat: { ...c, state: 'idle' } }));
+    // no update from main settled it in time: main's last state shows again, and an idle one lets the queue go
+    setTimeout(() => { const real = stops.expire(chatId, Date.now()); if (real) dispatch({ type: 'chat:updated', chat: real }, real.state === 'idle'); }, STOP_SHOWN_MS + 1);
+  }
   try { await sb.invoke('chat:stop', { chatId }); } catch (e) {
-    // main's own state again: the next update it sends (or the one before the stop) shows the chat as it is
-    if (stops.active(chatId, Date.now())) { stops.clear(chatId); const now = app.get().chats[chatId]; if (c && now?.state === 'idle') app.set(reduce(app.get(), { type: 'chat:updated', chat: { ...now, state: c.state } })); }
+    // main's own state again: the last update it sent (or the one before the stop) shows the chat as it is
+    const real = stops.clear(chatId);
+    if (real) app.set(reduce(app.get(), { type: 'chat:updated', chat: real }));
     fail(t('appText.store.stopFailed'))(e);
   }
 }

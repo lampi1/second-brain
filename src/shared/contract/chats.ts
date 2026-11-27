@@ -80,7 +80,10 @@ export interface ChatSummary {
    *  turn: its Stop hooks, its own bookkeeping (ADR 0318). state stays 'running' for every rule (queue, Stop,
    *  auto-close); only what shows the chat as working goes. Set by main with state 'running' only, never persisted */
   turnClosing?: true;
-  costUsd: number;            // cumulative for this app run (API-equivalent on a subscription), live estimate included
+  /** the Orchestrator: the user's own message started or joined its current turn (main's turnFromUser, #123); absent
+   *  for a turn only the app's news or mail started, which his next message interrupts (ADR 0368). Never persisted */
+  turnFromUser?: true;
+  costUsd: number;           // cumulative for this app run (API-equivalent on a subscription), live estimate included
   /** the part of costUsd that estimates the turn still running (from token usage); absent when every turn is settled */
   costLiveUsd?: number;
   contextTokens?: number;
