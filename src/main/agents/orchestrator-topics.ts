@@ -1,7 +1,8 @@
 // The rules that give each of the user's messages to the Orchestrator its topic (ADR 0369). The app decides, not the
 // model: cheap deterministic rules first, in this order: the user's own [Topic] or #topic tag; the message he answered
-// with «Rispondi» (the `> quote` the composer puts first); a chat, plan, project folder or topic his words name; the open
-// question of a chat that a short answer answers; a short follow-up of his last message. Only when none is sure does
+// with «Rispondi» (the `> quote` the composer puts first); a chat, plan, project folder or topic his words name; a short
+// follow-up of his last message; the open question of a chat that a short answer out of the blue answers. Only when
+// none is sure does
 // the caller ask the lightest model to choose among the open topics (classifyPrompt / readClassified); a message that
 // matches nothing opens a new topic named from its own words (newTopicLabel). Pure functions, no I/O: the store
 // (orchestrator-topic-store.ts) keeps the result and the chat manager calls it (chats/manager.ts deliverNow). Unit
@@ -196,14 +197,17 @@ export function assignTopic(text: string, w: TopicWorld): TopicAssignment {
   const last = lastOwn(w.items), lastTopic = last ? itemTopic(last) : null;
   const ongoing = !!last && w.now - last.at <= FOLLOW_UP_MS;
   const short = !newRequest(words, true);
-  // a short answer while chats wait for him: the newest question's chat, sure when they are all on one topic
+  // a short answer in a conversation going on answers it («sì» to the Orchestrator's own proposal), never the question
+  // another chat left waiting meanwhile
+  if (short && ongoing && lastTopic) return { topic: known(lastTopic), by: 'follow', sure: true, candidates: [] };
+  // a short answer out of the blue while chats wait for him: the newest question's chat, sure when they are all on one
+  // topic (a 'question' guess never rolls the engine over: manager-topics.ts orchestratorRollover)
   const asked = w.questions.filter(q => w.now - q.at <= QUESTION_MS).sort((a, b) => b.at - a.at)
     .map(q => topicOfChat(q.chatId, w.chats)).filter((t): t is string => !!t);
   if (short && asked.length) {
     const sure = asked.every(t => sameTopic(t, asked[0]));
-    if (sure || !(ongoing && lastTopic)) return { topic: known(asked[0]!), by: 'question', sure, candidates: sure ? [] : candidatesOf(w, asked) };
+    return { topic: known(asked[0]!), by: 'question', sure, candidates: sure ? [] : candidatesOf(w, asked) };
   }
-  if (short && ongoing && lastTopic) return { topic: known(lastTopic), by: 'follow', sure: true, candidates: [] };
   if (named.length > 1) return { topic: known(named[0]!.topic), by: 'named', sure: false, candidates: candidatesOf(w, named.map(n => n.topic)) };
   // nothing sure: a new topic from its words, unless the model (when there is one) puts it in an open topic
   const fresh = newTopicLabel(words), existing = w.topics.find(x => sameTopic(x, fresh));

@@ -70,6 +70,15 @@ describe('the topic rules', () => {
     expect(two).toMatchObject({ topic: 'Air 401', by: 'question', sure: false });
   });
 
+  it('a short answer in a conversation going on stays on it, even while another chat waits for him', () => {
+    const items = [...world().items, user('u3', 'e i colori del tema scuro?', NOW - 60_000, 'Restyle UI'), reply('a3', 'Propongo #1e1e1e per lo sfondo, procedo?', NOW - 50_000, 'Restyle UI')];
+    const w = world({ items, questions: [{ chatId: 'c-air', at: NOW - 30_000 }] });
+    expect(assignTopic('sì', w)).toMatchObject({ topic: 'Restyle UI', by: 'follow', sure: true });
+    // the same «sì» long after his last message answers the waiting chat
+    const late = [...world().items, user('u3', 'e i colori del tema scuro?', NOW - FOLLOW_UP_MS - 1, 'Restyle UI')];
+    expect(assignTopic('sì', world({ items: late, questions: [{ chatId: 'c-air', at: NOW - 30_000 }] }))).toMatchObject({ topic: 'Air 401', by: 'question' });
+  });
+
   it('a short follow-up of his last message stays on its topic, only while the conversation goes on', () => {
     const items = [...world().items, user('u3', 'e i colori del tema scuro?', NOW - 60_000, 'Restyle UI')];
     expect(assignTopic('anche i bordi', world({ items }))).toMatchObject({ topic: 'Restyle UI', by: 'follow', sure: true });
