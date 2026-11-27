@@ -6,8 +6,10 @@
 // again since the turn ended (the user's or another chat's later edit is never reverted); ignored files (builds,
 // node_modules) and nested repositories stay as they are. Before it touches a file, the undo records the tree as it is
 // under refs/sb/undo/<chat>/<time>, so an undo itself can be reverted with git. Why: agents run with the full default permissions (ADR 0085), and an undo is the safety net that needs no
-// popup. Used by ChatManager (deliverNow before a turn, undoTurn, and turnFiles for a run's receipts, ADR 0130); pinned
-// by the e2e only since its real-git unit tests were removed (docs/tests/load-sensitive-removed.md).
+// popup. Before a turn a tree that matches HEAD has HEAD as its checkpoint after one git status (turnCheckpoint, ADR 0368).
+// Used by ChatManager (deliverNow before a turn, undoTurn, and turnFiles for a run's receipts, ADR 0130); pinned
+// by the e2e since its real-git unit tests were removed (docs/tests/load-sensitive-removed.md), and turnCheckpoint by
+// test/unit/chats/turn-checkpoint.test.ts (git mocked).
 import { execFile } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -61,13 +63,51 @@ async function worktreeTree(root: string): Promise<string> {
 
 /** Records the working tree of the repository at cwd; null when cwd is no git work tree or git fails. The tree and
  *  HEAD are read together: every git call here runs between the user's Enter and the engine. */
-export async function snapshot(cwd: string, ref: string): Promise<Checkpoint | null> {
-  const root = await repoRoot(cwd);
+export async function snapshot(cwd: string, ref: string, knownRoot?: string): Promise<Checkpoint | null> {
+  const root = knownRoot ?? await repoRoot(cwd);
   if (!root) return null;
   const [tree, head] = await Promise.all([worktreeTree(root), git(root, ['rev-parse', '-q', '--verify', 'HEAD']).then(s => s.trim(), () => '')]);
   const commit = (await git(root, ['commit-tree', tree, ...(head ? ['-p', head] : []), '-m', 'second-brain checkpoint'], IDENTITY)).trim();
   await git(root, ['update-ref', ref, commit]);
   return { commit, at: Date.now(), root };
+}
+
+/** What `git status --porcelain=v2 --branch -z` says (parseStatus): HEAD's commit (null before the first commit) and
+ *  whether anything differs from it (a change, a staged file, an untracked file .gitignore does not hide). */
+export interface WorktreeStatus { head: string | null; changed: boolean }
+
+/** Pure, for the tests: the porcelain v2 output read as HEAD and «changed». Headers start with "# "; every other entry is
+ *  a change. */
+export function parseStatus(out: string): WorktreeStatus {
+  let head: string | null = null, changed = false;
+  for (const entry of out.split('\0')) {
+    if (!entry) continue;
+    if (entry.startsWith('# ')) {
+      const m = /^# branch\.oid ([0-9a-f]{40,64})$/.exec(entry);
+      if (m) head = m[1]!;
+      continue;
+    }
+    changed = true;
+  }
+  return { head, changed };
+}
+
+/** The pre-turn checkpoint with a cheap check first (ADR 0368): one `git status` (the files' stat cache, no hashing).
+ *  Nothing differs from HEAD: HEAD itself is the checkpoint (its tree is the files as they are), its ref written in the
+ *  background, so a turn on an engine that cannot hold its writes (every one but Claude) starts at once. Something
+ *  changed (or no commit yet): the full snapshot, as before. `root`: the repository's top folder when already known (no
+ *  rev-parse). Null when cwd is no git work tree or git fails. */
+export async function turnCheckpoint(cwd: string, ref: string, root?: string | null): Promise<Checkpoint | null> {
+  const top = root ?? await repoRoot(cwd);
+  if (!top) return null;
+  let status: WorktreeStatus;
+  try { status = parseStatus(await git(top, ['status', '--porcelain=v2', '--branch', '-z', '--untracked-files=normal', '--ignore-submodules=dirty'])); }
+  catch { return snapshot(top, ref, top); }
+  if (status.changed || !status.head) return snapshot(top, ref, top);
+  // the ref keeps the commit alive if the branch later moves away from it; prune() counts it like the others
+  const head = status.head;
+  void git(top, ['update-ref', ref, head]).catch(() => {});
+  return { commit: head, at: Date.now(), root: top };
 }
 
 /** The working tree's tree object when a turn ends (Checkpoint.after); null when git fails. */

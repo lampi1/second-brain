@@ -6,7 +6,7 @@ import path from 'node:path';
 import type { ChatItem } from '../../shared/contract';
 import { errText, log } from '../log';
 import type { AgentRun } from '../../shared/agents';
-import { afterTree, KEEP as CHECKPOINTS_KEPT, prune as pruneCheckpoints, restore as restoreCheckpoint, snapshot as takeCheckpoint, treeFiles, turnFiles } from './checkpoints';
+import { afterTree, KEEP as CHECKPOINTS_KEPT, prune as pruneCheckpoints, restore as restoreCheckpoint, turnCheckpoint as takeCheckpoint, treeFiles, turnFiles } from './checkpoints';
 import { emptyReceipts, noteTool, noteTurnFiles, receiptVerdict, rowChanges, turnFilesWithoutGit } from '../agents/receipts';
 import type { Checkpoint } from './checkpoints';
 import { receiptReadEnded, receiptReadStarted, receiptsReading } from './receipt-reads';
@@ -62,7 +62,8 @@ export abstract class ManagerCheckpoints extends ManagerSessions {
   private async takeTurnCheckpoint(r: Rec, seq: number, late: Promise<'late'>, limit: number): Promise<void> {
     if (r.gitRoot === null) return;
     const t0 = Date.now();
-    const snap = takeCheckpoint(r.s.cwd, `refs/sb/checkpoints/${r.s.id}/${Date.now()}`);
+    // HEAD itself when nothing changed since it (one git status, ADR 0368), else the full snapshot
+    const snap = takeCheckpoint(r.s.cwd, `refs/sb/checkpoints/${r.s.id}/${Date.now()}`, r.gitRoot);
     try {
       const cp = await Promise.race([snap, late]);
       if (cp === 'late') {
