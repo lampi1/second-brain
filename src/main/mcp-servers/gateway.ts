@@ -161,11 +161,25 @@ export class McpGateway {
         // checked again at the call: the agent card may have narrowed the role since the list
         const now = this.deps.context(chatId);
         if (!now || !toolFor(now, this.deps.roleAccess, server, t) || !this.offered(chatId, server)) throw new Error(`${t.name}: not allowed for this chat’s role (Brain → Agenti → its card → MCP)`);
-        try { return { raw: await this.conn(chatId, server).up.call(t.name, args, call.signal) }; }
+        // a connection the idle sweep closed is a new one: the same hold as at the list
+        let probe = false;
+        if (!this.conns.has(`${chatId}|${server}`)) {
+          const g = this.health.gate(server);
+          if (!g.open) throw new ToolRefusal(heldText(server, g.health, g.waitMs));
+          probe = g.probe;
+        }
+        try {
+          const raw = await this.conn(chatId, server).up.call(t.name, args, call.signal);
+          // a probe that answered: the server works again (its card's tools are refreshed at the next list)
+          if (probe) this.worked(server);
+          return { raw };
+        }
         catch (e) {
           this.drop(chatId, server, c);
           // the access ended after the list (a token that expired mid-chat): the same answer as at the list (#437)
           if (e instanceof McpClientError && e.code === 'auth') { this.failed(chatId, server, e); throw new ToolRefusal(refusedText(server, e)); }
+          // a probe that failed: the server is still down (a plain call's error may be the tool's own: not counted)
+          if (probe) this.failed(chatId, server, e);
           throw e;
         }
       },
@@ -192,11 +206,11 @@ export class McpGateway {
   }
 
   /** It listed on a request made now: back to ok; told (log, card) only when something was known against it. */
-  private worked(server: string, list: UpstreamTool[]): void {
+  private worked(server: string, list?: UpstreamTool[]): void {
     const t = this.health.worked(server);
     if (t.from === 'ok') return;
     log.info('mcp-servers', 'MCP server works again', { data: { server, was: t.from } });
-    try { this.deps.onWorks?.(server, list); } catch { /* the card is a convenience */ }
+    if (list) try { this.deps.onWorks?.(server, list); } catch { /* the card is a convenience */ }
   }
 
   /** A server's definition or token changed, or it was removed: its open connections close (the next call reopens). */

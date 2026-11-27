@@ -132,6 +132,26 @@ describe('a user MCP server that refuses the access', () => {
     expect(s.marked).toEqual(['kb:needs-login', 'kb:needs-login']);   // a new run: told anew
   });
 
+  it('a tool call on a held server whose connection the sweep closed is refused at once, opening nothing', async () => {
+    quiet();
+    let err: Error | null = null;
+    const s = setup(() => err);
+    const tools = await s.list('c1') as { run: (a: object, c: object) => Promise<unknown> }[];
+    err = new McpClientError('auth', 'Accesso rifiutato (HTTP 401).', 'x', true);
+    await expect(s.list('c2')).rejects.toThrow(); await expect(s.list('c3')).rejects.toThrow();
+    expect(s.g.health.get('kb').state).toBe('needs-login');
+    s.g.closeChat('c1');                                       // the idle sweep (or the chat's close) ended its connection
+    const before = s.started();
+    const call = tools[0]!.run({}, { signal: new AbortController().signal });
+    await expect(call).rejects.toBeInstanceOf(ToolRefusal);
+    await expect(call).rejects.toThrow(/needs the user's sign-in/);
+    expect(s.started()).toBe(before);
+    s.at(1000 + BACKOFF_MS['needs-login'][0]!);                // after the wait the call is the probe, and it works
+    err = null;
+    await expect(tools[0]!.run({}, { signal: new AbortController().signal })).resolves.toEqual({ raw: {} });
+    expect(s.g.health.get('kb').state).toBe('ok');
+  });
+
   it('an access that ends after the list: the call is a refusal with the same words and counts, no warning', async () => {
     const { warn } = quiet();
     const s = setup(() => null);

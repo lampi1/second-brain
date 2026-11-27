@@ -2,10 +2,11 @@
 // section of me.md or a skill's text changed in seconds instead of an Artisan and a Sentinel. One edit = up to
 // QUICK_LIMITS.files files, QUICK_LIMITS.lines changed lines (quick-edit.ts: the path guard, the counts, the diff line).
 // In order, all or nothing: every path checked (inside the brain's real folder, no link out), every change applied in
-// memory, no credential in the new text (mask.ts), the user's own PreToolUse hooks asked for every file as for a chat's
+// memory, no credential in the new text or the summary (mask.ts), no line about tools or permissions added or removed
+// (proposals/policy.ts textNever), at most 16 KB of new text per file, the user's own PreToolUse hooks asked for every file as for a chat's
 // Write (skills/guard.ts, ADR 0018: brain-limits.mjs keeps the fixed-context budget) — only then the files are written.
 // After: the brain's own lint when it has one (ops/tools/brain-lint.mjs, read only) and the skill lint of a SKILL.md, a
-// line in the brain's changelog.md, and a git commit of exactly those files when the brain is a git repo («brain: …»).
+// line in the brain's changelog.md, the undo journal (before the lint and the commit), and a git commit of exactly those files when the brain is a git repo («brain: …»).
 // «Annulla» for QUICK_LIMITS.undoMs: the files back to their text before, only while each still is what the edit wrote
 // (a later edit, the user's own or a chat's, is never overwritten), committed as a revert. The journal of edits (texts
 // before and after, never more than the files themselves) is in userData/brain-quick-edits.json, the last 50.
@@ -16,6 +17,7 @@ import { randomBytes } from 'node:crypto';
 import { readLocal, writeLocal } from '../agents/local-store';
 import { writeText } from '../brainmodel/changes';
 import { maskSecrets } from './mask';
+import { textNever } from '../proposals/policy';
 import { lintSkill, lintText } from '../../shared/skill-lint';
 import type { BrainChangelog } from './changelog';
 import type { ChangelogKind } from '../../shared/contract';
@@ -98,6 +100,7 @@ export class BrainQuickEdit {
     const root = this.d.root();
     if (!root) throw new Error('No brain folder is configured.');
     if (!Array.isArray(changes) || !changes.length) throw new Error('changes: give at least one {path, old?, new}.');
+    if (maskSecrets(o.summary).masked) throw new Error('summary: it looks like it holds a credential; describe the change without the secret.');
     if (changes.length > QUICK_LIMITS.changes) throw new Error(`Too many changes (${changes.length} > ${QUICK_LIMITS.changes}): give this edit to an Artisan.`);
     // 1. the paths, grouped by file in the order given
     const byFile = new Map<string, QuickChange[]>();
@@ -123,9 +126,14 @@ export class BrainQuickEdit {
     if (lines > QUICK_LIMITS.lines) throw new Error(`${lines} changed lines > ${QUICK_LIMITS.lines}: too big for a quick edit; give it to an Artisan.`);
     // 3. no credential in what is added, and the user's own hooks on every write
     for (const f of plan) {
-      const known = new Set((f.before ?? '').split(/\r?\n/));
-      const addedText = f.after.split(/\r?\n/).filter(l => !known.has(l)).join('\n');
+      const beforeLines = (f.before ?? '').split(/\r?\n/), afterLines = f.after.split(/\r?\n/);
+      const known = new Set(beforeLines), kept = new Set(afterLines);
+      const addedText = afterLines.filter(l => !known.has(l)).join('\n'), removedText = beforeLines.filter(l => !kept.has(l)).join('\n');
+      if (Buffer.byteLength(addedText) > QUICK_LIMITS.addedBytes) throw new Error(`${f.path}: ${Math.ceil(Buffer.byteLength(addedText) / 1024)} KB of new text > ${QUICK_LIMITS.addedBytes / 1024} KB: too big for a quick edit; give it to an Artisan.`);
       if (maskSecrets(addedText).masked) throw new Error(`${f.path}: the new text looks like it holds a credential; never write a secret in the brain.`);
+      // tools and permissions (a skill's allowed-tools, permissionMode, hooks, settings, an approval rule) keep their
+      // own approval (ADR 0294): an edit that adds or removes such a line is not a quick edit (proposals/policy.ts)
+      if (textNever(addedText) === 'permissions' || textNever(removedText) === 'permissions') throw new Error(`${f.path}: the edit touches tools or permissions (allowed-tools, permissionMode, hooks, settings, approvals): not a quick edit; they keep their own approval (ADR 0294): prepare the exact text for the user or give it to an Artisan.`);
     }
     for (const f of plan) {
       const no = await this.d.hooks?.(root, f.abs, f.after);
@@ -147,11 +155,13 @@ export class BrainQuickEdit {
     const summary = o.summary.replace(/\s+/g, ' ').trim().slice(0, 200) || `edit ${files.join(', ')}`;
     const logged = this.changelog(files, summary, o.by, 'edited');
     try { this.d.changed?.(); } catch { /* the pages re-read on their own too */ }
-    // 5. the brain's lint and the commit, side by side
+    // 5. the journal at once (its «Annulla» holds even if what follows fails), then the brain's lint and the commit,
+    //    side by side, and the commit's id into the journal
+    const entry: Entry = { id, at, summary, by: o.by.slice(0, 60), files: plan.map(f => ({ path: f.path, before: f.before, after: f.after })), commit: null };
+    const keep = () => { try { const entries = this.journal().filter(x => x.id !== id); entries.push(entry); this.save(entries); } catch (e) { log.warn('brain-edit', 'quick edit journal not written: its «Annulla» works only through git', { cause: errText(e), hint: 'check that the app data folder is writable' }); } };
+    keep();
     const [lint, commit] = await Promise.all([this.lint(root, files), this.commit(root, logged ? [...files, 'changelog.md'] : files, commitMessage(summary, files))]);
-    const entries = this.journal();
-    entries.push({ id, at, summary, by: o.by.slice(0, 60), files: plan.map(f => ({ path: f.path, before: f.before, after: f.after })), commit: 'sha' in commit ? commit.sha : null });
-    try { this.save(entries); } catch (e) { log.warn('brain-edit', 'quick edit journal not written: its «Annulla» works only through git', { cause: errText(e), hint: 'check that the app data folder is writable' }); }
+    if ('sha' in commit) { entry.commit = commit.sha; keep(); }
     log.info('brain-edit', 'quick brain edit applied', { data: { id, files, lines, commit: 'sha' in commit ? commit.sha.slice(0, 10) : null } });
     return {
       id, diff: diffLine(plan.map(f => f.delta), plan.find(f => f.preview)?.preview ?? ''), files: plan.map(f => f.delta),

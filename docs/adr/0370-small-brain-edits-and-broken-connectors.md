@@ -27,19 +27,29 @@ Date: 2026-11-27 · Status: accepted (owner proposals 4 and 6, 2026-11-27) · Am
      junction pointing out is refused);
    - Markdown and text files only (`.md`, `.txt`): scripts, JSON and code go to `brain_script_save` or an Artisan;
    - never `permissions.json`, `settings*.json`, `domain.json`, `config.json`, `.gitignore`, `.mcp.json`, the app's
-     `changelog.md`, nor anything under `.git`, `hooks`, `.githooks`, `.husky`: those keep their current approval
-     rules (ADR 0294, the brain's `permissions.json`, `brain-rules.md` rule 7);
-   - at most **3 files**, **40 changed lines** (added + removed, only the lines that differ), 12 changes, 256 KB per file;
+     `changelog.md`, nor anything under `.git`, `hooks`, `.githooks`, `.husky`, nor an engine's agents and commands
+     (`.claude/agents`, `.claude/commands`, any `agents`/`commands` folder of a dot folder: their frontmatter carries
+     tools and permission mode): those keep their current approval rules (ADR 0294, the brain's `permissions.json`,
+     `brain-rules.md` rule 7);
+   - an edit whose added or removed lines touch tools or permissions (`allowed-tools:`, `permissionMode`, `hooks:`,
+     `.claude/settings`, `bypassPermissions`…, the `permissions` hit of `textNever` in `proposals/policy.ts`) is refused
+     the same way, in any file (a SKILL.md, CLAUDE.md, brain-rules.md);
+   - at most **3 files**, **40 changed lines** (added + removed, only the lines that differ), **16 KB of new text per
+     file** (a huge line or a new file is not small), 12 changes, 256 KB per file;
    - beyond any limit the tool refuses with «give it to an Artisan».
 3. **Order, all or nothing** (`src/main/brain/quick-edit-service.ts`): every path checked and every change applied in
-   memory; a credential in the new text refuses the edit (`mask.ts`); the user's own PreToolUse hooks see every write as
+   memory; a credential in the new text or in the summary (it goes into the commit and `changelog.md`) refuses the edit
+   (`mask.ts`); the user's own PreToolUse hooks see every write as
    a chat's `Write` (`skills/guard.ts`, ADR 0018: `brain-limits.mjs` keeps the fixed-context budget and its `now.md`
    rule); a file changed on disk meanwhile stops it; a failed write puts back the files already written.
 4. **After the write**: the brain's own read-only lint when it has one (`ops/tools/brain-lint.mjs --json`), its findings
    on the edited files and the skill lint of a `SKILL.md` returned as `warnings` (never blocking); a line in the brain's
    `changelog.md`; a git commit of exactly the edited files (and `changelog.md`) with the message `brain: <summary>`,
-   the app's neutral identity like the sync's commits, skipped (the files stay written) when the brain is not the root
-   of a git repo, the sync holds its lock or a git operation is under way (`quick-edit-ports.ts`).
+   the app's neutral identity like the sync's commits. The commit takes the sync's own lock (`.git/sb-sync.lock`, a
+   stale one after 5 minutes) for the add and the commit; it is skipped (the files stay written, the sync commits them
+   in its next cycle) when the brain is not the root of a git repo, another writer holds the lock or a git operation is
+   under way (`quick-edit-ports.ts`). The undo journal is written right after the files, before the lint and the
+   commit, so «Annulla» holds whatever happens next; the commit id is added to it after.
 5. **The user sees one compact line** in the chat, which the tool returns and the Orchestrator shows as it is:
    `✎ rules/qa.md +2 −1 · me.md +1 — «first added line»`.
 6. **«Annulla» for 24 h**: the files go back to their text before (a created file is removed) only while each still is
@@ -54,7 +64,8 @@ Date: 2026-11-27 · Status: accepted (owner proposals 4 and 6, 2026-11-27) · Am
    **2** for a refusal or a program that does not start, **3** for a down service (a slow first start is not broken).
    A success on a request made now goes back to `ok`; a chat's cached tool list says nothing.
 2. **Held back**: while marked, the gateway opens nothing for a new chat and answers at once with what the user must do;
-   a chat whose connection is up keeps it. Tried again when the user signs in («Accedi»), sets a token, edits or removes
+   a chat whose connection is up keeps it. A tool call whose connection the idle sweep closed goes through the same
+   hold (refused at once; after the wait it is the probe). Tried again when the user signs in («Accedi»), sets a token, edits or removes
    the connector or presses «Prova» (all of them reset it), or after a back-off: `needs-login` 6 h then 24 h, `broken`
    15 min, 1 h, then 6 h. After the wait **one probe at a time** goes through (a 2-minute lease); only a failed probe
    lengthens the wait, not the connections that were already in flight.
@@ -78,4 +89,4 @@ Date: 2026-11-27 · Status: accepted (owner proposals 4 and 6, 2026-11-27) · Am
 - Pinned by `test/unit/brain/quick-edit.test.ts` (path guard, limits, hooks, credential, commit, revert),
   `test/unit/mcp-servers/health.test.ts` (the state machine), `test/unit/mcp-servers/gateway-broken.test.ts` and
   `test/unit/mcp-servers/notice.test.ts` (held back, one notice, one log line per change). The real git, lint and hook
-  ports (`quick-edit-ports.ts`) are not unit-tested (no real git or processes in unit tests, rule 7).
+  ports (`quick-edit-ports.ts`) are not unit-tested beyond the lock (no real git or processes in unit tests, rule 7).

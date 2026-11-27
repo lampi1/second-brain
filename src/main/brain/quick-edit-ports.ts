@@ -1,8 +1,8 @@
 // The real ports of the Orchestrator's small brain edit (ADR 0370; quick-edit-service.ts holds the logic and is tested
 // with fakes of these): the git commit of exactly the edited files in the brain repo, the brain's own read-only lint
 // (ops/tools/brain-lint.mjs --json, when the brain has it) and the user's PreToolUse hooks (skills/guard.ts). The commit
-// never fights the multi-PC sync: while its lock is held or a git operation is under way it is skipped (the sync commits
-// the files in its next cycle), and it carries the app's neutral identity like the sync's own commits (brain/sync.ts).
+// never fights the multi-PC sync: it takes the sync's own lock (.git/sb-sync.lock) for the add and the commit, and is
+// skipped while another writer holds it or a git operation is under way (the sync commits the files in its next cycle), and it carries the app's neutral identity like the sync's own commits (brain/sync.ts).
 // Git runs with prompts off. Used by wiring.ts and demo-wiring.ts.
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
@@ -24,6 +24,17 @@ function git(cwd: string, args: string[]): Promise<Git> {
 const last = (s: string) => s.split(/\r?\n/).filter(Boolean).pop()?.slice(0, 200) ?? '';
 const SYNC_LOCK_STALE_MS = 5 * 60_000;
 
+/** Takes the lock file like the sync does (exclusive create; a lock older than SYNC_LOCK_STALE_MS is a dead writer's);
+ *  its release, or null while another writer holds it. */
+export function takeLock(file: string, now = Date.now): (() => void) | null {
+  const take = () => { fs.writeFileSync(file, `${process.pid} ${new Date(now()).toISOString()} brain_edit\n`, { flag: 'wx' }); return () => { try { fs.unlinkSync(file); } catch { /* gone */ } }; };
+  try { return take(); } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'EEXIST') return null;
+    try { if (now() - fs.statSync(file).mtimeMs > SYNC_LOCK_STALE_MS) { fs.unlinkSync(file); return take(); } } catch { /* raced: the other writer has it */ }
+    return null;
+  }
+}
+
 export const brainGit: QuickGit = {
   async commit(root, paths, message) {
     const top = await git(root, ['rev-parse', '--show-toplevel', '--absolute-git-dir']);
@@ -32,14 +43,18 @@ export const brainGit: QuickGit = {
     // a brain folder inside another repo is not the brain's own repo: nothing is committed there
     const same = (a: string, b: string) => { try { return fs.realpathSync(a).toLowerCase() === fs.realpathSync(b).toLowerCase(); } catch { return false; } };
     if (!same(topDir, root)) return { skipped: 'the brain folder is not the root of its git repo' };
-    try { if (Date.now() - fs.statSync(path.join(gitDir, 'sb-sync.lock')).mtimeMs < SYNC_LOCK_STALE_MS) return { skipped: 'the brain sync holds the repo: it commits these files in its next cycle' }; } catch { /* no lock */ }
-    for (const f of ['MERGE_HEAD', 'rebase-merge', 'rebase-apply', 'CHERRY_PICK_HEAD', 'REVERT_HEAD']) if (fs.existsSync(path.join(gitDir, f))) return { skipped: 'a git operation is under way in the brain folder' };
-    const add = await git(root, ['add', '-A', '--', ...paths]);
-    if (add.code !== 0) return { skipped: `git add: ${last(add.err)}` };
-    const c = await git(root, [...APP_IDENTITY, 'commit', '-q', '-m', message, '--', ...paths]);
-    if (c.code !== 0) return { skipped: `git commit: ${last(c.err) || last(c.out) || `code ${c.code}`}` };
-    const sha = await git(root, ['rev-parse', 'HEAD']);
-    return sha.code === 0 ? { sha: sha.out } : { skipped: 'committed, id not read' };
+    // the sync's own lock, held for the add and the commit: one writer of the repo at a time (brain/sync.ts lock)
+    const release = takeLock(path.join(gitDir, 'sb-sync.lock'));
+    if (!release) return { skipped: 'the brain sync holds the repo: it commits these files in its next cycle' };
+    try {
+      for (const f of ['MERGE_HEAD', 'rebase-merge', 'rebase-apply', 'CHERRY_PICK_HEAD', 'REVERT_HEAD']) if (fs.existsSync(path.join(gitDir, f))) return { skipped: 'a git operation is under way in the brain folder' };
+      const add = await git(root, ['add', '-A', '--', ...paths]);
+      if (add.code !== 0) return { skipped: `git add: ${last(add.err)}` };
+      const c = await git(root, [...APP_IDENTITY, 'commit', '-q', '-m', message, '--', ...paths]);
+      if (c.code !== 0) return { skipped: `git commit: ${last(c.err) || last(c.out) || `code ${c.code}`}` };
+      const sha = await git(root, ['rev-parse', 'HEAD']);
+      return sha.code === 0 ? { sha: sha.out } : { skipped: 'committed, id not read' };
+    } finally { release(); }
   },
 };
 

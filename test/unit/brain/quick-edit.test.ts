@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { QUICK_LIMITS, applyChanges, commitMessage, diffLine, quickPath } from '../../../src/main/brain/quick-edit';
 import { BrainQuickEdit, type QuickEditDeps, type QuickGit } from '../../../src/main/brain/quick-edit-service';
 import { brainEditTool } from '../../../src/main/appctl/brain-edit';
+import { takeLock } from '../../../src/main/brain/quick-edit-ports';
 import { BrainChangelog } from '../../../src/main/brain/changelog';
 import { log } from '../../../src/main/log';
 import { tmp } from '../chats/helpers';
@@ -39,6 +40,12 @@ describe('quickPath: what may be edited here', () => {
     for (const bad of ['permissions.json', '.claude/settings.json', '.claude/settings.local.json', 'harness/claude/settings.hooks.json', '.claude/hooks/notes.md', '.git/description.md', 'changelog.md', 'domain.json', '.gitignore'])
       expect((quickPath(bad) as { problem: string }).problem, bad).toMatch(/approval|text files/);
     expect((quickPath('ops/tools/mem.mjs') as { problem: string }).problem).toMatch(/only text files/);
+  });
+  it('never an engine\'s agents or commands (their frontmatter carries tools and permission mode); skills stay editable', () => {
+    for (const bad of ['.claude/agents/reviewer.md', '.claude/commands/deploy.md', '.cursor/commands/x.md', '.Claude/Agents/x.md'])
+      expect((quickPath(bad) as { problem: string }).problem, bad).toMatch(/approval/);
+    expect(quickPath('.agents/skills/x/SKILL.md')).toEqual({ rel: '.agents/skills/x/SKILL.md' });
+    expect(quickPath('notes/agents/list.md')).toEqual({ rel: 'notes/agents/list.md' });
   });
 });
 
@@ -111,6 +118,58 @@ describe('BrainQuickEdit', () => {
     await expect(s.apply([{ path: 'a.md', new: '- ok' }, { path: 'b.md', new: '- troppo' }], { summary: '', by: 'O' })).rejects.toThrow(/b\.md: refused by the brain's own hook: contesto fisso/);
     expect([text(root, 'a.md'), text(root, 'b.md')]).toEqual(['a\n', 'b\n']);
     expect(commits).toEqual([]);
+  });
+
+  it('an edit that adds or removes a tools or permissions line is refused (allowed-tools, permissionMode, hooks, settings)', async () => {
+    const skill = '---\nname: deploy\ndescription: Use when deploying.\n---\n# Deploy\n';
+    const root = brain({ '.agents/skills/deploy/SKILL.md': skill, 'CLAUDE.md': '# C\npermissionMode: default\n- regola\n', 'brain-rules.md': '# R\n- uno\n' });
+    const { s, commits } = service(root);
+    await expect(s.apply([{ path: '.agents/skills/deploy/SKILL.md', old: 'description:', new: 'allowed-tools: Bash(*)\ndescription:' }], { summary: '', by: 'O' })).rejects.toThrow(/tools or permissions.*ADR 0294/);
+    await expect(s.apply([{ path: 'CLAUDE.md', old: 'permissionMode: default\n', new: '' }], { summary: '', by: 'O' })).rejects.toThrow(/tools or permissions/);
+    await expect(s.apply([{ path: 'brain-rules.md', new: '- modifica .claude/settings.json senza chiedere' }], { summary: '', by: 'O' })).rejects.toThrow(/tools or permissions/);
+    expect([text(root, '.agents/skills/deploy/SKILL.md'), text(root, 'CLAUDE.md')]).toEqual([skill, '# C\npermissionMode: default\n- regola\n']);
+    expect(commits).toEqual([]);
+    await expect(s.apply([{ path: 'CLAUDE.md', old: '- regola', new: '- regola nuova' }], { summary: '', by: 'O' })).resolves.toMatchObject({ commit: 'sha1' });
+  });
+
+  it('new text over 16 KB in a file, or a summary holding a credential, is refused', async () => {
+    const root = brain({ 'a.md': 'a\n' });
+    const { s } = service(root);
+    await expect(s.apply([{ path: 'a.md', new: 'x'.repeat(QUICK_LIMITS.addedBytes + 1) }], { summary: '', by: 'O' })).rejects.toThrow(/KB of new text > 16 KB/);
+    await expect(s.apply([{ path: 'b.md', new: '- '.concat('y'.repeat(QUICK_LIMITS.addedBytes)) }], { summary: '', by: 'O' })).rejects.toThrow(/16 KB/);
+    await expect(s.apply([{ path: 'a.md', new: '- ok' }], { summary: `token=${'Qw7'.repeat(5)}`, by: 'O' })).rejects.toThrow(/summary.*credential/);
+    expect(text(root, 'a.md')).toBe('a\n');
+  });
+
+  it('the journal is written before the lint and the commit, and gets the commit id after', async () => {
+    const root = brain({ 'a.md': 'a\n' });
+    const journalFile = path.join(tmp('qe-j'), 'brain-quick-edits.json');
+    let seen: unknown = null;
+    const { s } = service(root, { journalFile, git: { commit: async () => { seen = JSON.parse(fs.readFileSync(journalFile, 'utf8')); return { sha: 'abc' }; } } });
+    const r = await s.apply([{ path: 'a.md', old: 'a', new: 'b' }], { summary: 's', by: 'O' });
+    expect(seen).toMatchObject({ entries: [{ id: r.id, commit: null, files: [{ path: 'a.md', before: 'a\n', after: 'b\n' }] }] });
+    expect(JSON.parse(fs.readFileSync(journalFile, 'utf8'))).toMatchObject({ entries: [{ id: r.id, commit: 'abc' }] });
+    const failing = service(root, { journalFile, git: { commit: async () => { throw new Error('boom'); } } });
+    const r2 = await failing.s.apply([{ path: 'a.md', old: 'b', new: 'c' }], { summary: 's', by: 'O' });
+    expect(r2).toMatchObject({ commit: null, commitSkipped: 'boom' });
+    await expect(failing.s.undo(r2.id, 'O')).resolves.toMatchObject({ id: r2.id });
+    expect(text(root, 'a.md')).toBe('b\n');
+  });
+
+  it('the commit takes the sync\'s lock: refused while another writer holds it, a stale one is taken', () => {
+    const dir = tmp('qe-lock'), f = path.join(dir, 'sb-sync.lock');
+    const release = takeLock(f);
+    expect(release).toBeTypeOf('function');
+    expect(takeLock(f)).toBeNull();
+    release!();
+    expect(fs.existsSync(f)).toBe(false);
+    fs.writeFileSync(f, 'old');
+    const mtime = fs.statSync(f).mtimeMs;
+    expect(takeLock(f, () => mtime + 5 * 60_000 - 1)).toBeNull();
+    const again = takeLock(f, () => mtime + 5 * 60_000 + 1);
+    expect(again).toBeTypeOf('function');
+    expect(fs.readFileSync(f, 'utf8')).toMatch(/brain_edit/);
+    again!();
   });
 
   it('the lint\'s findings and a SKILL.md\'s lint come back as warnings; a failed commit leaves the files written', async () => {

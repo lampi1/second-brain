@@ -1,7 +1,8 @@
 // The pure half of the Orchestrator's small brain edit (ADR 0370, owner proposal 4, 2026-11-27: a «d'ora in poi …» rule
 // went Orchestrator → Artisan (p50 10.7 min) → Sentinel (p50 9.4 min) for a one-line change). What may be edited and how
 // much: a path inside the brain, a Markdown or text file, never git, settings, hooks, permissions or the app's own files
-// (those keep their own approval rules: ADR 0294 and the brain's permissions.json); at most QUICK_LIMITS.files files and
+// (those keep their own approval rules: ADR 0294 and the brain's permissions.json; nor an engine's agents and commands,
+// and an edit whose text touches tools or permissions is refused by the service); at most QUICK_LIMITS.files files and
 // QUICK_LIMITS.lines changed lines per edit, each change an exact replacement of text found once (or an append). A bigger
 // edit goes to an Artisan. Also the line counts and the one compact diff line the user reads in the chat. No I/O: the
 // service (quick-edit-service.ts) reads and writes; unit tests: test/unit/brain/quick-edit.test.ts.
@@ -14,6 +15,8 @@ export const QUICK_LIMITS = {
   lines: 40,
   /** a file larger than this is not edited here */
   bytes: 256 * 1024,
+  /** new text (the lines added) per file, in bytes: a huge line or a new file is not small */
+  addedBytes: 16 * 1024,
   /** changes in one edit */
   changes: 12,
   /** «Annulla» works this long after the edit */
@@ -40,7 +43,10 @@ export function quickPath(raw: unknown): { rel: string } | { problem: string } {
   const parts = s.split('/').filter(p => p && p !== '.');
   if (!parts.length || parts.includes('..')) return { problem: `${raw}: outside the brain folder` };
   const rel = parts.join('/'), base = parts[parts.length - 1]!;
-  if (parts.slice(0, -1).some(p => DENIED_DIRS.has(p.toLowerCase())) || DENIED_FILES.test(base)) return { problem: `${rel}: settings, hooks, permissions and git keep their own approval (ADR 0294): not a quick edit; prepare the exact text for the user` };
+  // an engine's agents and commands (.claude/agents, .claude/commands, .cursor/commands…) carry their tools and
+  // permission mode in their frontmatter: their own approval too
+  const engineDef = (p: string, i: number) => (p.toLowerCase() === 'agents' || p.toLowerCase() === 'commands') && i > 0 && parts[i - 1]!.startsWith('.');
+  if (parts.slice(0, -1).some((p, i) => DENIED_DIRS.has(p.toLowerCase()) || engineDef(p, i)) || DENIED_FILES.test(base)) return { problem: `${rel}: settings, hooks, permissions and git keep their own approval (ADR 0294): not a quick edit; prepare the exact text for the user` };
   if (!QUICK_EXTS.includes(path.posix.extname(base).toLowerCase())) return { problem: `${rel}: only text files (${QUICK_EXTS.join(' ')}) are edited here; scripts and data go to brain_script_save or an Artisan` };
   return { rel };
 }
