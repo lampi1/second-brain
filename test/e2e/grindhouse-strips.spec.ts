@@ -18,10 +18,12 @@ test('strips: collapsed with their facts, click to expand and collapse, "Ti aspe
       await expect(page.getByTestId(`chat-expand-${id}`)).toHaveAttribute('aria-expanded', 'false');
       await expect(page.getByTestId(`chat-sub-${id}`)).toHaveCount(0); // one line (ADR 0287): the details row is in the open window
     }
-    // time and cost so far, against the estimate, always on the strip (ADR 0292)
-    await expect(page.getByTestId('chat-meta-qa')).toContainText(/\d+ min \/ ~\d+ min/);
+    // time and cost so far always on the strip; the estimate, the model and its effort in the ⓘ (ADR 0366)
+    await expect(page.getByTestId('chat-meta-qa')).toContainText(/\d+ min/);
+    await expect(page.getByTestId('chat-meta-qa')).not.toContainText('/ ~');
     await expect(page.getByTestId('chat-meta-fix')).toContainText('$');
-    // the model and the effort it runs with before the figures, and a working chat says so in words (the owner, 2026-11-13)
+    await expect(page.getByTestId('strip-info-qa')).toHaveAttribute('aria-label', /stima ~\d+ min/);
+    // a working chat says so in words (the owner, 2026-11-13)
     await expect(page.getByTestId('strip-model-fix')).toHaveText('Opus 5.5 · medium');
     await expect(page.getByTestId('chat-status-fix')).toHaveText('In attività');
     await expect(page.getByTestId('chat-status-fix')).toBeVisible();

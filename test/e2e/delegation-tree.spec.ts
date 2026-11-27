@@ -95,7 +95,8 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     await expect(page.getByTestId(`grind-kid-${sentinelChat.id}`)).toBeVisible();
     const pBox = (await page.getByTestId(`tile-chat-${parent.id}`).boundingBox())!, hBox = (await helper.boundingBox())!;
     expect(hBox.y).toBeGreaterThan(pBox.y + pBox.height - 1); // under the lead
-    expect(hBox.x).toBeGreaterThan(pBox.x);                   // and indented
+    const face = async (id: string) => (await page.getByTestId(`tile-chat-${id}`).locator('.strip-face').boundingBox())!.x;
+    expect(await face(scout.id)).toBeGreaterThan(await face(parent.id)); // and indented
     await expect(helper).toContainText('Scout');
     const row = page.getByTestId(`chat-expand-${scout.id}`);
     // the sidebar tree: the same shape, the children one level in

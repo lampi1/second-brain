@@ -14,7 +14,7 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     await expect(gear).toBeVisible();
     await expect(page.getByTestId('theme-system')).toHaveCount(0);
     await expect(page.getByTestId('settings-all')).toBeVisible();
-    await expect(page.getByTestId('topbar-connectors')).toHaveCount(0);
+    await expect(gear.getByTestId('topbar-connectors')).toHaveCount(0); // the connectors are a chip on the bar (ADR 0349), not in the gear
     await expect(page.getByTestId('nav-map')).toHaveCount(0);
     await expect(gear).not.toContainText('Windows');
     await expect(gear).not.toContainText('DevOps');

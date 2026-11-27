@@ -30,7 +30,7 @@ async function keyringStandIn(app: ElectronApplication): Promise<void> {
   });
 }
 
-test('Impostazioni: groups, theme live, messaging always available, no model comparison', async () => {
+test('Impostazioni: groups, dark only, messaging always available, no model comparison', async () => {
   const { app, page } = await launchDemo();
   await page.getByTestId('settings').click();
   await page.getByTestId('settings-all').click();

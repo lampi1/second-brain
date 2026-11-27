@@ -59,6 +59,8 @@ test('a strip\'s ⓘ says the skills its run used (no chips on the row, ADR 0366
     await expect(loaded.locator('.gs-tip')).toBeVisible();
     await expect(loaded.locator('.gs-tip')).toContainText('uso non tracciato');
     await shot(page, 'grindhouse-skills-untracked');
+    await page.mouse.move(2, 2); // its card closes when the pointer leaves
+    await expect(loaded.locator('.gs-tip')).toBeHidden();
     await info.scrollIntoViewIfNeeded();
     await info.hover();
     await expect(info.locator('.gs-tip')).toContainText('code-work');
