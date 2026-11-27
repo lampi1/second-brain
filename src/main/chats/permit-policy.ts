@@ -7,6 +7,7 @@
 // auto-permit.ts; pinned by test/unit/chats/permit-policy.test.ts with the owner's policy as fixture.
 import fs from 'node:fs';
 import path from 'node:path';
+import { Worker } from 'node:worker_threads';
 
 export const POLICY_FILE = 'permissions.json';
 export const POLICY_ACTIONS = ['esegui', 'ask-user', 'never-print'] as const;
@@ -152,17 +153,16 @@ const ruleSees = (rule: PolicyRule, cls: string, name: string, title: string): b
 
 /** What the rules say of a request. unread: they did not read it all (a part over the limit, or they would take too
  *  long), so no rule found is not «no rule holds it»: the caller asks. */
-export interface PolicyRead { rule: PolicyRule | null; unread: boolean }
+export interface PolicyRead { rule: PolicyRule | null; unread: boolean; /** unread because the time budget ran out (not a part over the limit) */ slow?: boolean }
 
 // The rules run in the main process and a pattern cannot be stopped: one that goes back over the text for every match
 // (`psql[\s\S]*insert`, on a text full of «psql») takes seconds on 100,000 characters. So the rules have a time budget
 // for one request, and on a long text each pattern is first timed on every 20,000 characters of it: when the whole
 // text would take too long at that pace, the app stops and asks.
-const BUDGET_MS = 250, PROBE = 20_000, NOISE_MS = 25;
-/** The budget while the user is away (Modalità notte, ADR 0371 point 9): nobody waits on the card, and a request the
- *  rules did not read in time is parked, not asked, so the evening's slower machine must not turn his «everything
- *  passes» into a refusal. Still bounded: a pattern that goes back over a long text stops here too. */
-export const NIGHT_BUDGET_MS = 2000;
+export const BUDGET_MS = 250;
+const PROBE = 20_000, NOISE_MS = 25;
+/** How long the rules may take off the main thread (policyReadOffThread, ADR 0371 point 9) before it is the user's. */
+export const OFF_THREAD_MS = 5_000;
 
 /** A pattern is quick enough on the whole text, judged by its time on each stretch of PROBE characters. A pattern that
  *  goes back over the text scans from each match to the end, so a slow stretch weighs as much as the text after it is
@@ -187,26 +187,60 @@ function quick(re: RegExp, text: string, now: () => number, spent: () => boolean
 }
 
 /** The first rule that holds this request, and whether the rules read all of it. title: the engine's line, an ACP MCP
- *  tool's only name. now: the clock (the tests' own). budgetMs: the request's time budget (one pattern on a long text
- *  gets the same), BUDGET_MS by default, NIGHT_BUDGET_MS while the user is away. */
-export function policyRead(policy: BrainPolicy, tool: string, input: unknown, commandTools: readonly string[], title?: string, now: () => number = () => performance.now(), budgetMs = BUDGET_MS): PolicyRead {
+ *  tool's only name. now: the clock (the tests' own). The main process never runs the rules longer than BUDGET_MS (one
+ *  pattern on a long text gets the same); a slow read at night goes on off the main thread (policyReadOffThread). */
+export function policyRead(policy: BrainPolicy, tool: string, input: unknown, commandTools: readonly string[], title?: string, now: () => number = () => performance.now()): PolicyRead {
   if (policy.state !== 'ok') return { rule: null, unread: false };
   const cls = toolClass(tool, commandTools), name = tool.toLowerCase(), t = (title ?? '').trim().toLowerCase();
   const { text, long } = readable(tool, input, cls, cls === 'mcp' ? title?.trim() : undefined);
-  const start = now(), spent = (): boolean => now() - start > budgetMs;
+  const start = now(), spent = (): boolean => now() - start > BUDGET_MS;
   let slow = false;
   const hit = (re: RegExp): boolean => {
     if (slow) return false;
-    if (spent() || (text.length > PROBE && !quick(re, text, now, spent, budgetMs))) { slow = true; return false; }
+    if (spent() || (text.length > PROBE && !quick(re, text, now, spent, BUDGET_MS))) { slow = true; return false; }
     return re.test(text);
   };
   for (const rule of policy.rules) {
     if (!ruleSees(rule, cls, name, t)) continue;
     const held = rule.match.some(hit) && !rule.unless.some(hit);
-    if (slow) return { rule: null, unread: true };
+    if (slow) return { rule: null, unread: true, slow: true };
     if (held) return { rule, unread: false };
   }
   return { rule: null, unread: long };
+}
+
+// The matcher of policyReadOffThread, run in a worker thread with no budget (its time limit is the worker's end).
+const OFF_THREAD_SOURCE = `
+const { parentPort, workerData } = require('node:worker_threads');
+const { rules, text } = workerData;
+const hit = p => new RegExp(p.source, p.flags).test(text);
+let found = null;
+for (const r of rules) { if (r.match.some(hit) && !r.unless.some(hit)) { found = r.i; break; } }
+parentPort.postMessage(found);
+`;
+
+/** policyRead without the main process's time budget, for a request it did not read in time (ADR 0371 point 9: at
+ *  night a slow read was parked, though his rules let the request through). The text and the rules that see the
+ *  tool are prepared here (cheap); the patterns run in a worker thread, ended after timeoutMs: then it stays unread.
+ *  A part over the limit stays unread, as on the main thread. */
+export function policyReadOffThread(policy: BrainPolicy, tool: string, input: unknown, commandTools: readonly string[], title?: string, timeoutMs = OFF_THREAD_MS): Promise<PolicyRead> {
+  if (policy.state !== 'ok') return Promise.resolve({ rule: null, unread: false });
+  const cls = toolClass(tool, commandTools), name = tool.toLowerCase(), t = (title ?? '').trim().toLowerCase();
+  const { text, long } = readable(tool, input, cls, cls === 'mcp' ? title?.trim() : undefined);
+  const seen = policy.rules.map((rule, i) => ({ rule, i })).filter(x => ruleSees(x.rule, cls, name, t));
+  if (!seen.length) return Promise.resolve({ rule: null, unread: long });
+  const pat = (re: RegExp) => ({ source: re.source, flags: re.flags });
+  const rules = seen.map(({ rule, i }) => ({ i, match: rule.match.map(pat), unless: rule.unless.map(pat) }));
+  return new Promise(resolve => {
+    let done = false;
+    const end = (v: PolicyRead): void => { if (done) return; done = true; clearTimeout(timer); void worker.terminate().catch(() => {}); resolve(v); };
+    const worker = new Worker(OFF_THREAD_SOURCE, { eval: true, workerData: { rules, text } });
+    const timer = setTimeout(() => end({ rule: null, unread: true, slow: true }), timeoutMs);
+    (timer as { unref?: () => void }).unref?.();
+    worker.once('message', (i: number | null) => end(i === null ? { rule: null, unread: long } : { rule: policy.rules[i] ?? null, unread: false }));
+    worker.once('error', () => end({ rule: null, unread: true, slow: true }));
+    worker.once('exit', () => end({ rule: null, unread: true, slow: true }));
+  });
 }
 
 /** Some rule could hold a request of this tool, or the policy cannot be read: no «always» on what the user grants for

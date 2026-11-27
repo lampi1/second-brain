@@ -17,7 +17,7 @@ import path from 'node:path';
 import type { PermissionCeiling } from '../../shared/agents';
 import { shellOfTool } from '../agents/command-steps';
 import { COMMAND_TOOLS, readOnlyCommand, type ReadScripts } from '../agents/tool-policy';
-import { policyCovers, policyRead, type BrainPolicy, type PolicyRule } from './permit-policy';
+import { policyCovers, policyRead, type BrainPolicy, type PolicyRead, type PolicyRule } from './permit-policy';
 
 /** title: the engine's one line; an ACP engine names an MCP tool only there (its tool is «Tool») */
 /** whole: the input is as the engine sent it (Claude, ADR 0290), not a copy an engine or the app shortened: the signs
@@ -36,14 +36,14 @@ export interface PermitContext {
   rulesFile?: string;
   /** the clock of the rules' time budget (permit-policy.ts policyRead); the tests' own, else the real one */
   now?: () => number;
-  /** that budget (permit-policy.ts NIGHT_BUDGET_MS while the user is away); absent = the day's */
-  budgetMs?: number;
+  /** the rules' read already done off the main thread (permit-policy.ts policyReadOffThread, ADR 0371 point 9) */
+  read?: PolicyRead;
 }
 export type PermitVerdict =
   | { kind: 'allow' }
   /** reason: English, for the log. rule: the user's policy rule that sent it to the user (no «always» then: a rule would
    *  free later ones) */
-  | { kind: 'ask'; reason: string; rule?: PolicyRule; rulesFile?: true }
+  | { kind: 'ask'; reason: string; rule?: PolicyRule; rulesFile?: true; /** only because the rules ran out of time on the main thread (permit-policy.ts policyReadOffThread can finish the read) */ slow?: true }
   /** a rule of the user's policy refused it. message: English, what the model reads */
   | { kind: 'deny'; shown: string; rule: PolicyRule; message: string };
 
@@ -247,14 +247,14 @@ export function autoPermit(req: PermitRequest, ctx: PermitContext): PermitVerdic
   const covered = policyCovers(policy, req.tool, COMMAND_TOOLS, req.title);
   if (covered && command && (typeof raw !== 'string' || !raw.trim())) return ask('a command with no line, under a brain rule');
   if (covered && !req.whole && cut(req.input)) return ask('a request cut short, under a brain rule');
-  const { rule, unread } = policyRead(policy, req.tool, req.input, COMMAND_TOOLS, req.title, ctx.now, ctx.budgetMs);
+  const { rule, unread, slow } = ctx.read ?? policyRead(policy, req.tool, req.input, COMMAND_TOOLS, req.title, ctx.now);
   if (rule) {
     if (rule.action === 'ask-user') return { kind: 'ask', reason: `brain rule: ${rule.id}`, rule };
     return refusal(rule, typeof raw === 'string' ? raw.trim() : req.title?.trim() || req.tool, command);
   }
   // no rule in what they read, but they did not read it all (longer than their limit, or too slow to read): what they
   // did not see may be what they hold. Only for a tool some rule could hold
-  if (unread && covered) return ask('a request the brain rules could not read whole');
+  if (unread && covered) return slow ? { kind: 'ask', reason: 'a request the brain rules could not read in time', slow: true } : ask('a request the brain rules could not read whole');
   // looking never asks, whatever the role's limit (ADR 0278: the quick-answer role, limited to «Solo piano», asked the
   // user for Read, Glob and Grep)
   const reads = command ? readOnlyCommand(raw, ctx.readScripts, shellOfTool(req.tool)) : READ_TOOLS.has(req.tool);

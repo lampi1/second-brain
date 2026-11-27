@@ -17,7 +17,7 @@ import { allowsClass, COMMAND_TOOLS, commandsReadOnly, readOnlyCommand, toolClas
 import { readOnlyTools } from '../agents/read-tools';
 import { gateRequest, runtimePluginName } from '../agents/role-gate';
 import { autoPermit } from './auto-permit';
-import { loadPolicy, NIGHT_BUDGET_MS, policyCovers, policyRead, POLICY_FILE } from './permit-policy';
+import { loadPolicy, policyCovers, policyRead, policyReadOffThread, POLICY_FILE, type PolicyRead } from './permit-policy';
 import { AWAY_PARKED, AWAY_PLAN_NOTE, recommendedAnswers } from '../../shared/away';
 import { askingPlan, PLAN_APPROVED, type IntakeSource, type PlanIntake } from '../../shared/strategy';
 import type { SubmissionReceipt, Rec } from './manager-types';
@@ -53,7 +53,8 @@ const EXPLAIN_HERE = 'bloccato: il suo messaggio chiede una spiegazione, non dec
  *  included); allow and deny are answered by the app under their policy's name. A deny carries the line the chat
  *  shows and, when a brain rule refused it, that rule (action «esegui»: only the user runs it, from the Esegui button). */
 export type GateDecision =
-  | { kind: 'user' }
+  /** slow: only because the brain rules ran out of time on the main thread (answeredByGates may finish the read off it) */
+  | { kind: 'user'; slow?: true }
   | { kind: 'allow'; policy: 'role-gate' | 'auto-permit'; patch?: AnswerPatch }
   | { kind: 'deny'; policy: 'role-gate' | 'read-only-role' | 'auto-permit'; message: string; item: ChatItem; rule?: { id: string; action: string } };
 
@@ -530,9 +531,30 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
   }
 
   /** The native path: the gates' verdict answered here (true: allowed, or refused visibly with its reason) or the
-   *  request goes on to the user (false). */
-  protected answeredByGates(r: Rec, req: Omit<PendingRequest, 'chatId'>, whole = false): boolean {
+   *  request goes on to the user (false). toUser: how the caller shows it to the user; with it, at night, a request the
+   *  rules did not read in time is read off the main thread first (ADR 0371 point 9: it was parked, though his rules let
+   *  it through) and stays unanswered meanwhile: what they let through is allowed, the rest goes to toUser. */
+  protected answeredByGates(r: Rec, req: Omit<PendingRequest, 'chatId'>, whole = false, toUser?: () => void): boolean {
     const d = this.gateDecision(r, req, whole);
+    if (d.kind === 'user' && d.slow && toUser && this.opts.away?.()) { this.readOffThread(r, req, whole, toUser); return true; }
+    return this.applyDecision(r, req, d);
+  }
+
+  /** The night's read of the brain rules off the main thread, then the same gate with that read. */
+  private readOffThread(r: Rec, req: Omit<PendingRequest, 'chatId'>, whole: boolean, toUser: () => void): void {
+    const policy = loadPolicy(this.opts.brainRoot?.() ?? null);
+    log.info('chats', 'night: brain rules read off the main thread', { chat: r.s.id, data: { tool: req.tool } });
+    const read = this.opts.offThreadRead ?? policyReadOffThread;
+    const live = (): boolean => this.chats.get(r.s.id) === r && !!r.session?.alive;
+    void read(policy, req.tool, req.input, COMMAND_TOOLS, req.title).then(res => {
+      if (!live()) return;
+      const d = res.unread ? { kind: 'user' as const } : this.permitDecision(r, req, whole, res);
+      if (!this.applyDecision(r, req, d)) toUser();
+    }, () => { if (live()) toUser(); });
+  }
+
+  /** A gate verdict answered (true), or left to the user (false). */
+  private applyDecision(r: Rec, req: Omit<PendingRequest, 'chatId'>, d: GateDecision): boolean {
     if (d.kind === 'user') return false;
     if (d.kind === 'allow') { this.policyAnswer(r, req, { kind: 'permission', allow: true }, d.policy, d.patch); return true; }
     this.addItem(r, d.item, false);
@@ -597,7 +619,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
   /** ADR 0103, 0254: the app answers a permission request itself (chats/auto-permit.ts): everything passes by default
    *  except what the user's brain rules hold (permissions.json: refused visibly with the rule's reason, or sent to the
    *  user) and the user's own role limits. Each request left to the user logs why. */
-  private permitDecision(r: Rec, req: Omit<PendingRequest, 'chatId'>, whole = false): GateDecision {
+  private permitDecision(r: Rec, req: Omit<PendingRequest, 'chatId'>, whole = false, read?: PolicyRead): GateDecision {
     const policy = loadPolicy(this.opts.brainRoot?.() ?? null);
     if (policy.state === 'broken' && r.policyWarned !== policy.error) {
       r.policyWarned = policy.error;
@@ -606,10 +628,10 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     }
     // whatever reaches the user for a tool the rules could hold gets no «always»: a remembered grant would let a later
     // request they hold run without coming back here
-    const toUser = (reason: string): GateDecision => {
+    const toUser = (reason: string, slow = false): GateDecision => {
       log.info('chats', 'the gate leaves a request to the user', { chat: r.s.id, data: { tool: req.tool, reason } });
       if (req.type === 'permission' && policyCovers(policy, req.tool, COMMAND_TOOLS, req.title)) { req.noAlways = true; delete req.alwaysRules; }
-      return { kind: 'user' };
+      return slow ? { kind: 'user', slow: true } : { kind: 'user' };
     };
     // a class the role was not given, or a writing command of a role that may only read commands, stays the user's call
     // (Cursor and Codex do not enforce the role's tools themselves)
@@ -619,16 +641,14 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     const readScripts = this.permissionReadScripts(r, req);
     if (COMMAND_TOOLS.includes(req.tool) && commandsReadOnly(r.policy) && !readOnlyCommand(command, readScripts, shellOfTool(req.tool))) return toUser('the chat may only run commands that read');
     const brainRoot = this.opts.brainRoot?.() ?? null;
-    // at night a request the rules did not read in time would be parked, not asked: they get the night's longer budget
-    // (ADR 0371 point 9), so what his rules let through passes as by day
-    const night = !!this.opts.away?.();
+    // read: the rules' read done off the main thread at night (answeredByGates, ADR 0371 point 9)
     const v = autoPermit(whole ? { ...req, whole } : req, { cwd: r.s.cwd, ceiling: r.policy?.ceiling ?? null, readScripts, policy, ...(brainRoot ? { rulesFile: path.join(brainRoot, POLICY_FILE) } : {}),
-      ...(this.opts.permitClock ? { now: this.opts.permitClock } : {}), ...(night ? { budgetMs: NIGHT_BUDGET_MS } : {}) });
+      ...(this.opts.permitClock ? { now: this.opts.permitClock } : {}), ...(read ? { read } : {}) });
     if (v.kind === 'ask') {
       // held by the user's rule: no «always» (a saved rule would let the next ones through unasked); the phone may answer
       if (v.rule) { req.noAlways = true; delete req.alwaysRules; req.heldBy = { rule: v.rule.id, why: v.rule.why }; }
       if (v.rulesFile) { req.noAlways = true; delete req.alwaysRules; }
-      return toUser(v.reason);
+      return toUser(v.reason, v.slow === true);
     }
     if (v.kind === 'allow') {
       log.info('chats', 'auto-permit allowed', { chat: r.s.id, data: { tool: req.tool } });

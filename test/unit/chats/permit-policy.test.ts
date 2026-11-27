@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { autoPermit } from '../../../src/main/chats/auto-permit';
-import { loadPolicy, parsePolicy, policyRead, POLICY_FILE } from '../../../src/main/chats/permit-policy';
+import { loadPolicy, parsePolicy, policyRead, policyReadOffThread, POLICY_FILE } from '../../../src/main/chats/permit-policy';
 
 const FIXTURE = path.join(__dirname, '..', '..', 'fixtures', 'brain-policy');
 const tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-pp-')));
@@ -84,18 +84,18 @@ describe('the owner\'s policy', () => {
     expect(policyRead(one, 'Bash', { command: 'sqlcmd -Q "DROP TABLE t"' }, ['Bash'], undefined, step).rule?.id).toBe('one');
     // 96,000 characters: at 30 ms for every 20,000, the whole text would take too long, so it is not read
     const long = 'ls -la docs\n'.repeat(8000);
-    expect(policyRead(one, 'Bash', { command: long }, ['Bash'], undefined, step)).toEqual({ rule: null, unread: true });
+    expect(policyRead(one, 'Bash', { command: long }, ['Bash'], undefined, step)).toEqual({ rule: null, unread: true, slow: true });
     expect(autoPermit({ type: 'permission', tool: 'Bash', input: { command: long } }, { cwd: tmp, ceiling: null, policy: one, now: step }).kind).toBe('ask');
     // with a still clock the same text is read, and free
     expect(policyRead(one, 'Bash', { command: long }, ['Bash'], undefined, () => 0)).toEqual({ rule: null, unread: false });
     // the budget of one request: with 300 ms between two looks it is gone before the first pattern
     const jump = () => (t += 300);
-    expect(policyRead(owner, 'Bash', { command: 'ls' }, ['Bash'], undefined, jump)).toEqual({ rule: null, unread: true });
+    expect(policyRead(owner, 'Bash', { command: 'ls' }, ['Bash'], undefined, jump)).toEqual({ rule: null, unread: true, slow: true });
     // the budget ends after a pattern held and before its exception is read: not «held», not «free»
     const dry = parsePolicy(JSON.stringify({ version: 1, rules: [{ id: 'dry', action: 'esegui', why: 'w', tools: ['command'], match: ['DROP TABLE'], unless: ['dry run'] }] }));
     let looks = 0;
     const late = () => (++looks > 2 ? 1000 : 0);   // the start and the first pattern at 0, the exception at 1000 ms
-    expect(policyRead(dry, 'Bash', { command: 'sqlcmd -Q "DROP TABLE t"' }, ['Bash'], undefined, late)).toEqual({ rule: null, unread: true });
+    expect(policyRead(dry, 'Bash', { command: 'sqlcmd -Q "DROP TABLE t"' }, ['Bash'], undefined, late)).toEqual({ rule: null, unread: true, slow: true });
     // a tool no rule looks at is not timed at all
     expect(policyRead(one, 'Write', { file_path: 'a.md', content: 'x' }, ['Bash'], undefined, jump)).toEqual({ rule: null, unread: false });
   });
@@ -189,5 +189,20 @@ describe('the policy file', () => {
     fs.writeFileSync(file, JSON.stringify({ version: 1, rules: [{ id: 'r', action: 'ask-user', why: 'w', match: ['^npm publish'] }] }));
     fs.utimesSync(file, new Date(), new Date(Date.now() + 5000));
     expect(cmd('npm publish', loadPolicy(dir))).toMatchObject({ kind: 'ask', rule: { id: 'r' } });
+  });
+});
+
+describe('#492 point 9: the rules off the main thread (ADR 0371)', () => {
+  it('a read the main thread stops at its budget is slow; off the thread the same rules decide it', async () => {
+    const one = parsePolicy(JSON.stringify({ version: 1, rules: [{ id: 'db', action: 'ask-user', why: 'w', tools: ['command'], match: ['DROP TABLE', 'psql', 'sqlcmd', 'mongosh'] }] }));
+    let t = 0;
+    const step = () => (t += 100);
+    expect(policyRead(one, 'Bash', { command: 'npm test' }, ['Bash'], undefined, step)).toEqual({ rule: null, unread: true, slow: true });
+    // a worker thread, no budget of the main process's (its own limit is OFF_THREAD_MS)
+    expect(await policyReadOffThread(one, 'Bash', { command: 'npm test' }, ['Bash'])).toEqual({ rule: null, unread: false });
+    expect((await policyReadOffThread(one, 'Bash', { command: 'mongosh --eval "db.x.drop()"' }, ['Bash'])).rule?.id).toBe('db');
+    expect(await policyReadOffThread(one, 'Write', { file_path: 'a.md', content: 'psql' }, ['Bash'])).toEqual({ rule: null, unread: false });
+    expect((await policyReadOffThread(owner, 'Bash', { command: 'sqlcmd -S prod-sql -d app -Q "UPDATE users SET active = 0"' }, ['Bash'])).rule?.id)
+      .toBe(policyRead(owner, 'Bash', { command: 'sqlcmd -S prod-sql -d app -Q "UPDATE users SET active = 0"' }, ['Bash'], undefined, () => 0).rule?.id);
   });
 });
