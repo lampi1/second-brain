@@ -37,6 +37,7 @@ import { BrainScripts } from './brain/scripts';
 import { BrainQueries } from './brain/queries';
 import { writeDemoQueries } from './brain/queries-demo';
 import { BrainChangelog } from './brain/changelog';
+import { BrainQuickEdit } from './brain/quick-edit-service';
 import { gitBranches } from './chats/branch';
 import path from 'node:path';
 import { log, errText } from './log';
@@ -231,7 +232,9 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   let mapsClock: number | null = null;
   const plans = attachPlans(ctx, chats, brain, () => mapsClock ?? now());
   plans.tellTo(wake);
-  attachAppTools(mcp, { plans, recordings, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), resolveRole: req => agents.resolve(req), runFeedback, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd) }, source, true);
+  attachAppTools(mcp, { plans, recordings, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), resolveRole: req => agents.resolve(req), runFeedback, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd),
+    // brain_edit on the demo brain: no git, no hooks, no lint (ADR 0370)
+    brainEdit: new BrainQuickEdit({ root: () => brain.info().brainRoot, journalFile: path.join(ctx.userData, 'brain-quick-edits.json') }) }, source, true);
   try { recordMcpPort(mcpPortFromEnv(), await mcp.listen(mcpPortFromEnv())); } catch (e) {
     log.warn('demo', 'MCP port busy, using a random one', { data: { error: errText(e) } });
     recordMcpPort(mcpPortFromEnv(), await mcp.listen(0), errText(e)); // the banner shows in the demo too (e2e)

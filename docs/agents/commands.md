@@ -88,6 +88,7 @@ row and its line here in the same change.
 | `app_work_create` | Orchestrator only | Create one persistent thread for a feature, bugfix or investigation. |
 | `app_work_report` | Orchestrator only | Update a thread's stage with concrete evidence. |
 | `agent_lessons_waiting` | Orchestrator only | The lessons waiting for review and the ones the user rejected. |
+| `brain_edit` | Orchestrator only | A small brain edit applied at once (a rule, now.md, me.md, a skill's text; at most 3 files and 40 lines, never settings, hooks or permissions), committed in the brain repo, «Annulla» for 24 h. |
 | `brain_script_save` | Orchestrator only | Add, edit or fix a tested script in the brain's scripts/ folder. |
 | `brain_script_delete` | Orchestrator only | Move a brain script to scripts/.deleted/ (restorable). |
 | `brain_changelog_add` | Orchestrator only | Log a brain change made outside the script tools in the brain's changelog. |
