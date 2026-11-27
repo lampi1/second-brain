@@ -257,8 +257,10 @@ export type ChatItem =
    *  via phone = the user wrote it from the paired phone (voice = a voice note, transcribed on the PC): a 📱 badge;
    *  remote = typed in Remote Control (the same session on claude.ai), where he reads the replies whole, unlike
    *  Telegram, whose filter hides commands (#390) */
-  | { kind: 'user'; id: string; at: number; text: string; images?: number; thumbs?: string[]; from?: string; via?: 'phone'; remote?: true; voice?: boolean }
-  | { kind: 'assistant'; id: string; at: number; text: string; streaming?: boolean }
+  /** topic (the Orchestrator only, ADR 0369): the topic the app gave the message (topicBy: how), the user's own pick
+   *  when topicBy is 'user'; absent = none (another chat, or an Orchestrator item from before topics) */
+  | { kind: 'user'; id: string; at: number; text: string; images?: number; thumbs?: string[]; from?: string; via?: 'phone'; remote?: true; voice?: boolean; topic?: string; topicBy?: TopicSource }
+  | { kind: 'assistant'; id: string; at: number; text: string; streaming?: boolean; topic?: string }
   | { kind: 'thinking'; id: string; at: number; text: string }
   /** exitCode: a shell command's exit code, only when its engine said it (Claude's Bash result, Codex's exitCode, an ACP
    *  rawOutput that carries one); absent = unknown (the run's receipts, agents/receipts.ts, ADR 0130) */
@@ -267,7 +269,7 @@ export type ChatItem =
    *  (shown folded), its note is the hand-off it starts from */
   // text: the English rendering, for agents, logs and items saved before this field existed. When code is set, the
   // UI shows t('sys.' + code, params) instead (src/shared/sys.ts, src/renderer/i18n/index.ts's sysText()).
-  | { kind: 'system'; id: string; at: number; text: string; level: 'info' | 'warn' | 'error'; code?: SysCode; params?: SysParams; result?: CanonicalResult; continued?: { notePath: string; session?: string } }
+  | { kind: 'system'; id: string; at: number; text: string; level: 'info' | 'warn' | 'error'; code?: SysCode; params?: SysParams; result?: CanonicalResult; continued?: { notePath: string; session?: string }; topic?: string }
   /** interrupted = the user stopped the turn (Stop, "Invia subito"): isError stays false, the UI says "interrotto da te" */
   | { kind: 'result'; id: string; at: number; costUsd: number; durationMs: number; turns: number; isError: boolean; interrupted?: boolean }
   /** a visual a chat showed with show_ui (ADR 0033): a trusted catalog component, never HTML. id = `art-<key>`, key =
@@ -275,6 +277,18 @@ export type ChatItem =
    *  Orchestrator) and cwd = its folder (relative file paths open there); target next-ask: askId = the question it is attached
    *  to, waiting = no question yet (not in the list) */
   | { kind: 'artifact'; id: string; at: number; key: string; title: string; summary: string; ui: UiSpec; target: ArtifactTarget; from?: string; cwd?: string; askId?: string; waiting?: boolean };
+
+/** How the app chose the topic of a message in the Orchestrator (ADR 0369): tag = the user wrote [Topic] or #topic;
+ *  reply = the message he answered with «Rispondi»; named = it names a chat, plan, project or topic; question = it
+ *  answers the open question of a chat; follow = a short follow-up of his last message; model = the lightest model
+ *  chose among the open topics; new = nothing matched; user = he moved it himself; chat = a chat's news or result. */
+export type TopicSource = 'tag' | 'reply' | 'named' | 'question' | 'follow' | 'model' | 'new' | 'user' | 'chat';
+/** One topic of the Orchestrator's conversation (ADR 0369). label = its name (unique, case-insensitive; at most
+ *  TOPIC_MAX characters); chatIds = the chats and plans it holds; open = touched in the last days; gist = his last
+ *  message on it, one line. */
+export interface OrchestratorTopic { label: string; createdAt: number; lastAt: number; chatIds: string[]; open: boolean; gist?: string }
+/** The Orchestrator's topics, most recent first (`orchestrator:topics`, `orchestrator:topicsChanged`). */
+export interface OrchestratorTopics { chatId: string | null; topics: OrchestratorTopic[] }
 
 // ── Generative UI (ADR 0033): the catalog of trusted components a chat can show (show_ui on its MCP endpoint, or an
 // ```sb-ui fence inside an AskUserQuestion option's preview). Shapes only; validation and caps: shared/genui.ts ──
@@ -550,4 +564,9 @@ export interface ChatsInvokeMap {
   'orchestrator:held': [void, HeldNewsState];
   /** the user opened a held news item's chat from the list: that chat's items are read, never wake the Orchestrator (#123) */
   'orchestrator:heldSeen': [{ chatId: string }, HeldNewsState];
+  /** the Orchestrator's topics (ADR 0369); chatId = the Orchestrator */
+  'orchestrator:topics': [{ chatId: string }, OrchestratorTopics];
+  /** the user moves one message of the Orchestrator to another topic (a new label makes a new topic): its turn's
+   *  replies follow it; the result is the list after the move */
+  'orchestrator:setTopic': [{ chatId: string; itemId: string; topic: string }, OrchestratorTopics];
 }

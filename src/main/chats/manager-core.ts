@@ -231,7 +231,13 @@ export abstract class ManagerCore {
     return s ? (s.workMs ?? 0) + (s.workSince !== undefined ? Date.now() - s.workSince : 0) : 0;
   }
 
-  protected addItem(r: Rec, item: ChatItem, replace: boolean): void {
+  /** The Orchestrator's topic of an item (ADR 0369, manager-topics.ts); here: unchanged. */
+  protected tagItem(_r: Rec, item: ChatItem): ChatItem { return item; }
+  /** The topics of a transcript read back (ADR 0369, manager-topics.ts); here: nothing. */
+  protected tagHistory(_r: Rec): void { /* the topics layer tags them */ }
+
+  protected addItem(r: Rec, item0: ChatItem, replace: boolean): void {
+    const item = this.tagItem(r, item0);
     r.eventAt = Date.now();
     if (item.kind === 'user' && item.images && !r.continuityUnsafe) { r.continuityUnsafe = true; this.persist(); }
     let rep = false;

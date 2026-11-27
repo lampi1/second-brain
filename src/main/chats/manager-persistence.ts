@@ -400,6 +400,7 @@ export abstract class ManagerPersistence extends ManagerCore {
       // the CLI restores a session's spend on resume (2.1.277+): its total is the baseline for per-turn costs
       if (h.costTotalUsd !== null && !r.costTotalUsd) r.costTotalUsd = h.costTotalUsd;
       if (h.title && (r.s.title === 'Nuova chat' || r.s.title === 'Fork')) r.s.title = this.uniqueTitle(r.forkFrom ? `${h.title} (fork)` : h.title, r.s.id);
+      this.tagHistory(r);
       log.info('chats', 'history loaded', { chat: r.s.id, data: { items: h.items.length, file: path.basename(file) } });
     } catch (e) {
       r.continuityUnsafe = true;

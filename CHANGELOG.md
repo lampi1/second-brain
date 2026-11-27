@@ -6,6 +6,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- The app gives each message to the Orchestrator its topic (ADR 0369): rules first (his tag, «Rispondi», a named chat,
+  plan or folder, key words, the open question a short reply answers), the lightest model only when unsure and never
+  holding the turn; chats, results and replies carry their topic; the topic chip moves a message to another topic. On ACP
+  engines the Orchestrator starts a fresh session with a zero-token brief of the topic when its context grows past
+  60k (30k on a sure topic switch): about half the input tokens of an Antigravity day in the fixture.
 - `brain_edit` (ADR 0370): the Orchestrator makes a small edit to a `.md`/`.txt` file of the brain (at most 3 files, 40
   lines) in one step, with one compact line in the chat and «Annulla» for 24 h; settings, permissions, hooks and agent
   definitions stay out of it.

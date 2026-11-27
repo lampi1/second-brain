@@ -306,4 +306,5 @@ export const chatIt = {
   'chat.orch.searchClose': 'Chiudi ricerca',
   'chat.orch.topicsAria': 'Filtra per argomento',
   'chat.orch.topicsAll': 'Tutti',
+  'chat.orch.topicMove': 'Argomento del messaggio: scegline un altro per spostarlo',
 };

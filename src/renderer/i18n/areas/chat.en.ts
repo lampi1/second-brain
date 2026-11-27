@@ -308,4 +308,5 @@ export const chatEn: typeof chatIt = {
   'chat.orch.searchClose': 'Close search',
   'chat.orch.topicsAria': 'Filter by topic',
   'chat.orch.topicsAll': 'All',
+  'chat.orch.topicMove': 'Topic of this message: pick another to move it',
 };

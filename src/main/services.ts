@@ -2,7 +2,7 @@
 // Keeping them here lets the modules be built and tested apart (chats, browser + MCP, brain + feed).
 import type {
   Answer, AppInfo, ChatCommand, BrainApiResult, CredentialEntry, BrowserEnv, BrowserHandoff, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, ContextStats, LearnResult, Effort, FeedAction, FeedEvent, HandoffInfo, Harness, ImageAttachment, JobRecordInput, ModelRegistry, ModelsSeen, SeenModel,
-  NewChat, PendingRequest, PermissionMode, WorkRouting, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncChoice, SyncState, Usage, HarnessUsage, ViewLayout, TasksState, SkillCatalog, SkillDoc, SkillSave, SkillSaveResult,
+  NewChat, OrchestratorTopics, PendingRequest, PermissionMode, WorkRouting, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncChoice, SyncState, Usage, HarnessUsage, ViewLayout, TasksState, SkillCatalog, SkillDoc, SkillSave, SkillSaveResult,
 } from '../shared/contract';
 import type { AgentMetrics, AgentRunOutcome, UserTaskEvents } from '../shared/agents';
 import type { AgentPolicy } from './agents/tool-policy';
@@ -48,6 +48,9 @@ export interface ChatService {
   /** the question ladder (ADR 0344): the questions a chat holds, and its answer to one or askUser = one level up */
   ladderHeldBy?(holderId: string): { chatId: string; title: string; q: LadderQuestion }[];
   ladderReply?(callerId: string, a: { chatId: string; requestId?: string; answer?: string; why?: string; askUser?: boolean }): Promise<{ answered: string; askUser: boolean }>;
+  /** the Orchestrator's topics (ADR 0369) and the user's move of one of its messages to another topic */
+  topicsOf?(chatId: string): OrchestratorTopics;
+  setItemTopic?(chatId: string, itemId: string, topic: string): OrchestratorTopics;
   /** the user's last message typed to the Orchestrator on the PC (ADR 0274): app_resolve_question `words` come from it */
   userSaid?(): { text: string; at: number } | null;
   /** his own message passed to a work chat's question by the Orchestrator (ADR 0274); refused on what stays his click */

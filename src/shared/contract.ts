@@ -12,7 +12,7 @@ import type { AgentsInvokeMap } from './contract/agents';
 import type { AppSourceState, CliStatus, Usage, AppInvokeMap } from './contract/app';
 import type { BrainInvokeMap } from './contract/brain';
 import type { BrowserEnv, BrowserHandoff, BrowserTab, BrowserInvokeMap } from './contract/browser';
-import type { ChatItem, ChatSummary, PendingRequest, RunInfo, ChatsInvokeMap } from './contract/chats';
+import type { ChatItem, ChatSummary, OrchestratorTopics, PendingRequest, RunInfo, ChatsInvokeMap } from './contract/chats';
 import type { EngineInfo, Harness, EnginesInvokeMap } from './contract/engines';
 import type { FeedEvent, TasksState, FeedInvokeMap } from './contract/feed';
 import type { MediaInvokeMap } from './contract/media';
@@ -109,6 +109,8 @@ export interface EventMap {
   'sync:state': SyncState;
   /** what the app holds back for the Orchestrators changed (main/chats/held-news.ts, #88) */
   'orchestrator:heldChanged': HeldNewsState;
+  /** the Orchestrator's topics changed (ADR 0369): a message got one, the user moved one, a chat joined one */
+  'orchestrator:topicsChanged': OrchestratorTopics;
   /** the number of open proposals changed (Memoria's badge, ADR 0123) */
   'proposals:changed': { count: number };
   /** the maintenance started, moved (cost) or ended, or one of its cards changed (ADR 0132, 0153) */
@@ -171,7 +173,7 @@ export const INVOKE_CHANNELS = [
   'rec:state', 'rec:arm', 'rec:start', 'rec:chunk', 'rec:stop', 'rec:transcribe', 'rec:rename', 'rec:remove', 'rec:transcript', 'rec:find', 'rec:readFound', 'rec:open',
   'impara:state', 'impara:get', 'impara:start', 'impara:move', 'impara:ask', 'impara:answer', 'impara:explain', 'impara:retry', 'impara:clarify', 'impara:topics', 'impara:remove', 'impara:queue', 'impara:grade', 'impara:subject', 'impara:tutor', 'impara:tutorWarm', 'impara:studio',
   'news:state', 'news:refresh', 'news:edition', 'news:test', 'news:mark', 'news:sources', 'news:schedule',
-  'orchestrator:held', 'orchestrator:heldSeen',
+  'orchestrator:held', 'orchestrator:heldSeen', 'orchestrator:topics', 'orchestrator:setTopic',
   'log:renderer',
   'proposals:shown', 'proposals:undoAuto',
   'agents:quips',
@@ -189,7 +191,7 @@ export const EVENT_CHANNELS = [
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
   'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'tasks:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'source:state', 'later:changed', 'search:status', 'brainmodel:changed', 'queries:changed', 'sync:state',
   'mcpservers:changed',
-  'orchestrator:heldChanged',
+  'orchestrator:heldChanged', 'orchestrator:topicsChanged',
   'scripts:changed',
   'log:events',
   'voice:changed', 'voice:heard', 'voice:speech', 'voice:committed',

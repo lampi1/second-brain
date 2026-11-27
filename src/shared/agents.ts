@@ -11,8 +11,9 @@ import type { RoleJudges } from './ppi';
 
 /** One-shot purposes: the service and persisted run reader share this list so new jobs survive a restart. */
 /** 'pulse' and 'headline' were the Battito's jobs (removed, ADR 0201): kept so the runs it left still load; review = the
- *  nightly batch review (agents/judge-sample.ts, ADR 0203): a hidden run, never a chat */
-export const ONE_SHOT_PURPOSES = ['pulse', 'headline', 'upgrade', 'phrases', 'guide', 'review'] as const;
+ *  nightly batch review (agents/judge-sample.ts, ADR 0203): a hidden run, never a chat; topic = the Orchestrator's topic of
+ *  a message the rules were not sure of (ADR 0369), a light run that is no role's work */
+export const ONE_SHOT_PURPOSES = ['pulse', 'headline', 'upgrade', 'phrases', 'guide', 'review', 'topic'] as const;
 export type OneShotPurpose = (typeof ONE_SHOT_PURPOSES)[number];
 
 /** The cartoon character a role is drawn as (renderer/lib/character-art.ts): fixed per role, never user content. */
