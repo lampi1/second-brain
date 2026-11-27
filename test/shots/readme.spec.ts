@@ -280,13 +280,11 @@ test('README showcase: the Strategist\'s plan to approve on its map', async () =
     ],
     clarified: [{ q: 'Where', a: 'Cart, order and refund' }, { q: 'Offers', a: 'No, full price only' }] } as StrategyPlan;
   await demo('plan', 'tree-plan', plan);
-  await goPage(page, 'collegamenti');
-  await page.getByTestId('bm-map-page').getByRole('button', { name: 'Jobs', exact: true }).click();
+  // the plans' page (G B, ADR 0359): the plan waiting for the user, opened on its steps
+  await goPage(page, 'piani');
   await page.getByTestId('pl-group-wait').locator('.pl-row-main').first().click({ timeout: 15_000 });
-  const map = page.getByTestId('pl-map');
-  await expect(map.getByTestId('pl-do-approve')).toBeVisible({ timeout: 15_000 });
-  await map.getByTestId('pl-box-pick-2').click(); // a step told in the side panel
-  await save('plan', map);
+  await expect(page.getByTestId('pl-steps')).toBeVisible({ timeout: 15_000 });
+  await save('plan', await frameOf(page.getByTestId('plans-page')));
 });
 
 test('README showcase: voice, Log, recordings, quality, learn, news, costs, trends, the maintenance notice', async () => {
@@ -417,11 +415,11 @@ test('README screenshot: Artifacts', async () => {
 
 // Last: its jobs are chats of the demo, which no other picture should show.
 test('README screenshot: the plans', async () => {
-  // Map › Jobs (ADR 0343): one map per Strategist job or idea, by status, what waits for the user on top
+  // the plans' page (ADR 0359): one row per Strategist job or idea, by status, what waits for the user on top
   await keepQuestionsAside(page);
   await demo('plans');
-  await goPage(page, 'collegamenti');
-  await page.getByTestId('bm-map-page').getByRole('button', { name: 'Jobs', exact: true }).click();
-  await expect(page.getByTestId('pl-group-planned')).toBeVisible({ timeout: 30_000 });
-  await save('plans', await frameOf(page.getByTestId('bm-map-page')));
+  await goPage(page, 'piani');
+  if (await page.getByTestId('pl-back').count()) await page.getByTestId('pl-back').click(); // the list, not an open plan
+  await expect(page.getByTestId('pl-list')).toBeVisible({ timeout: 30_000 });
+  await save('plans', await frameOf(page.getByTestId('plans-page')));
 });
