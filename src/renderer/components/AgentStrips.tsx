@@ -131,7 +131,7 @@ export function AgentStrips() {
   </>;
   // the chats under a lead, each with the ones it delegated in turn; the thread lines are the list's (agent-strips.css)
   const kidList = (kids: readonly GrindKid[]) => kids.length > 0 && <div className="grind-kids" role="group" aria-label={tr('product.benchTeam')}>
-    {kids.map(k => <div key={k.id} className="grind-kid" data-testid={`grind-kid-${k.id}`}>{strip(k.id, 'kid')}{kidList(k.kids)}</div>)}
+    {kids.map(k => <div key={k.id} className="grind-kid" data-testid={`grind-kid-${k.id}`} data-status={shownStatus[k.id]}>{strip(k.id, 'kid')}{kidList(k.kids)}</div>)}
   </div>;
   const toggle = (lead: string) => setUnfolded(u => { const n = new Set(u); if (n.has(lead)) n.delete(lead); else n.add(lead); return n; });
   // one flat list of section heads and teams, each keyed by itself: a team that changes section moves, its strips stay

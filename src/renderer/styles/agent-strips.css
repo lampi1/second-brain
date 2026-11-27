@@ -290,8 +290,10 @@
 .gs-subs { flex:none; font:11.5px var(--mono); color:var(--text-3); white-space:nowrap; }
 .gs-perm { flex:none; }
 .gs-row > .chat-header-actions { position:absolute; right:34px; top:50%; transform:translateY(-50%); z-index:2; min-width:0; margin:0; padding:1px; gap:1px; flex-wrap:nowrap;
-  border:1px solid var(--border-3); border-radius:var(--r-m); background:var(--surface-3); opacity:0; pointer-events:none; transition:opacity var(--dur-fast) var(--ease); }
-.chat-tile.is-strip:hover > .gs-row > .chat-header-actions, .chat-tile.is-strip:focus-within > .gs-row > .chat-header-actions, .gs-row > .chat-header-actions:has([aria-expanded="true"]) { opacity:1; pointer-events:auto; }
+  border:1px solid var(--border-3); border-radius:var(--r-m); background:var(--surface-3); opacity:0; transition:opacity var(--dur-fast) var(--ease); }
+/* shown under the pointer or the focus; never pointer-events:none: a pointer on the strip already shows them, and a
+   control that refuses its click while hidden-by-opacity would swallow it into the row instead */
+.chat-tile.is-strip:hover > .gs-row > .chat-header-actions, .chat-tile.is-strip:focus-within > .gs-row > .chat-header-actions, .gs-row > .chat-header-actions:has([aria-expanded="true"]) { opacity:1; }
 .chat-tile.is-strip .gs-row > .chat-header-actions > .icon-btn { opacity:1; width:26px; height:26px; }
 @media (prefers-reduced-motion: reduce) { .gs-row > .chat-header-actions { transition:none; } }
 /* what needs words under a row: the machine's queue, an error and its one action, the auto close */
