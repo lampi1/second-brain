@@ -151,7 +151,7 @@ describe('old saved plans and the flow text', () => {
     const p = withDelegated(plan(), 0, ['c_1'], 5);
     expect(readPlan(JSON.parse(JSON.stringify(p)))).toEqual(p);
     expect(readPlan({ ...p, phase: 'other' })).toBeNull();
-    expect(readPlan({ ...p, steps: [{ id: 's1', title: 'x', state: 'now', role: 'judge' }] })).toBeNull();
+    expect(readPlan({ ...p, steps: [{ id: 's1', title: 'x', state: 'now', role: 'wizard' }] })).toBeNull();
     expect(readPlan({ ...p, steps: [{ id: 's1', title: 'x', state: 'now', chatIds: ['../x'] }] })).toBeNull();
     expect(readPlan(null)).toBeNull();
   });

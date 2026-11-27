@@ -1,7 +1,7 @@
 // The instant Stop and the queue behind it (ADR 0368, renderer/store/stopping.ts and store.ts): the chat shows stopped
 // the moment Stop is pressed, main's late «running» does not bring the working state back, what the user types waits
 // and goes once main ends the turn; a message to the Orchestrator busy on the app's own news interrupts that turn.
-// Fake bridge, no timers.
+// Fake bridge, fake timers.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatItem, ChatSummary } from '@shared/contract';
 import { lowPriorityTurn, Stops, STOP_SHOWN_MS } from '../../src/renderer/store/stopping';
@@ -16,7 +16,8 @@ const chat = (id: string, p: Partial<ChatSummary> = {}): ChatSummary => ({
   costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: 1, browserTabIds: [], ...p,
 });
 const user = (text: string, from?: string): ChatItem => ({ kind: 'user', id: `u-${text}`, at: 1, text, ...(from ? { from } : {}) });
-const flush = () => new Promise(r => setTimeout(r, 0));
+/** lets the store's awaited bridge calls run (microtasks only, no timer) */
+const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 
 describe('Stops', () => {
   it('shows a running chat stopped until main reports another state, and no longer than STOP_SHOWN_MS', () => {
@@ -57,6 +58,7 @@ describe('lowPriorityTurn', () => {
 
 describe('Stop in the store', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     invoke.mockReset(); invoke.mockResolvedValue(undefined);
     dispatch({ type: 'init', chats: [chat('a'), chat('o', { isOrchestrator: true, harness: 'claude' })], pending: [], tabs: [], feed: [], usage: null, info: null });
     for (const id of ['a', 'o']) for (const m of app.get().queued[id] ?? []) dispatch({ type: 'unqueue', chatId: id, id: m.id });
@@ -74,6 +76,26 @@ describe('Stop in the store', () => {
     dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle' }) });
     expect(invoke).toHaveBeenCalledWith('chat:send', { chatId: 'a', text: 'il prossimo' });
     await flush();
+  });
+
+  it('a stop that settles, or that main refuses, leaves no timer behind', async () => {
+    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'running' }) });
+    const before = vi.getTimerCount();
+    void stop('a');
+    expect(vi.getTimerCount()).toBe(before + 1); // the STOP_SHOWN_MS fallback
+    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle' }) });
+    expect(vi.getTimerCount()).toBe(before);
+    await flush();
+    // refused: its fallback timer is cancelled (the failure's toast may start timers of its own)
+    const set = vi.spyOn(globalThis, 'setTimeout'), cleared = vi.spyOn(globalThis, 'clearTimeout');
+    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'running' }) });
+    invoke.mockRejectedValueOnce(new Error('Stop non riuscito'));
+    const p = stop('a');
+    const fallback = set.mock.results[set.mock.calls.findIndex(c => c[1] === STOP_SHOWN_MS + 1)]?.value;
+    expect(fallback).toBeDefined();
+    await p;
+    expect(cleared).toHaveBeenCalledWith(fallback);
+    set.mockRestore(); cleared.mockRestore();
   });
 
   it('a stop main refuses gives the chat its state back', async () => {
@@ -111,7 +133,6 @@ describe('Stop in the store', () => {
   });
 
   it('no update from main within STOP_SHOWN_MS: its last state (running) shows again, and its later idle lets the queue go', () => {
-    vi.useFakeTimers();
     dispatch({ type: 'chat:updated', chat: chat('a', { state: 'running' }) });
     void stop('a');
     expect(send('a', 'in coda')).toBe('queued');

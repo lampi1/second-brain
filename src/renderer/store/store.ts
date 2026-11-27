@@ -39,6 +39,9 @@ const undoableCloses = new Set<string>();
 
 /** Chats whose Stop the user pressed: shown stopped at once, main's running ignored until it ends the turn (stopping.ts). */
 const stops = new Stops();
+/** per chat: the timer that ends a Stop main never settles; cancelled when it settles, so no stop leaves one behind */
+const stopTimers = new Map<string, ReturnType<typeof setTimeout>>();
+function endStopTimer(chatId: string): void { const h = stopTimers.get(chatId); if (h !== undefined) { clearTimeout(h); stopTimers.delete(chatId); } }
 
 /** stopSettled: a Stop shown as stopped is over (stopping.ts): the chat counts as coming from busy, so its queue goes
  *  even when the reducer finds nothing new (the shown idle equals main's idle). */
@@ -46,7 +49,12 @@ export function dispatch(a: Action, stopSettled = false): void {
   const prev = app.get();
   if (a.type === 'chat:updated' && undoableCloses.has(a.chat.id) && !a.keep) a = { ...a, keep: true };
   // a Stop shown: main's running is the turn still ending; once it settles the queue goes as after any turn's end
-  if (a.type === 'chat:updated') { const v = stops.view(a.chat, Date.now()); stopSettled ||= v.settled; if (v.chat !== a.chat) a = { ...a, chat: v.chat }; }
+  if (a.type === 'chat:updated' && stopTimers.has(a.chat.id)) {
+    const now = Date.now(), v = stops.view(a.chat, now);
+    stopSettled ||= v.settled;
+    if (v.chat !== a.chat) a = { ...a, chat: v.chat };
+    if (!stops.active(a.chat.id, now)) endStopTimer(a.chat.id);
+  }
   const next = reduce(prev, a);
   if (next === prev && !stopSettled) return;
   if (next !== prev) app.set(next);
@@ -494,10 +502,16 @@ export async function stop(chatId: string): Promise<void> {
     stops.mark(c, Date.now());
     app.set(reduce(app.get(), { type: 'chat:updated', chat: { ...c, state: 'idle' } }));
     // no update from main settled it in time: main's last state shows again, and an idle one lets the queue go
-    setTimeout(() => { const real = stops.expire(chatId, Date.now()); if (real) dispatch({ type: 'chat:updated', chat: real }, real.state === 'idle'); }, STOP_SHOWN_MS + 1);
+    endStopTimer(chatId);
+    stopTimers.set(chatId, setTimeout(() => {
+      stopTimers.delete(chatId);
+      const real = stops.expire(chatId, Date.now());
+      if (real) dispatch({ type: 'chat:updated', chat: real }, real.state === 'idle');
+    }, STOP_SHOWN_MS + 1));
   }
   try { await sb.invoke('chat:stop', { chatId }); } catch (e) {
     // main's own state again: the last update it sent (or the one before the stop) shows the chat as it is
+    endStopTimer(chatId);
     const real = stops.clear(chatId);
     if (real) app.set(reduce(app.get(), { type: 'chat:updated', chat: real }));
     fail(t('appText.store.stopFailed'))(e);

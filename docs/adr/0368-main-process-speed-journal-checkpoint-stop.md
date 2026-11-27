@@ -40,15 +40,20 @@ Measured on the owner's PC on 2026-11-27, after his latest updates:
    may be days old and would be deleted first).
 6. **A stop ends within a second**: an ACP engine's cancel grace is 1 s (`CANCEL_GRACE_MS`, was 5 s); a Claude turn
    whose result has not come 1 s after the interrupt (`STOP_GRACE_MS`, `claude.ts` `watchStop`) ends at once as the
-   user's stop and the engine is restarted on the same session through the same `SessionPatch.restart` as ACP, carrying
-   every message sent into the turn that no result answered (app news, mail, a «step» correction, what came after the
-   stop; one the model already read between two tool steps may reach it twice). The tile shows the stop at once
+   user's stop and the engine is restarted, idle, on the same session through the same `SessionPatch.restart` as ACP.
+   It carries only what the stop must not lose: the messages the CLI still held as turns of their own at its last
+   result (`queued_turn_count`) and those sent after the stop. One the model may already have read between two tool
+   steps of the stopped turn never starts a new turn. The tile shows the stop at once
    (`renderer/store/stopping.ts`): main's «running» while the turn ends is shown as stopped, and what the user types
    waits in the queue until main is free; the queue goes when the stop settles even if main's idle equals the shown one,
-   and after STOP_SHOWN_MS (15 s) with no word from main its last state shows again.
+   and after STOP_SHOWN_MS (15 s) with no word from main its last state shows again (that fallback timer is cancelled
+   when the stop settles or main refuses it).
 7. **The user's message goes before the app's news**: a message to the Orchestrator while it works on a turn only the
    app's own news started interrupts that turn and goes first («Invia subito»'s path). Main says whose turn it is
    (`ChatSummary.turnFromUser`, its `turnFromUser` of #123): a turn the user started stays his when news joins it.
+   A message the engine runs as the next turn with no idle in between makes that turn his or the app's as the message
+   was; Claude says before each result how many it still holds (`SessionPatch.queuedTurns`), so one read inside the
+   ending turn does not count, and an ACP engine runs each as a turn of its own.
 
 ## Measured
 

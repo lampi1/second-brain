@@ -24,7 +24,9 @@ async function orchestrator() {
   managers.push(m);
   const c = await m.create({ harness: 'claude', cwd: dir, orchestrator: true });
   const end = () => { busy = false; sink.item({ kind: 'result', id: `r${Date.now()}`, at: Date.now(), costUsd: 0, durationMs: 1, turns: 1, isError: false }, false); sink.changed({ state: 'idle' }); };
-  return { m, id: c.id, end, summary: () => m.list().find(x => x.id === c.id)! };
+  // the turn ends and the engine goes on with a queued one (no idle in between); queued: what the engine reports
+  const next = (queued?: number) => { if (queued !== undefined) sink.changed({ queuedTurns: queued }); sink.item({ kind: 'result', id: `r${Date.now()}`, at: Date.now(), costUsd: 0, durationMs: 1, turns: 1, isError: false }, false); };
+  return { m, id: c.id, end, next, summary: () => m.list().find(x => x.id === c.id)! };
 }
 
 describe('the Orchestrator\'s turnFromUser on its summary', () => {
@@ -38,6 +40,44 @@ describe('the Orchestrator\'s turnFromUser on its summary', () => {
     expect(o.summary().turnFromUser).toBeUndefined();
     await o.m.send(o.id, '[evento app] altre novità', undefined, false, 'App', false, { kind: 'app' });
     expect(o.summary().state).toBe('running');
+    expect(o.summary().turnFromUser).toBeUndefined();
+  });
+
+  it('the app\'s news queued behind his turn runs as a turn that is not his', async () => {
+    const o = await orchestrator();
+    await o.m.send(o.id, 'fai il punto');
+    await o.m.send(o.id, '[evento app] novità dalle chat', undefined, false, 'App', false, { kind: 'app' });
+    o.next(1);
+    expect(o.summary().state).toBe('running');
+    expect(o.summary().turnFromUser).toBeUndefined();
+  });
+
+  it('his message queued behind the app\'s news runs as his turn', async () => {
+    const o = await orchestrator();
+    await o.m.send(o.id, '[evento app] novità dalle chat', undefined, false, 'App', false, { kind: 'app' });
+    await o.m.send(o.id, 'fai il punto');
+    o.next(1);
+    expect(o.summary().turnFromUser).toBe(true);
+    await o.m.send(o.id, '[evento app] altre novità', undefined, false, 'App', false, { kind: 'app' });
+    o.next(1);
+    expect(o.summary().turnFromUser).toBeUndefined();
+  });
+
+  it('only the messages the engine still holds count: his message it read inside the news turn is no turn of its own', async () => {
+    const o = await orchestrator();
+    await o.m.send(o.id, '[evento app] novità dalle chat', undefined, false, 'App', false, { kind: 'app' });
+    await o.m.send(o.id, 'fai il punto');
+    expect(o.summary().turnFromUser).toBe(true);
+    await o.m.send(o.id, '[evento app] altre novità', undefined, false, 'App', false, { kind: 'app' });
+    o.next(1); // his message went into the running turn, the second news runs next
+    expect(o.summary().turnFromUser).toBeUndefined();
+  });
+
+  it('an engine that reports no queue runs each message as its own turn (ACP)', async () => {
+    const o = await orchestrator();
+    await o.m.send(o.id, 'fai il punto');
+    await o.m.send(o.id, '[evento app] novità dalle chat', undefined, false, 'App', false, { kind: 'app' });
+    o.next();
     expect(o.summary().turnFromUser).toBeUndefined();
   });
 });

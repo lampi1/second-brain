@@ -45,16 +45,42 @@ describe('Stop on a Claude engine', () => {
     await expect(stopping).resolves.toBeUndefined();
   });
 
-  it('the restart carries what was sent into the turn and no result answered, never the message that started it', () => {
+  it('the restart is idle: a message the CLI may have read mid-turn never starts new work after the stop', () => {
     const { s, sink, out } = live();
     s.send('primo turno');
     s.send('notizia nel turno'); // queued in the CLI behind the first
     out({ type: 'result', subtype: 'success', is_error: false, total_cost_usd: 0, usage: {}, queued_turn_count: 1 });
-    // the queued one now runs as its own turn; a «step» correction goes into it
+    // the queued one now runs as its own turn; a «step» correction goes into it (the CLI may read it between steps)
     s.send('correzione al passo');
     void s.interrupt({ byUser: true });
     vi.advanceTimersByTime(STOP_GRACE_MS);
-    expect(sink.patches.find(p => p.restart)?.restart).toEqual([{ text: 'correzione al passo', images: [] }]);
+    expect(sink.patches.find(p => p.restart)?.restart).toEqual([]);
+  });
+
+  it('the restart carries what the last result said was still queued, and what came after the stop', () => {
+    const { s, sink, out } = live();
+    s.send('primo');
+    s.send('secondo'); s.send('terzo');
+    out({ type: 'result', subtype: 'success', is_error: false, total_cost_usd: 0, usage: {}, queued_turn_count: 2 });
+    // «secondo» runs now, «terzo» waits behind it
+    void s.interrupt({ byUser: true });
+    s.send('dopo lo stop');
+    vi.advanceTimersByTime(STOP_GRACE_MS);
+    expect(sink.patches.find(p => p.restart)?.restart?.map(m => m.text)).toEqual(['terzo', 'dopo lo stop']);
+  });
+
+  it('an idle without a result, or a turn the CLI starts itself, leaves nothing to carry', () => {
+    const { s, sink, out } = live();
+    s.send('primo');
+    s.send('secondo');
+    out({ type: 'result', subtype: 'success', is_error: false, total_cost_usd: 0, usage: {}, queued_turn_count: 3 }); // more than it holds
+    out({ type: 'system', subtype: 'session_state_changed', state: 'idle' });
+    expect(sink.patch.state).toBe('idle');
+    out({ type: 'system', subtype: 'session_state_changed', state: 'running' }); // a turn of its own
+    expect(sink.patch.state).toBe('running');
+    void s.interrupt({ byUser: true });
+    vi.advanceTimersByTime(STOP_GRACE_MS);
+    expect(sink.patches.find(p => p.restart)?.restart).toEqual([]);
   });
 
   it('a result in time: no restart, the stop is the usual interrupted turn', async () => {
