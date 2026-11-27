@@ -132,12 +132,13 @@ export class OrchestratorTopicStore {
 
   /** A message's topic, by its item's id when marked with it, else by its text and time (the nearest mark of the same
    *  text), null = never marked. */
-  recall(text: string, at: number, id?: string): { topic: string; by: TopicSource } | null {
+  /** `near` = only a mark within RECALL_MS of `at` (a chat's mail or result: the same words may come again another day). */
+  recall(text: string, at: number, id?: string, near = false): { topic: string; by: TopicSource } | null {
     const byId = id ? this.data.marks.find(m => m.id === id) : undefined;
     if (byId) return { topic: byId.topic, by: byId.by };
     const key = textKey(text);
     let best: Mark | null = null;
-    for (const m of this.data.marks) if (m.key === key && (!best || Math.abs(m.at - at) < Math.abs(best.at - at))) best = m;
+    for (const m of this.data.marks) if (m.key === key && (!near || Math.abs(m.at - at) <= RECALL_MS) && (!best || Math.abs(m.at - at) < Math.abs(best.at - at))) best = m;
     return best ? { topic: best.topic, by: best.by } : null;
   }
 

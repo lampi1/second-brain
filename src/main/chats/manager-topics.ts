@@ -102,14 +102,15 @@ export abstract class ManagerTopics extends ManagerContinuity {
   }
 
   /** A transcript read back (ManagerPersistence.ensureHistory): each message of the user finds its topic again by its
-   *  mark, each reply takes the one of the message before it. */
+   *  mark, a chat's mail or result its chat's (or the user's move of it), each reply the one of the message before it
+   *  (his, or the mail it answers: as moveTurn moves them). */
   protected override tagHistory(r: Rec): void {
     const topics = this.opts.topics;
     if (!topics || !r.s.isOrchestrator) return;
     let turn: string | undefined;
     r.items = r.items.map(it => {
       const tagged = this.tagWith(it, turn);
-      if (tagged.kind === 'user' && !tagged.from && tagged.topic) turn = tagged.topic;
+      if (tagged.kind === 'user' && tagged.topic) turn = tagged.topic;
       return tagged;
     });
     if (turn) r.turnTopic = turn;

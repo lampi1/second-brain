@@ -299,6 +299,25 @@ describe('the Orchestrator\'s topics in the chat manager', () => {
     expect([at(u1.id).topic, at(a1.id).topic, at(mail.id).topic, at(a2.id).topic]).toEqual(['Restyle UI', 'Restyle UI', 'Fatture', 'Fatture']);
   });
 
+  it('his moves of his own turn and of a mail-led one come back when the transcript is read again', async () => {
+    const f = fixture();
+    const o = await f.m.create({ harness: 'opencode', cwd: f.cwd, orchestrator: true, prompt: 'controlla perché air-mcp-test risponde 401' });
+    const work = await f.m.create({ harness: 'opencode', cwd: f.cwd, title: 'Fix air-mcp-test', prompt: 'indaga' }, 'agent');
+    await f.m.send(o.id, 'Token scaduto, rinnovato.', undefined, false, 'Fix air-mcp-test', false, { kind: 'chat', chatId: work.id });
+    const replies = f.m.items(o.id).filter(i => i.kind === 'assistant');
+    f.m.setItemTopic(o.id, replies[0]!.id, 'Restyle UI');
+    f.m.setItemTopic(o.id, replies.at(-1)!.id, 'Fatture');
+    // the transcript read back after a restart: the same messages, other ids, no topics (ManagerPersistence.ensureHistory)
+    const r = (f.m as unknown as { chats: Map<string, { items: ChatItem[]; turnTopic?: string }> }).chats.get(o.id)!;
+    const live = r.items.filter(i => i.kind === 'user' || i.kind === 'assistant');
+    r.items = live.map((i, n) => { const { topic: _t, ...rest } = i as ChatItem & { topic?: string; topicBy?: string }; delete (rest as { topicBy?: string }).topicBy; return { ...rest, id: `h-${n}`, at: i.at + 700 } as ChatItem; });
+    (f.m as unknown as { tagHistory(r: unknown): void }).tagHistory(r);
+    const mailAt = r.items.findIndex(i => i.kind === 'user' && !!i.from);
+    expect(mailAt).toBeGreaterThan(0);
+    expect(r.items.map(i => (i as { topic?: string }).topic)).toEqual(r.items.map((_, n) => (n < mailAt ? 'Restyle UI' : 'Fatture')));
+    expect(r.items[mailAt]).toMatchObject({ topicBy: 'user' });
+  });
+
   it('a question that comes while the old session closes keeps it, and its hand-off note as it was', async () => {
     let ask = false, oid = '';
     // the chat's own record, as the manager holds it: a question lands on it while the old session closes

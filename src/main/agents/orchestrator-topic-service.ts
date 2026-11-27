@@ -112,6 +112,11 @@ export class OrchestratorTopicService {
       const r = this.d.store.recall(item.text, item.at, item.id);
       return r ? { topic: r.topic, by: r.by } : null;
     }
+    // a chat's mail or result the user moved himself (setItemTopic marks it): his choice over the chat's topic
+    if (item.kind === 'user' || item.kind === 'system') {
+      const moved = this.d.store.recall(item.text, item.at, item.id, true);
+      if (moved?.by === 'user') return { topic: moved.topic, by: 'user' };
+    }
     const fromChat = chatTopicOf(item);
     if (fromChat) return { topic: fromChat, by: 'chat' };
     if (item.kind === 'assistant' && turnTopic) return { topic: turnTopic };

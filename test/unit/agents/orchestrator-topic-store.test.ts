@@ -167,6 +167,13 @@ describe('the topic service', () => {
     expect(svc.itemTopic({ kind: 'assistant', id: 'a', at: NOW, text: 'ok' }, 'Turno', () => undefined)).toEqual({ topic: 'Turno' });
     expect(svc.itemTopic({ kind: 'user', id: 'h-1', at: NOW + 500, text: 'organizza la settimana' }, undefined, () => undefined)).toMatchObject({ topic: 'Organizza settimana' });
     expect(svc.itemTopic({ kind: 'user', id: 'h-2', at: NOW, text: 'ciao', topic: 'Già' }, undefined, chat)).toBeNull();
+    // his own move of a chat's mail or of a result comes back after a restart (other ids, about the same time)
+    svc.move('o', 'fatto', NOW, 'Fatture', 'm-live');
+    svc.move('o', 'Result ready: radii 3/4/6px', NOW, 'Restyle UI', 's-live');
+    expect(svc.itemTopic({ kind: 'user', id: 'm-back', at: NOW + 900, text: 'fatto', from: 'Fix air-mcp-test' }, 'X', chat)).toEqual({ topic: 'Fatture', by: 'user' });
+    expect(svc.itemTopic({ kind: 'system', id: 's-back', at: NOW + 900, level: 'info', text: 'Result ready: radii 3/4/6px', code: 'resultReady' }, 'X', chat)).toEqual({ topic: 'Restyle UI', by: 'user' });
+    // the same words from the chat another day: the chat's topic, not his old move
+    expect(svc.itemTopic({ kind: 'user', id: 'm-2', at: NOW + 86_400_000, text: 'fatto', from: 'Fix air-mcp-test' }, 'X', chat)).toEqual({ topic: 'Air 401', by: 'chat' });
     expect(svc.itemTopic({ kind: 'tool', id: 't', at: NOW, name: 'Bash', summary: '', input: {}, status: 'ok' }, 'Turno', chat)).toBeNull();
   });
 });
