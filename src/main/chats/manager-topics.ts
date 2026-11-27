@@ -182,15 +182,22 @@ export abstract class ManagerTopics extends ManagerContinuity {
     const run = (async (): Promise<RolloverStep | null> => {
       const old = r.s.sessionId, at = Date.now(), contextTokens = r.s.contextTokens ?? 0;
       const prev = { sessionId: old, contextTokens: r.s.contextTokens, contextMaxTokens: r.s.contextMaxTokens, costTotalUsd: r.costTotalUsd, ctxSince: r.ctxSince, after: r.after, rolePrimed: r.rolePrimed };
+      // the brief is kept as the divider's note, like a cold continuation's hand-off: written first, so a disk that
+      // refuses it leaves the session as it is
+      let notePath: string;
+      try {
+        const note = this.handoffs.write(r.s.id, { title: r.s.title, text: this.topicBriefFor(r, topic), at, source: 'auto', ...(contextTokens ? { contextTokens } : {}) });
+        notePath = old && /^[\w-]{1,64}$/.test(old) ? this.handoffs.archive(r.s.id, old) : note.path;
+      } catch (e) {
+        log.warn('chats', 'Orchestrator rollover note not written', { chat: r.s.id, cause: errText(e), hint: 'it goes on in the same session; the next message tries again' });
+        return null;
+      }
       const sess = r.session;
       if (sess) {
         r.autoEnding = true;
         try { await this.closeKeeping(r, sess); } finally { r.autoEnding = false; }
       }
       if (r.pending.size || this.midTurn(r)) return null;
-      // the brief is kept as the divider's note, like a cold continuation's hand-off
-      const note = this.handoffs.write(r.s.id, { title: r.s.title, text: this.topicBriefFor(r, topic), at, source: 'auto', ...(contextTokens ? { contextTokens } : {}) });
-      const notePath = old && /^[\w-]{1,64}$/.test(old) ? this.handoffs.archive(r.s.id, old) : note.path;
       r.s.sessionId = engine.caps.transcript ? crypto.randomUUID() : null;
       delete r.s.contextTokens; delete r.s.contextMaxTokens;
       r.costTotalUsd = 0; r.ctxSince = undefined; r.rolePrimed = undefined;
