@@ -271,8 +271,9 @@ export class ClaudeSession implements HarnessSession {
   /** the stopped turn's grace (watchStop); wedged: it ran out, this engine only waits for its kill now */
   private stopWatch: NodeJS.Timeout | null = null;
   private wedged = false;
-  /** messages sent while a stop waits: the new engine gets them when this one is restarted (SessionPatch.restart) */
-  private sentSinceStop: { text: string; images: readonly ImageAttachment[] }[] = [];
+  /** messages sent into the running turn (app news, mail, a «step» correction, what came after a stop) that no result
+   *  answered yet: a restart after an unanswered stop gives them to the new engine (SessionPatch.restart) */
+  private intoTurn: { text: string; images: readonly ImageAttachment[] }[] = [];
   private stateEvents = false;       // the CLI sends session_state_changed (authoritative running/idle)
   /** the reply is complete and the CLI only closes the turn (Stop hooks, its own bookkeeping, a late idle): told as
    *  SessionPatch.closing, so what shows the chat as working stops with the last text, not with the result (ADR 0318) */
@@ -497,7 +498,7 @@ export class ClaudeSession implements HarnessSession {
       for (const old of this.sentUuids) { if (this.sentUuids.size <= SENT_UUIDS_MAX) break; this.sentUuids.delete(old); }
     }
     this.write({ type: 'user', message: { role: 'user', content }, parent_tool_use_id: null, session_id: this.sessionId ?? '', uuid });
-    if (this.stopWatch) this.sentSinceStop.push({ text, images });
+    if (this.turnOpen) this.intoTurn.push({ text, images }); else this.intoTurn = [];
     // a message queued behind a running turn is not timed (its wait is the other turn's)
     if (!this.turnOpen) this.turnT = { sent: Date.now(), warm: !!this.readyAt, n: ++this.turnsSent };
     if (!this.turnOpen) this.sink.changed({ effortSubmitted: this.selectedEffort });
@@ -559,11 +560,11 @@ export class ClaudeSession implements HarnessSession {
 
   /** A stopped turn whose result has not come STOP_GRACE_MS after the interrupt (ADR 0368): it ends here as the user's
    *  stop, this engine is left behind (killed at once: close() gives a wedged engine no grace) and the manager resumes
-   *  the same session on a new one, where the messages sent since the stop go (SessionPatch.restart, as acp.ts). */
+   *  the same session on a new one, where the messages sent into the turn and not answered by a result go
+   *  (SessionPatch.restart, as acp.ts; one the model already read between two tool steps may reach it twice). */
   private watchStop(): void {
     if (this.stopWatch) return;
     const ms = this.opts.stopGraceMs ?? STOP_GRACE_MS, at = Date.now();
-    this.sentSinceStop = [];
     this.stopWatch = setTimeout(() => {
       this.stopWatch = null;
       const stopped = this.stopping;
@@ -580,13 +581,12 @@ export class ClaudeSession implements HarnessSession {
       this.turnOpen = false;
       this.setClosing(false);
       this.setState('idle');
-      this.sink.changed({ liveCostUsd: 0, restart: this.sentSinceStop.splice(0) });
+      this.sink.changed({ liveCostUsd: 0, restart: this.intoTurn.splice(0) });
     }, ms);
     this.stopWatch.unref();
   }
   private endStopWatch(): void {
     if (this.stopWatch) { clearTimeout(this.stopWatch); this.stopWatch = null; }
-    this.sentSinceStop = [];
   }
 
   async setModel(model: string | null): Promise<void> {
@@ -1308,7 +1308,7 @@ export class ClaudeSession implements HarnessSession {
   }
 
   private onResult(m: Obj): void {
-    this.endStopWatch(); // the stopped turn ended in time: no restart, what was sent since stays queued in the CLI
+    this.endStopWatch(); // the stopped turn ended in time: no restart, what is queued stays in the CLI
     this.flushStreams(true);
     this.opts.preToolUse?.turnEnded();
     const failed = m.is_error === true || (s(m.subtype) !== '' && s(m.subtype) !== 'success');
@@ -1350,6 +1350,8 @@ export class ClaudeSession implements HarnessSession {
     this.sink.changed({ turnCostUsd: turn, totalCostUsd: total, liveCostUsd: 0, ...(turnTokens ? { turnTokens } : {}) });
     // more sends wait in the CLI's queue: another turn follows on its own, the chat stays running
     const queued = num(m.queued_turn_count) ?? 0;
+    // what is still in the CLI's queue: the last `queued` sent; the first of them starts the next turn
+    this.intoTurn = queued > 1 ? this.intoTurn.slice(-(queued - 1)) : [];
     if (queued > 0) { this.sink.changed({ effortSubmitted: null }); this.turnOpen = true; this.setClosing(false); }
     else {
       this.turnOpen = false;

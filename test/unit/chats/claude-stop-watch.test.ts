@@ -45,6 +45,18 @@ describe('Stop on a Claude engine', () => {
     await expect(stopping).resolves.toBeUndefined();
   });
 
+  it('the restart carries what was sent into the turn and no result answered, never the message that started it', () => {
+    const { s, sink, out } = live();
+    s.send('primo turno');
+    s.send('notizia nel turno'); // queued in the CLI behind the first
+    out({ type: 'result', subtype: 'success', is_error: false, total_cost_usd: 0, usage: {}, queued_turn_count: 1 });
+    // the queued one now runs as its own turn; a «step» correction goes into it
+    s.send('correzione al passo');
+    void s.interrupt({ byUser: true });
+    vi.advanceTimersByTime(STOP_GRACE_MS);
+    expect(sink.patches.find(p => p.restart)?.restart).toEqual([{ text: 'correzione al passo', images: [] }]);
+  });
+
   it('a result in time: no restart, the stop is the usual interrupted turn', async () => {
     const { s, sink, written, out } = live();
     s.send('lavora');

@@ -30,18 +30,25 @@ Measured on the owner's PC on 2026-11-27, after his latest updates:
    history is no longer part of a job's `coordination.requests`; `requests()` still reads it.
 4. **The old auto-permitted rows are removed once** (`coordination/prune.ts`): three minutes after the start, 50 requests
    per transaction (with their decision, delivery and execution rows), one batch a second, only permissions allowed by
-   auto-permit or the role gate, delivered and older than a day; done is marked in `coordination_meta` and it never runs
-   again. A failing batch pauses it until the next start.
+   auto-permit or the role gate, delivered and older than a day. When a pass leaves rows younger than a day (the day
+   before the upgrade) it runs again a day later (or at the next start); only when no such row is left at all is it
+   marked done in `coordination_meta`, and it never runs again. A failing batch pauses it until the next start.
 5. **The checkpoint checks first** (`checkpoints.ts` `turnCheckpoint`): one `git status --porcelain=v2 --branch`; a tree
    that matches HEAD has HEAD itself as its checkpoint (its ref written in the background), so the turn starts after one
    git process; a changed tree (or no commit yet) takes the full snapshot as before, with the root already known.
+   `prune` keeps the newest checkpoints by the time in their ref name, not git's creatordate (a HEAD checkpoint's commit
+   may be days old and would be deleted first).
 6. **A stop ends within a second**: an ACP engine's cancel grace is 1 s (`CANCEL_GRACE_MS`, was 5 s); a Claude turn
    whose result has not come 1 s after the interrupt (`STOP_GRACE_MS`, `claude.ts` `watchStop`) ends at once as the
    user's stop and the engine is restarted on the same session through the same `SessionPatch.restart` as ACP, carrying
-   the messages sent since the stop. The tile shows the stop at once (`renderer/store/stopping.ts`): main's «running»
-   while the turn ends is shown as stopped, and what the user types waits in the queue until main is free.
-7. **The user's message goes before the app's news**: a message to the Orchestrator while it works on a turn the app's
-   own news started (its last message is from «App») interrupts that turn and goes first («Invia subito»'s path).
+   every message sent into the turn that no result answered (app news, mail, a «step» correction, what came after the
+   stop; one the model already read between two tool steps may reach it twice). The tile shows the stop at once
+   (`renderer/store/stopping.ts`): main's «running» while the turn ends is shown as stopped, and what the user types
+   waits in the queue until main is free; the queue goes when the stop settles even if main's idle equals the shown one,
+   and after STOP_SHOWN_MS (15 s) with no word from main its last state shows again.
+7. **The user's message goes before the app's news**: a message to the Orchestrator while it works on a turn only the
+   app's own news started interrupts that turn and goes first («Invia subito»'s path). Main says whose turn it is
+   (`ChatSummary.turnFromUser`, its `turnFromUser` of #123): a turn the user started stays his when news joins it.
 
 ## Measured
 
@@ -63,11 +70,12 @@ several times slower, so the ratios matter, not the milliseconds):
 - The minute tick no longer decodes the journal; the ~470 rows an hour stop; the old rows go within ~25 minutes of the
   first start.
 - A Claude engine that does not end a stopped turn in 1 s is killed and resumed: its next turn pays a cold start
-  (~3 s) instead of waiting for the old one. A message it held in its own queue before the stop is lost with it (messages
-  sent after the stop are carried).
+  (~3 s) instead of waiting for the old one. Messages sent into the turn and not answered by a result go to the new
+  engine; one already read mid-turn may be read twice.
 - A job's `coordination.requests` lists its open requests only.
 - Not proven on the owner's PC yet: the stall rate and the stop-to-next-turn time need his next day of logs
   (`npm run logs -- --scope perf`, «timer wiring/…»). Every git spawn of the worktree hold (#357) still runs on the main
   thread's CreateProcess; it is async JS and was left as is.
 - Pinned by `test/unit/coordination-prune.test.ts`, `test/unit/chats/gate-allowed-journal.test.ts`,
-  `test/unit/chats/turn-checkpoint.test.ts`, `test/unit/chats/claude-stop-watch.test.ts`, `test/unit/store-stopping.test.ts`.
+  `test/unit/chats/turn-checkpoint.test.ts`, `test/unit/chats/claude-stop-watch.test.ts`, `test/unit/store-stopping.test.ts`,
+  `test/unit/chats/turn-from-user.test.ts`.
