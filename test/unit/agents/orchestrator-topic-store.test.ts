@@ -62,16 +62,41 @@ describe('the topic store', () => {
     expect(b.recall('sì', NOW + 60_700, 'h-2')).toEqual({ topic: 'Air 401', by: 'question' });
   });
 
-  it('drops a topic only when no message and no chat is filed under it', () => {
+  it('drops a topic only when it is the app\'s guess and no message and no chat is filed under it', () => {
     const s = new OrchestratorTopicStore(null, () => NOW);
-    s.touch('Vuoto', NOW);
+    s.touch('Vuoto', NOW, undefined, 'provisional');
+    s.touch('Pieno', NOW, undefined, 'provisional');
     s.mark('ciao', NOW, 'Pieno', 'new');
+    s.touch('Con chat', NOW, undefined, 'provisional');
     s.linkChat('c-1', 'Con chat');
+    // the user's own topics are never dropped: one he named, one he moved a message to
+    s.touch('Suo', NOW, undefined, 'user');
+    s.touch('Spostato', NOW, undefined, 'provisional');
+    s.touch('Spostato', NOW + 1, undefined, 'user');
+    s.touch('Senza origine', NOW);
+    expect(s.dropIfEmpty('Suo')).toBe(false);
+    expect(s.dropIfEmpty('Spostato')).toBe(false);
+    expect(s.dropIfEmpty('Senza origine')).toBe(false);
     expect(s.dropIfEmpty('vuoto')).toBe(true);
     expect(s.dropIfEmpty('Pieno')).toBe(false);
     expect(s.dropIfEmpty('Con chat')).toBe(false);
     expect(s.dropIfEmpty('Mai visto')).toBe(false);
-    expect(s.list().map(t => t.label).sort()).toEqual(['Con chat', 'Pieno']);
+    expect(s.list().map(t => t.label).sort()).toEqual(['Con chat', 'Pieno', 'Senza origine', 'Spostato', 'Suo']);
+  });
+
+  it('never drops a topic whose marks the cap may have trimmed, and keeps that across a restart', () => {
+    const file = path.join(tmp('topics-cap'), 'orchestrator-topics.json');
+    const s = new OrchestratorTopicStore(file, () => NOW);
+    s.touch('Vecchio', NOW, undefined, 'provisional');
+    s.mark('il primo', NOW, 'Vecchio', 'new', 'u-0', true);
+    for (let i = 1; i <= 4000; i++) s.mark(`messaggio ${i}`, NOW + i, 'Altro', 'follow', `u-${i}`, true);
+    expect(s.recall('il primo', NOW, 'u-0')).toBeNull(); // trimmed
+    expect(s.dropIfEmpty('Vecchio')).toBe(false);
+    s.touch('Nuovo', NOW + 5000, undefined, 'provisional'); // made after the trim: its marks are all here
+    s.flush();
+    const b = new OrchestratorTopicStore(file, () => NOW);
+    expect(b.dropIfEmpty('Vecchio')).toBe(false);
+    expect(b.dropIfEmpty('Nuovo')).toBe(true);
   });
 
   it('never overwrites a file it could not read', () => {

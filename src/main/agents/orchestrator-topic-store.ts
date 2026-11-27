@@ -17,11 +17,16 @@ const MAX_TOPICS = 200, MAX_MARKS = 4000, MAX_CHATS = 2000, GIST = 120;
 /** A transcript's time of a message may differ a little from the live one. */
 const RECALL_MS = 5 * 60_000;
 
-interface StoredTopic { label: string; createdAt: number; lastAt: number; chatIds: string[]; gist?: string }
+/** provisional = opened by the app's guess (a new subject the rules named, a new label of the light model), never by
+ *  the user: only such a topic may be dropped once no message is filed under it (dropIfEmpty) */
+interface StoredTopic { label: string; createdAt: number; lastAt: number; chatIds: string[]; gist?: string; provisional?: true }
 /** One message's topic: the fingerprint of its text, its time, the topic, how it was chosen, and the id of the item it
  *  was given to (two equal messages a minute apart, «sì» and «sì», keep a mark each). */
 interface Mark { key: string; at: number; topic: string; by: TopicSource; id?: string }
-interface Stored { version: 1; topics: StoredTopic[]; marks: Mark[]; chats: Record<string, string> }
+/** trimmedAt = the time of the newest mark the cap dropped: a topic made before it may have lost its marks */
+interface Stored { version: 1; topics: StoredTopic[]; marks: Mark[]; chats: Record<string, string>; trimmedAt?: number }
+/** Who opens or touches a topic (touch): the app's guess, or the user (his tag, his move). */
+export type TopicOrigin = 'provisional' | 'user'
 
 /** The fingerprint of a message: its first 160 characters, spaces collapsed, the app's hints after them never count. */
 export function textKey(text: string): string {
@@ -37,7 +42,7 @@ function readStored(value: unknown): Stored {
     const r = t as Record<string, unknown>, label = cleanTopic(String(r?.label ?? '')), createdAt = num(r?.createdAt), lastAt = num(r?.lastAt);
     if (!label || createdAt === null || lastAt === null) return [];
     const chatIds = Array.isArray(r.chatIds) ? r.chatIds.filter((c): c is string => typeof c === 'string' && c.length <= 100).slice(-50) : [];
-    return [{ label, createdAt, lastAt, chatIds, ...(typeof r.gist === 'string' ? { gist: r.gist.slice(0, GIST) } : {}) }];
+    return [{ label, createdAt, lastAt, chatIds, ...(typeof r.gist === 'string' ? { gist: r.gist.slice(0, GIST) } : {}), ...(r.provisional === true ? { provisional: true as const } : {}) }];
   }).slice(-MAX_TOPICS) : [];
   const marks = Array.isArray(o.marks) ? o.marks.flatMap((m): Mark[] => {
     const r = m as Record<string, unknown>, at = num(r?.at), topic = cleanTopic(String(r?.topic ?? ''));
@@ -49,7 +54,8 @@ function readStored(value: unknown): Stored {
     const label = typeof t === 'string' ? cleanTopic(t) : '';
     if (label && id.length <= 100) chats[id] = label;
   }
-  return { version: 1, topics, marks, chats };
+  const trimmedAt = num(o.trimmedAt);
+  return { version: 1, topics, marks, chats, ...(trimmedAt !== null ? { trimmedAt } : {}) };
 }
 
 export class OrchestratorTopicStore {
@@ -82,16 +88,17 @@ export class OrchestratorTopicStore {
   private find(label: string): StoredTopic | undefined { return this.data.topics.find(t => sameTopic(t.label, label)); }
 
   /** The topic with this label, made when missing and touched now (gist = the user's line on it). Returns its label as
-   *  stored (a known topic keeps its own spelling). */
-  touch(label: string, at = this.now(), gist?: string): string {
+   *  stored (a known topic keeps its own spelling). origin: 'provisional' = a topic this call makes is the app's guess;
+   *  'user' = the user's own (his tag, his move), never dropped from then on. */
+  touch(label: string, at = this.now(), gist?: string, origin?: TopicOrigin): string {
     const clean = cleanTopic(label);
     if (!clean) throw new Error('Argomento non valido.');
     let t = this.find(clean);
     if (!t) {
-      t = { label: clean, createdAt: at, lastAt: at, chatIds: [] };
+      t = { label: clean, createdAt: at, lastAt: at, chatIds: [], ...(origin === 'provisional' ? { provisional: true as const } : {}) };
       this.data.topics.push(t);
       if (this.data.topics.length > MAX_TOPICS) this.data.topics.sort((a, b) => a.lastAt - b.lastAt).splice(0, this.data.topics.length - MAX_TOPICS);
-    }
+    } else if (origin === 'user') delete t.provisional;
     t.lastAt = Math.max(t.lastAt, at);
     if (gist) t.gist = gist.replace(/\s+/g, ' ').trim().slice(0, GIST);
     this.save();
@@ -116,7 +123,10 @@ export class OrchestratorTopicStore {
     const next: Mark = { key, at, topic: label, by, ...(keepId ? { id: keepId } : {}) };
     if (i >= 0) this.data.marks[i] = next;
     else this.data.marks.push(next);
-    if (this.data.marks.length > MAX_MARKS) this.data.marks.splice(0, this.data.marks.length - MAX_MARKS);
+    if (this.data.marks.length > MAX_MARKS) {
+      const cut = this.data.marks.splice(0, this.data.marks.length - MAX_MARKS);
+      this.data.trimmedAt = Math.max(this.data.trimmedAt ?? 0, ...cut.map(m => m.at));
+    }
     this.save();
   }
 
@@ -137,6 +147,8 @@ export class OrchestratorTopicStore {
     const i = this.data.topics.findIndex(t => sameTopic(t.label, label));
     if (i < 0) return false;
     const t = this.data.topics[i]!;
+    // only the app's own guess, and only when its marks are all still here (none trimmed by the cap)
+    if (!t.provisional || (this.data.trimmedAt !== undefined && t.createdAt <= this.data.trimmedAt)) return false;
     if (t.chatIds.length || this.data.marks.some(m => sameTopic(m.topic, t.label)) || Object.values(this.data.chats).some(c => sameTopic(c, t.label))) return false;
     this.data.topics.splice(i, 1);
     this.save();

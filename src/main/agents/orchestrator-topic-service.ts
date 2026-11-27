@@ -50,7 +50,8 @@ export class OrchestratorTopicService {
     const w: TopicWorld = { ...world, chats: this.chatsWithTopics(world.chats), topics: this.d.store.openLabels(), now: at };
     const a = assignTopic(text, w);
     const words = replyQuote(text)?.body ?? text;
-    const label = this.d.store.touch(a.topic, at, words);
+    // a new subject the rules named is the app's guess (dropped if its message moves away); his own tag is his
+    const label = this.d.store.touch(a.topic, at, words, a.by === 'new' ? 'provisional' : a.by === 'tag' ? 'user' : undefined);
     this.d.store.mark(text, at, label, a.by, id, true);
     const out = { ...a, topic: label };
     this.changed(chatId);
@@ -74,7 +75,7 @@ export class OrchestratorTopicService {
     if (this.d.store.recall(text, at, id)?.by === 'user') return;
     // a new label the model invented for a message the rules already put in a new topic: keep the rules' words
     if (pick.isNew && a.by === 'new') return;
-    const label = this.d.store.touch(pick.topic, at);
+    const label = this.d.store.touch(pick.topic, at, undefined, pick.isNew ? 'provisional' : undefined);
     this.d.store.mark(text, at, label, 'model', id);
     // the rules' provisional topic holds nothing else: never left as an empty open topic
     this.d.store.dropIfEmpty(a.topic);
@@ -88,7 +89,7 @@ export class OrchestratorTopicService {
     const clean = cleanTopic(topic);
     if (!clean) throw new Error('Argomento non valido.');
     const was = this.d.store.recall(text, at, id)?.topic;
-    const label = this.d.store.touch(clean, at);
+    const label = this.d.store.touch(clean, at, undefined, 'user');
     this.d.store.mark(text, at, label, 'user', id);
     if (was && !sameTopic(was, label)) this.d.store.dropIfEmpty(was);
     this.changed(chatId);
