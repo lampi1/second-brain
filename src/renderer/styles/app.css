@@ -773,7 +773,10 @@ button.lc-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 1
   padding: 1px 7px; border-radius: 99px; background: var(--violet-bg); color: var(--violet);
   font: 600 10.5px var(--font); letter-spacing: 0.03em;
 }
-.msg-topic-pick { appearance: none; border: 0; cursor: pointer; } /* the chip that moves a message to another topic (ADR 0369) */
+/* the chip that moves a message to another topic (ADR 0369): its look unchanged, an invisible native list over it */
+.msg-topic-movable { position: relative; cursor: pointer; }
+.msg-topic-movable:focus-within { outline: 2px solid var(--violet); outline-offset: 1px; }
+.msg-topic-pick { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; opacity: 0; cursor: pointer; font: inherit; }
 /* Orchestrator engine pill, subbar, inline search bar & #topic filter pills */
 .orch-engine-pill {
   display: inline-flex; align-items: center; gap: 4px; flex: none;

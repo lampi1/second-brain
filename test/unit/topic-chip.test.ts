@@ -25,7 +25,9 @@ describe('the topic chip', () => {
   it('lists the other open topics to move the message in one click', () => {
     stored = [topic('Air 401'), topic('Restyle UI'), topic('Chiuso', false)];
     const html = render('o');
-    expect(html).toContain('<select class="msg-topic msg-topic-pick"');
+    // the chip keeps its own look: the same label in the same .msg-topic, the list laid over it
+    expect(html.startsWith('<span class="msg-topic msg-topic-movable" data-tip="chat.orch.topicMove" data-testid="item-u1-topic">Air 401<select class="msg-topic-pick"')).toBe(true);
+    expect(html).toContain('data-testid="item-u1-topic-pick"');
     expect(html).toContain('aria-label="chat.orch.topicMove"');
     expect(html).toContain('<option value="Air 401" selected="">Air 401</option>');
     expect(html).toContain('<option value="Restyle UI">Restyle UI</option>');
