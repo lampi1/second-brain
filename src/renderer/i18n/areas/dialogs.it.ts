@@ -156,8 +156,6 @@ export const dialogsIt = {
   // Sidebar
   'dialogs.sidebar.label': 'Sezioni',
   'dialogs.sidebar.work': 'Lavoro',
-  'dialogs.sidebar.brain': 'Brain',
-  'dialogs.sidebar.app': 'App',
   'dialogs.sidebar.waiting': (p: { count: number }) => `${p.count} ti aspettano`,
   'dialogs.sidebar.working': (p: { count: number }) => p.count === 1 ? '1 agente al lavoro' : `${p.count} agenti al lavoro`,
   'dialogs.sidebar.new': (p: { count: number }) => `${p.count} nuove`,

@@ -1,8 +1,5 @@
 // The «Giornale» (ADR 0265, editions ADR 0280) auf Deutsch (Österreich): dieselben Schlüssel wie news.it.ts.
 export const newsDe = {
-  'impara.tab.giornale': 'News',
-  'impara.tab.pr': 'Pull Requests',
-  'impara.tab.lezioni': 'Lektionen',
 
   'news.title': 'News',
   'news.lastAt': ({ when }: { when: string }) => `aktualisiert ${when}`,
@@ -42,7 +39,6 @@ export const newsDe = {
   'news.why': 'Warum es für dich zählt',
   'news.noSummary': 'Die KI-Zusammenfassung kommt mit der nächsten Aktualisierung. Oben die Worte der Quelle.',
   'news.explain': 'Vertiefen',
-  'news.openLesson': 'Lektion öffnen',
   'news.save': 'Für später speichern',
   'news.savedOn': 'Gespeichert',
   'news.markRead': 'Als gelesen markieren',
@@ -128,23 +124,4 @@ export const newsDe = {
   'news.src.triedBad': ({ why }: { why: string }) => `Ich kann sie nicht lesen: ${why}`,
   'news.src.none': 'Keine Quellen. Füg oben einen Link ein oder bitte den Orchestrator «such die Quellen für diese Ausgabe».',
 
-  'impara.prs.filters': 'Filter',
-  'impara.prs.filter.todo': 'Zu lernen',
-  'impara.prs.filter.half': 'Halb fertig',
-  'impara.prs.filter.done': 'Gelernt',
-  'impara.prs.filter.all': 'Alle',
-  'impara.prs.list': 'Deine Pull Requests',
-  'impara.prs.refresh': 'PRs jetzt lesen',
-  'impara.prs.none': 'Keine Pull Requests: Sie kommen von der Task-Seite. Für einen GitHub-PR füg den Link unter «Lektionen» ein.',
-  'impara.prs.noneHere': 'Keine Pull Requests mit diesem Filter.',
-  'impara.prs.pick': 'Wähl links einen Pull Request.',
-  'impara.prs.draft': 'Entwurf',
-  'impara.prs.lesson': 'Deine Lektion',
-  'impara.prs.notYet': 'Noch nicht gelernt. «Lernen» bereitet die Lektion aus seinem Diff vor.',
-  'impara.prs.seen': ({ seen, planned }: { seen: number; planned: number }) => `${seen} von ${planned} Teilen gesehen`,
-  'impara.prs.study': 'Lernen',
-  'impara.prs.open': 'PR öffnen',
-  'impara.prs.reviewers': 'Reviewer',
-  'impara.prs.build': 'Build',
-  'impara.prs.items': 'Work Items',
 };

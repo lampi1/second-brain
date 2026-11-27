@@ -25,8 +25,6 @@ import { voiceIt } from './areas/voice.it';
 import { phoneIt } from './areas/phone.it';
 import { recIt } from './areas/rec.it';
 import { imparaIt } from './areas/impara.it';
-import { imparaStudioIt } from './areas/impara-studio.it';
-import { imparaV3It } from './areas/impara-v3.it';
 import { newsIt } from './areas/news.it';
 import {studioIt}from'./areas/studio.it';
 import { langSwitchIt } from './areas/lang-switch.it';
@@ -100,8 +98,6 @@ export const it = {
   ...phoneIt,
   ...recIt,
   ...imparaIt,
-  ...imparaStudioIt,
-  ...imparaV3It,
   ...newsIt,
   'genui.request.question': 'Domanda',
   'genui.request.permission': 'Permesso',
