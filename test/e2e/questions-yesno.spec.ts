@@ -39,7 +39,7 @@ for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
     const shotFile = path.join(userData, 'evidence', 'fix-at-7', 'carrello-dopo.png');
     fs.mkdirSync(path.dirname(shotFile), { recursive: true });
     fs.writeFileSync(shotFile, png(640, 360, [50, 120, 80]));
-    const { app, page } = await launchDemo({ width: 1366, height: 900, scheme, userData, config: { theme: scheme } });
+    const { app, page } = await launchDemo({ width: 1366, height: 900, scheme, userData });
     for (const id of ['orchestrator', 'qa', 'feedback', 'fix', 'sms', 'mappa']) await demo(app, (d, c) => d.stop(c), id);
     for (let i = 0; i < 5; i++) {
       await page.waitForTimeout(300);
@@ -107,7 +107,7 @@ test('a brief whose screenshot cannot be shown: no empty column, the line and it
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-decision-'));
   const outside = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-outside-')), 'impostazioni-microfono.png');
   fs.writeFileSync(outside, png(320, 200, [60, 60, 140]));
-  const { app, page } = await launchDemo({ width: 1366, height: 900, scheme: 'dark', userData, config: { theme: 'dark' } });
+  const { app, page } = await launchDemo({ width: 1366, height: 900, scheme: 'dark', userData });
   for (const id of ['orchestrator', 'qa', 'feedback', 'fix', 'sms', 'mappa']) await demo(app, (d, c) => d.stop(c), id);
   for (let i = 0; i < 5; i++) {
     await page.waitForTimeout(300);

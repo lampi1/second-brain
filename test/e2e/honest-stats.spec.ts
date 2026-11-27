@@ -16,7 +16,7 @@ async function goLearning(page: Page) {
 for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`honest statistics on the Agenti and Apprendimento pages (${scheme})`, async () => {
     test.setTimeout(150_000);
-    const { app, page } = await launchDemo({ scheme, height: 1600, config: { theme: scheme } });
+    const { app, page } = await launchDemo({ scheme, height: 1600 });
     try {
       // the Agenti card: one success definition on its front
       await openAgentOverview(page);

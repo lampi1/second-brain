@@ -29,7 +29,7 @@ const BRIEF = { id: 'brief-bivio', target: 'next-ask', component: 'brief', title
 for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`a question as «Bivio»: context, before → after, roads with next steps · ${scheme}`, async () => {
     test.setTimeout(120_000);
-    const { app, page } = await launchDemo({ scheme, width: 1366, height: 900, config: { theme: scheme } });
+    const { app, page } = await launchDemo({ scheme, width: 1366, height: 900 });
     await clear(app, page);
     expect(await demo(app, (d, id, a) => d.show(id, a), 'fix', BRIEF)).toContain('Mostrato');
     await demo(app, (d, id, q) => d.ask(id, q), 'fix', yn('Faccio il commit del fix sul rimborso?'));
