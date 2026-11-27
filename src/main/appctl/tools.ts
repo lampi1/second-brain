@@ -36,6 +36,7 @@ import { answerableInWords, sameWords } from '../../shared/answer-in-words';
 import { heldQuestions, openQuestions } from '../../shared/question-ladder';
 import { isPlanApproval } from '../../shared/strategy';
 import { withPasswordsHidden } from '../browser/shot-mask';
+import { withCredentialsHidden } from './ui-shot-mask';
 import { fmtFactor, previewOf } from '../browser/preview';
 import { healthSnapshot } from '../health';
 import { timerSnapshot } from '../timers';
@@ -514,7 +515,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (!win) return 'no window';
         const images: { data: string; mimeType: string; caption: string }[] = [];
         const left: string[] = [];
-        const ui = await win.webContents.capturePage();
+        // a live credential card shows values: hidden for the capture, or the screenshot is refused (ADR 0367)
+        const ui = await withCredentialsHidden(script => frameRun(win.webContents.mainFrame, script), () => win.webContents.capturePage());
         const p = previewOf(ui);
         images.push({ data: p.data, mimeType: p.mimeType, caption: `app UI ${ui.getSize().width}x${ui.getSize().height}, image ${p.width}x${p.height} (UI px = image px × ${fmtFactor(p.factor)})` });
         for (const v of win.contentView.children) {

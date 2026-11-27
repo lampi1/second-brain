@@ -37,21 +37,32 @@ estimate lives), #351 (the folded result card). A rule-2 exception (`docs/agents
    the app's own block after his words, in the same format the role text names.
 6. **The credentials card (rule-2 exception).** `app_show_credentials { ref }` on the Orchestrator's own endpoint (required
    tool, `shared/role-tools.ts`; one line in its role text): main finds the entry of the user's credentials file
-   (`browser/logins.ts cardMatch`: exact user or host, then the words of the group, hosts and user; production entries,
-   unknown and ambiguous references refused, naming groups only) and adds a `credentialCard` system item holding only the
-   entry's opaque id and group. The tool's result says the card is shown and nothing else. The entry goes live for 10
-   minutes (`shared/credential-card.ts`): only then does main answer the renderer `credentials:card` (URL, user) and, on
-   «Mostra», `credentials:reveal` (password); `credentials:copy` writes one field to the clipboard on the user's click.
-   The card hides itself after 10 minutes and forgets the values. Logs name the entry id, never a value.
+   (`browser/logins.ts cardMatch`: an exact user name or host, then whole words of the group and hosts, then words inside
+   the group's; a user name never matches in part) and adds a `credentialCard` system item holding only the entry's
+   opaque id and group. No match, several, or production only all get the same plain refusal naming nothing
+   (`CARD_REFUSAL`), so a model cannot probe the file by trying references. The tool's result says the card is shown and
+   nothing else. The entry goes live for 10 minutes (`browser/card-gate.ts`, `shared/credential-card.ts`): only then does
+   main answer the renderer `credentials:card` (URL, user) and, on «Mostra», `credentials:reveal` (password), reading the
+   entry again and refusing it if it now looks like production (the id does not cover loginUrls);
+   `credentials:copy` writes one field to the clipboard on the user's click. The card hides itself after 10 minutes and
+   forgets the values. Logs name the entry id, never a value.
+   **`app_screenshot` hides the values** before it captures the app window (`appctl/ui-shot-mask.ts`): the renderer
+   sets `data-shot-mask` (every value carries `.oc-cred-val`, hidden by orch-chat.css), waits for a painted frame and
+   confirms each value hidden; the capture follows and the values come back. Without that confirmation the screenshot
+   is refused, as `browser/shot-mask.ts` refuses a tab whose passwords cannot be hidden. No other capture of the app
+   window reaches an agent (the tab screenshots never show the column; the dev and README shots are CI/human only).
 7. **The clipboard gets its earlier text back** 30 s after a password copy, only if it still holds the password
-   (`browser/password-clip.ts`, for hand-offs, the panel and the card alike); empty before means cleared, as before.
+   (`browser/password-clip.ts`, for hand-offs, the panel and the card alike); empty before means cleared, as before. A
+   repeat copy takes the earlier text again when the clipboard no longer holds the password (X, password, Y, password
+   gives back Y).
 8. Every code block already has «Copia» (`CodeBlock.tsx`), the command card has its own; radii come from the tokens.
 
 ## Consequences
 
 - The Orchestrator column reads as a list of short lines; the details are one click away.
 - A password reaches the renderer only on the user's «Mostra», for a card he asked for in the last 10 minutes; it is never
-  in a tool result, an item, a transcript or a log. Pinned by `test/unit/appctl-credential-card.test.ts`,
+  in a tool result, an item, a transcript, a log or an agent's screenshot. Pinned by
+  `test/unit/appctl-credential-card.test.ts`, `test/unit/ui-shot-mask.test.ts`,
   `test/unit/password-clip.test.ts`, `test/unit/orch-lines.test.ts`, `test/unit/orch-column-render.test.ts`,
   `test/unit/chat-items-estimate.test.ts`, `test/unit/chats/user-wait.test.ts`, `test/unit/chats/request-estimate.test.ts`.
 - «Entra tu al posto mio» (an agent signs in with that entry) is left out: `fill_credential` already does it inside a chat's

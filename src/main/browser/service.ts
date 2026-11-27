@@ -16,7 +16,7 @@ import { McpServer, listenWithRetry, type CallCtx, type McpTool } from '../mcp/s
 import { EndpointTokens } from '../mcp/tokens';
 import { BrowserTabs } from './tabs';
 import { passwordClip } from './password-clip';
-import { CREDENTIAL_CARD_MS } from '../../shared/credential-card';
+import { cardGate } from './card-gate';
 import { BrowserActions, normalizeUrl } from './actions';
 import { browserTools, type Scope } from './tools';
 import { SHOW_UI_HINT } from '../genui/artifacts';
@@ -146,9 +146,8 @@ ${SCREENSHOT_HINT}`;
   const pwClip = passwordClip(clip, tabs.credentials, CLIPBOARD_CLEAR_MS);
   const clearCopied = () => pwClip.restore();
   const copyPassword = (pw: string) => pwClip.copy(pw);
-  /** the Orchestrator's credentials cards shown now (ADR 0367): entry id → until when the renderer may read it */
-  const liveCards = new Map<string, number>();
-  const cardLive = (id: string, now = Date.now()): boolean => { const until = liveCards.get(id); if (until !== undefined && until <= now) liveCards.delete(id); return until !== undefined && until > now; };
+  /** the Orchestrator's credentials cards shown now (ADR 0367): the renderer reads an entry only while it is live */
+  const cards = cardGate(tabs.credentials);
   /** The agent ended its turn instead of waiting: tell its chat, a few seconds later (a call may be on its way). */
   const wakeIfNobodyWaits = (id: string) => {
     // an agent that just got "still waiting" is probably calling again after its turn: give it that time first
@@ -234,16 +233,15 @@ ${SCREENSHOT_HINT}`;
       return true;
     },
     credentialCardMatch: ref => {
-      const m = tabs.credentials.cardMatch(ref);
-      if ('id' in m) { liveCards.set(m.id, Date.now() + CREDENTIAL_CARD_MS); log.info('browser', 'credentials card shown', { data: { id: m.id } }); }   // never a value
+      const m = cards.match(ref);
+      if ('id' in m) log.info('browser', 'credentials card shown', { data: { id: m.id } });   // never a value
       return m;
     },
-    credentialCardFields: id => (cardLive(id) ? tabs.credentials.cardFields(id) : null),
+    credentialCardFields: id => cards.fields(id),
     credentialReveal: id => {
-      if (!cardLive(id)) return null;
-      const e = tabs.credentials.byId(id);
-      if (e) log.info('browser', 'password shown on the credentials card', { data: { id } });   // never the value
-      return e?.password ?? null;
+      const pw = cards.reveal(id);
+      if (pw !== null) log.info('browser', 'password shown on the credentials card', { data: { id } });   // never the value
+      return pw;
     },
     setWake: fn => { wake = fn; },
     envs: () => tabs.envList(),

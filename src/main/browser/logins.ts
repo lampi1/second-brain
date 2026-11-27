@@ -147,9 +147,14 @@ export type CardMatch = { id: string; group: string } | { refusal: string };
 const words = (s: string): string[] => s.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter(w => w && !STOP.has(w));
 const STOP = new Set(['di', 'del', 'della', 'per', 'le', 'la', 'il', 'lo', 'gli', 'i', 'of', 'the', 'for', 'credenziali', 'credentials', 'account', 'login', 'utente', 'user', 'password', 'https', 'http', 'www']);
 
-/** The entry a reference names: an exact user name or host (with port) first, then every word of the reference found in
- *  its group, hosts and user name ("test 3" also matches "test3"). One hit, or a refusal that names the candidates by
- *  group only (never a user name, URL or password). Production-looking entries are never shown (rule 2). Pure. */
+/** The one plain answer to a reference that names no single test entry: none, several and production-only all read the
+ *  same, so a model cannot probe the file for user names, hosts or groups by trying references (security review). */
+export const CARD_REFUSAL = 'Refused: no single test entry of the user\'s credentials file matches this ref. Ask him in one line which environment he means (the words of its group, or its host), never for a password.';
+
+/** The entry a reference names: an exact user name or host (with port) first; then every word of the reference found
+ *  among the whole words of its group and hosts ("test 3" also matches "test3"); then words inside longer words of the
+ *  group only. A user name matches only whole, never a part of it, so it cannot be guessed letter by letter. One hit,
+ *  or CARD_REFUSAL naming nothing. Production-looking entries are never shown (rule 2). Pure. */
 export function cardMatch(all: Entry[], ref: string): CardMatch {
   const want = ref.trim().toLowerCase();
   if (!want) return { refusal: 'Refused: ref is empty. Pass the host, the user name or the words the user used ("test 3").' };
@@ -158,17 +163,14 @@ export function cardMatch(all: Entry[], ref: string): CardMatch {
   let hits = indexed.filter(({ e }) => e.user.toLowerCase() === want || (!!host && hostsOf(e).includes(host)));
   if (!hits.length) {
     const ws = words(want);
-    const hay = (e: Entry) => { const w = words([e.group, ...hostsOf(e), e.user].join(' ')); return { w, joined: w.join(' ') }; };
-    // whole words first ("test 3" = the words test and 3, or the word test3), then words inside longer ones
-    const strict = ({ e }: { e: Entry }) => { const h = hay(e); return ws.every(x => h.w.includes(x)) || h.w.includes(ws.join('')); };
-    const loose = ({ e }: { e: Entry }) => { const h = hay(e); return ws.every(x => h.joined.includes(x)); };
+    // whole words of group and hosts first ("test 3" = the words test and 3, or the word test3), then inside the group's
+    const strict = ({ e }: { e: Entry }) => { const w = words([e.group, ...hostsOf(e)].join(' ')); return ws.every(x => w.includes(x)) || w.includes(ws.join('')); };
+    const loose = ({ e }: { e: Entry }) => { const g = words(e.group).join(' '); return ws.every(x => g.includes(x)); };
     hits = !ws.length ? [] : indexed.filter(strict);
     if (!hits.length && ws.length) hits = indexed.filter(loose);
   }
   const safe = hits.filter(({ e }) => !looksProduction(e));
-  if (!safe.length) return { refusal: hits.length ? 'Refused: the matching entry looks like a production account; the app shows test accounts only. Tell the user to open the credentials file himself.'
-    : `Refused: no entry of the user's credentials file matches "${oneLine(ref, 80)}". Ask him which environment (in one line), never for a password.` };
-  if (safe.length > 1) return { refusal: `Several entries match "${oneLine(ref, 80)}": ${safe.slice(0, 6).map(({ e }) => `«${e.group || 'senza gruppo'}»`).join(', ')}. Call again with a narrower ref (the host or the group's words).` };
+  if (safe.length !== 1) return { refusal: CARD_REFUSAL };
   const { e, i } = safe[0]!;
   return { id: entryId(e, i), group: e.group };
 }
@@ -296,9 +298,19 @@ export class Credentials {
 
   /** The card's URL and user name of an entry, read from the file now (renderer only, never a tool result). */
   cardFields(id: string): { user: string; url?: string } | null {
+    const e = this.cardEntry(id);
+    return e ? { user: e.user, ...(e.url ? { url: e.url } : {}) } : null;
+  }
+
+  /** The card's password, on «Mostra» (renderer only). */
+  cardPassword(id: string): string | null { return this.cardEntry(id)?.password ?? null; }
+
+  /** The card's entry, read from the file now and checked again: the id does not cover loginUrls, so an entry that
+   *  turned production-looking since the card was shown (a production loginUrl added) answers nothing (rule 2). */
+  private cardEntry(id: string): Entry | null {
     const all = this.entries();
     const hits = all.filter((e, n) => entryId(e, n) === id);
-    return hits.length === 1 ? { user: hits[0]!.user, ...(hits[0]!.url ? { url: hits[0]!.url } : {}) } : null;
+    return hits.length === 1 && !looksProduction(hits[0]!) ? hits[0]! : null;
   }
 
   /** Every entry for the "Credenziali" panel: group, user, URL, note and an id (never the password). */

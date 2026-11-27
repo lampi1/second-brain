@@ -52,4 +52,14 @@ describe('passwordClip', () => {
     await vi.advanceTimersByTimeAsync(MS);
     expect(s.read()).toBe('mine');
   });
+
+  it('a text copied between two password copies is the one that comes back (X, password, Y, password → Y)', async () => {
+    const s = setup('X');
+    s.pc.copy('pw-1');
+    await vi.advanceTimersByTimeAsync(5_000);
+    s.set('Y');
+    s.pc.copy('pw-1');
+    await vi.advanceTimersByTimeAsync(MS);
+    expect(s.read()).toBe('Y');
+  });
 });

@@ -1,11 +1,13 @@
 // app_show_credentials (ADR 0367): the Orchestrator names an environment («test 3»), the app finds the entry of the
 // user's credentials file and shows him a card; the tool's result and the card's chat item carry only an opaque id and
 // the group label, never the URL, the user name or the password (fake values below), and a production entry, an
-// unknown or an ambiguous reference is refused with the fix and without values.
+// unknown or an ambiguous reference gets one plain refusal without values; the card gate answers the renderer only
+// for an entry shown in the last 10 minutes that is still a test entry.
 import { describe, expect, it } from 'vitest';
 import path from 'node:path';
 import type { ChatItem } from '../../src/shared/contract';
-import { cardMatch, Credentials, DEFAULT_CREDENTIALS_FILE, parseEntries } from '../../src/main/browser/logins';
+import { CARD_REFUSAL, cardMatch, Credentials, DEFAULT_CREDENTIALS_FILE, entryId, parseEntries } from '../../src/main/browser/logins';
+import { cardGate } from '../../src/main/browser/card-gate';
 import { credentialCardItem, credentialsCardTool, CREDENTIALS_TOOL } from '../../src/main/appctl/credential-card-tool';
 import { ORCHESTRATOR_APP_REQUIRED } from '../../src/shared/role-tools';
 import { cardMinutesLeft, CREDENTIAL_CARD_MS } from '../../src/shared/credential-card';
@@ -27,6 +29,7 @@ const creds = () => new Credentials(() => ROOT, f => {
   return FILE;
 });
 const noValues = (text: string) => { for (const v of VALUES) expect(text).not.toContain(v); };
+const entryIdOf = (user: string) => { const all = parseEntries(FILE), i = all.findIndex(e => e.user === user); return entryId(all[i]!, i); };
 
 describe('cardMatch', () => {
   const all = parseEntries(FILE);
@@ -38,13 +41,56 @@ describe('cardMatch', () => {
     expect(cardMatch(all, 'admin.test3')).toEqual(three);
     expect(cardMatch(all, 'credenziali di test 4')).toMatchObject({ group: 'Air · test4' });
   });
-  it('refuses production, unknown and ambiguous references, naming groups only', () => {
-    for (const ref of ['prod', 'air.example.com', 'test 9', 'test', '']) {
+  it('refuses production, unknown and ambiguous references with one plain answer that names nothing', () => {
+    for (const ref of ['prod', 'air.example.com', 'test 9', 'test', 'air']) {
       const m = cardMatch(all, ref);
-      expect(m).toHaveProperty('refusal');
+      expect(m).toEqual({ refusal: CARD_REFUSAL });
       noValues(JSON.stringify(m));
     }
-    expect(JSON.stringify(cardMatch(all, 'test'))).toContain('«Air · test3»');
+    expect(CARD_REFUSAL).not.toContain('Air');
+    expect(cardMatch(all, '')).toHaveProperty('refusal');
+  });
+  it('never matches a part of a user name, so it cannot be guessed letter by letter', () => {
+    for (const ref of ['admin', 'admin.test', 'admin.t', 'dmin']) expect(cardMatch(all, ref)).toEqual({ refusal: CARD_REFUSAL });
+    expect(cardMatch(all, 'admin.test4')).toMatchObject({ group: 'Air · test4' });
+  });
+});
+
+describe('the card gate (credentials:card and credentials:reveal)', () => {
+  const setup = () => {
+    let now = 1_000, text = FILE;
+    const c = new Credentials(() => ROOT, f => {
+      if (path.relative(ROOT, f).replace(/\\/g, '/') !== DEFAULT_CREDENTIALS_FILE) throw new Error('ENOENT');
+      return text;
+    });
+    const gate = cardGate(c, () => now);
+    return { gate, c, tick: (ms: number) => { now += ms; }, edit: (t: string) => { text = t; } };
+  };
+  it('answers only for an entry shown in the last 10 minutes', () => {
+    const { gate, tick } = setup();
+    const id = entryIdOf('admin.test3');
+    expect(gate.fields(id)).toBeNull();
+    expect(gate.reveal(id)).toBeNull();
+    const m = gate.match('test 3');
+    expect(m).toMatchObject({ id });
+    expect(gate.fields(id)).toEqual({ user: 'admin.test3', url: 'https://test3.example.local/' });
+    expect(gate.reveal(id)).toBe(pw('3'));
+    // another entry never shown, and an id that names nothing
+    expect(gate.fields(entryIdOf('admin.test4'))).toBeNull();
+    expect(gate.reveal(entryIdOf('admin.test4'))).toBeNull();
+    expect(gate.fields('0123456789abcdef')).toBeNull();
+    expect(gate.reveal('0123456789abcdef')).toBeNull();
+    tick(CREDENTIAL_CARD_MS);
+    expect(gate.fields(id)).toBeNull();
+    expect(gate.reveal(id)).toBeNull();
+  });
+  it('checks production again at each answer (the id does not cover loginUrls)', () => {
+    const { gate, edit } = setup();
+    const id = entryIdOf('admin.test3');
+    gate.match('test 3');
+    edit(FILE.replace('"username": "admin.test3",', '"username": "admin.test3", "loginUrl": "https://prod.example.com/",'));
+    expect(gate.fields(id)).toBeNull();
+    expect(gate.reveal(id)).toBeNull();
   });
 });
 
@@ -77,7 +123,7 @@ describe(CREDENTIALS_TOOL, () => {
     for (const ref of ['prod', 'test']) {
       let message = '';
       try { tool.run({ ref }); } catch (e) { message = (e as Error).message; }
-      expect(message).toMatch(/Refused|Several/);
+      expect(message).toMatch(/Refused/);
       noValues(message);
     }
     expect(shown).toHaveLength(0);

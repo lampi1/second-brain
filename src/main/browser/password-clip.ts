@@ -18,7 +18,9 @@ export interface PasswordClip {
 export function passwordClip(clip: ClipLike, guard: PasteGuard, ms: number): PasswordClip {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let copied: string | null = null;
-  /** what the clipboard held before the first password of this round (a second copy keeps the first round's) */
+  /** what the clipboard held before the password went on it: taken at each copy unless the clipboard still holds the
+   *  previous password (then the round's earlier text stays), so a text the user copied between two password copies is
+   *  the one that comes back (security review, 2026-11-27) */
   let before: string | null = null;
   const restore = async (): Promise<void> => {
     if (timer) { clearTimeout(timer); timer = null; }
@@ -30,11 +32,10 @@ export function passwordClip(clip: ClipLike, guard: PasteGuard, ms: number): Pas
   };
   return {
     copy(password: string): void {
-      if (copied === null) {
-        // read synchronously when the clipboard allows it (Electron's does): the earlier text must be taken before the write
-        const now = clip.readText();
-        before = typeof now === 'string' ? now : null;
-      }
+      // read synchronously when the clipboard allows it (Electron's does): the earlier text must be taken before the write
+      const now = clip.readText();
+      if (copied === null) before = typeof now === 'string' ? now : null;
+      else if (typeof now === 'string' && now !== copied) before = now;
       clip.writeText(password);
       copied = password;
       guard.markCopied(ms);

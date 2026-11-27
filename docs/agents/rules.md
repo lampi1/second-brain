@@ -36,7 +36,8 @@ app (each CLI logs in itself) with these exceptions:
   (`app_show_credentials`): the tool and the chat item carry only the entry's id and group; main gives the renderer the
   URL and user name, and the password only on his «Mostra», for 10 minutes after the card was shown; «Copia» writes one
   field to the clipboard on his click (a password goes back off it after 30 s, the earlier text restored); never a
-  production entry, never in a tool result, a transcript or a log (ADR 0367);
+  production entry, never in a tool result, a transcript, a log or an agent's screenshot (`app_screenshot` hides the
+  values or refuses); a reference that names no single test entry gets one plain refusal (ADR 0367);
 - the site passwords of the former Routine section stay encrypted in the app profile (`routine-site-credentials.json`);
   the app no longer reads or writes them (ADR 0325).
 

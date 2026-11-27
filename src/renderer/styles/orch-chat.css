@@ -88,6 +88,9 @@
 @media (prefers-reduced-motion: no-preference) { .oc-wchip.oc-t-run .oc-wdot { animation: oc-pulse 1.6s ease-in-out infinite; } }
 @keyframes oc-pulse { 50% { opacity: .45; } }
 
+/* ---- app_screenshot: the credential card's values are hidden while the window is captured (main/appctl/ui-shot-mask.ts) ---- */
+:root[data-shot-mask] .oc-cred-val { visibility: hidden !important; }
+
 /* ---- the column's own state word (StatePill in OrchestratorTile's header): a dot and coloured text, no box ---- */
 .pill[data-testid="orchestrator-state"] { height: auto; padding: 0; background: none; }
 .pill[data-testid="orchestrator-state"]:not(:has(.pill-dot))::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }

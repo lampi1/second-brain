@@ -4,7 +4,8 @@
 // the values come from main (credentials:card, credentials:reveal) only while the card is live and live only in this
 // component's state; «Copia» asks main to write that one field to the clipboard, only on the click (a password goes
 // back off it after 30 s). The card hides itself 10 minutes after it was shown and forgets the values. Used by
-// ChatItems.tsx (system items with code credentialCard).
+// ChatItems.tsx (system items with code credentialCard). Every value carries oc-cred-val: app_screenshot hides them
+// before it captures the window (main/appctl/ui-shot-mask.ts).
 import { useEffect, useState } from 'react';
 import type { ChatItem } from '@shared/contract';
 import { cardMinutesLeft } from '@shared/credential-card';
@@ -53,9 +54,9 @@ export function CredentialCard({ item }: { item: Sys }) {
       <div className="oc-row"><span className="oc-who oc-grow">{t('chat.cred.title', { group })}</span><span className="oc-who">{t('chat.cred.closesIn', { min: left })}</span></div>
       {fields === null ? <span className="oc-src" data-testid="credential-card-missing">{t('chat.cred.missing')}</span> : (
         <div className="oc-kvc">
-          <span>{t('chat.cred.url')}</span><code data-testid="credential-url">{f?.url ?? '—'}</code>{f?.url ? copyBtn('url') : <span />}
-          <span>{t('chat.cred.user')}</span><code data-testid="credential-user">{f?.user ?? '…'}</code>{copyBtn('user')}
-          <span>{t('chat.cred.password')}</span><code className="oc-pw" data-testid="credential-password">{password ?? MASK}</code>
+          <span>{t('chat.cred.url')}</span><code className="oc-cred-val" data-testid="credential-url">{f?.url ?? '—'}</code>{f?.url ? copyBtn('url') : <span />}
+          <span>{t('chat.cred.user')}</span><code className="oc-cred-val" data-testid="credential-user">{f?.user ?? '…'}</code>{copyBtn('user')}
+          <span>{t('chat.cred.password')}</span><code className="oc-pw oc-cred-val" data-testid="credential-password">{password ?? MASK}</code>
           <span className="oc-row oc-tight">
             <button type="button" className="oc-copy" onClick={reveal} aria-pressed={password !== null} data-testid="credential-show">{password !== null ? t('chat.cred.hide') : t('chat.cred.show')}</button>
             {copyBtn('password')}
