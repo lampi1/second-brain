@@ -27,6 +27,9 @@ function day(topics: boolean) {
   const store = new OrchestratorTopicStore(null, () => now), svc = new OrchestratorTopicService({ store, now: () => now });
   const items: ChatItem[] = [], chats: { id: string; title: string; cwd: string }[] = [], role = orchestratorRole();
   let ctx = fx.baseTokens + tok(role.length), last: string | undefined, rollovers = 0, n = 0;
+  // the session a rollover started, as the manager tracks it (manager-topics.ts orchestratorRollover): the user's
+  // messages into it and its size after its first turn
+  let fresh: { turns: number; base?: number } | null = null;
   const perTurn: number[] = [], labels: string[] = [];
   for (const t of fx.turns) {
     now = fx.start + t.min * 60_000;
@@ -35,13 +38,17 @@ function day(topics: boolean) {
       const c = chats.find(x => x.title === t.from);
       topic = c ? svc.topicOfChat(c.id, chats) : undefined;
     } else {
-      topic = svc.assign('o', t.text, now, { items, chats, questions: [] }).topic;
-      const reason = topics ? rolloverDue({ kind: 'acp', contextTokens: ctx, topicChanged: !!last && !sameTopic(last, topic), idle: true }) : null;
+      const a = svc.assign('o', t.text, now, { items, chats, questions: [] }, undefined, `u${n + 1}`);
+      topic = a.topic;
+      if (fresh && fresh.base === undefined && fresh.turns > 0) fresh.base = ctx;
+      const sureSwitch = a.sure && a.by !== 'question' && !!last && !sameTopic(last, topic);
+      const reason = topics ? rolloverDue({ kind: 'acp', contextTokens: ctx, topicChanged: sureSwitch, idle: true, ...(fresh ? { turns: fresh.turns, ...(fresh.base ? { baseTokens: fresh.base } : {}) } : {}) }) : null;
       if (reason) {
         rollovers++;
         const brief = topicBrief({ topic, items, topics: store.list(), chats: chats.map(c => ({ id: c.id, title: c.title, state: 'idle' })), essentials: ESSENTIALS });
         ctx = fx.baseTokens + tok(role.length + ROLLOVER_NOTE.length + brief.length);
-      }
+        fresh = { turns: 1 };
+      } else if (fresh) fresh.turns++;
       last = topic;
     }
     labels.push(topic ?? '-');

@@ -636,7 +636,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     const topic = ownWords ? this.assignTopic(r, userItemId, t) : null;
     const news = r.s.isOrchestrator && !ownWords && !resumed ? this.newsTopic(t, from) : undefined;
     let lapT = Date.now();
-    const roll = topic ? await this.orchestratorRollover(r, topic.topic) : null;
+    const roll = topic ? await this.orchestratorRollover(r, topic) : null;
     lap.rolloverMs = Date.now() - lapT;
     // a cold chat (ADR 0031): after the cache expired the message goes on in a fresh session from its note
     lapT = Date.now();
@@ -666,10 +666,12 @@ export class ChatManager extends ManagerRemote implements ChatService {
     const fromPhone = !!phoneVia && from === undefined && !resumed;
     const phoneVoice = fromPhone && !!phoneVia?.voice;
     if (fromPhone) r.turnFromPhone = true; else if (!this.midTurn(r)) delete r.turnFromPhone;
-    // the topic brief of a fresh context leaves this message out (it is sent right after it)
-    const briefTopic = topic?.topic;
     if (topic) r.turnTopic = topic.topic; else if (news && !this.midTurn(r)) r.turnTopic = news;
     this.addItem(r, { kind: 'user', id: userItemId, at: Date.now(), text: t, ...(imgs.length ? { images: imgs.length } : {}), ...(thumbs.length ? { thumbs } : {}), ...(from ? { from: from.slice(0, 80) } : {}), ...(fromPhone ? { via: 'phone' as const, ...(phoneVoice ? { voice: true } : {}) } : {}), ...(topic ? { topic: topic.topic, topicBy: topic.by } : news ? { topic: news, topicBy: 'chat' as const } : {}) }, false);
+    // the topic brief of a fresh context leaves this message out (it is sent right after it); the item's own topic,
+    // the lightest model's when it answered while the engine started (ManagerTopics.tagItem)
+    const added = topic ? r.items.findLast(i => i.id === userItemId) : undefined;
+    const briefTopic = topic ? (added?.kind === 'user' && added.topic ? added.topic : topic.topic) : undefined;
     r.activeAt = Date.now();
     if (r.jobNew) this.startJob(r, t || `[${imgs.length} immagini]`);
     const continuation = cold?.h ?? (r.continuationPending ? this.handoffs.read(r.s.id, r.continuationPending) : null);

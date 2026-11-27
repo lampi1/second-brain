@@ -270,6 +270,13 @@ export interface Rec {
   /** the Orchestrator (ADR 0369): the topic of its current or last turn (the user's message, a chat's news); its replies
    *  take it. Never persisted: after a restart the transcript's marks give each message its topic again */
   turnTopic?: string;
+  /** the Orchestrator (ADR 0369): the lightest model moved the user's message before its item was added (the rollover
+   *  and the engine's start come in between): the item takes this topic when it appears */
+  topicMove?: { itemId: string; topic: string };
+  /** the Orchestrator's session as the rollover rule reads it (orchestrator-rollover.ts): the user's messages into it,
+   *  and the context it reported after its first turn (its baseline); fresh = started by a rollover. Never persisted:
+   *  after a restart the session's size is all the app knows */
+  rollTurns?: RollTurns;
   turnOutcomeDelivery?: boolean;
   /** the user's message being sent came from the paired phone (sendFromPhone): its text, so only that delivery is marked
    *  📱 and takes the phone reply line; voice = a transcribed voice note */
@@ -480,8 +487,12 @@ export interface ColdStep {
  *  note, and what to put back when the new engine does not start. */
 export interface RolloverStep {
   reason: 'budget' | 'topic'; old: string | null; at: number; contextTokens: number; notePath: string;
-  prev: { sessionId: string | null; contextTokens: number | undefined; contextMaxTokens: number | undefined; costTotalUsd: Rec['costTotalUsd']; ctxSince: Rec['ctxSince']; after: Rec['after']; rolePrimed: Rec['rolePrimed'] };
+  prev: { sessionId: string | null; contextTokens: number | undefined; contextMaxTokens: number | undefined; costTotalUsd: Rec['costTotalUsd']; ctxSince: Rec['ctxSince']; after: Rec['after']; rolePrimed: Rec['rolePrimed']; rollTurns: RollTurns | undefined };
+  /** the chat's hand-off note before the brief overwrote it (handoffs/<id>.md), put back by the undo; null = there was none */
+  prevNote: HandoffInfo | null;
 }
+/** An Orchestrator session as the rollover rule reads it (Rec.rollTurns). */
+export interface RollTurns { session: string | null | undefined; turns: number; base?: number; fresh: boolean }
 /** what a root chat's clean result tells the Orchestrator (onCleanReport) */
 export interface CleanReportNote { chatId: string; title: string; role: string; summary: string; at: number }
 /** One message the user typed in a work chat (userWrote): what the Orchestrator and the parent learn. */

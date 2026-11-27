@@ -8,7 +8,7 @@
 // user's message is delivered (manager.ts deliverNow).
 import crypto from 'node:crypto';
 import { sameTopic } from '../../shared/orchestrator-topics';
-import type { ChatItem, OrchestratorTopics, PendingRequest } from '../../shared/contract';
+import type { ChatItem, HandoffInfo, OrchestratorTopics, PendingRequest } from '../../shared/contract';
 import { engineOf } from '../engines/registry';
 import { errText, log } from '../log';
 import { topicBrief, type BriefChat } from '../agents/orchestrator-brief';
@@ -16,7 +16,7 @@ import type { TopicAssignment, TopicChat, TopicQuestion } from '../agents/orches
 import { AFTER_CALLS } from './continuity';
 import { ManagerContinuity } from './manager-continuity';
 import { coldDivider } from './manager-helpers';
-import type { Rec, RolloverStep } from './manager-types';
+import type { Rec, RollTurns, RolloverStep } from './manager-types';
 import { ROLLOVER_POLICY, rolloverDue } from './orchestrator-rollover';
 
 /** A chat id a wake message names («chatId <id>»). */
@@ -33,9 +33,10 @@ export abstract class ManagerTopics extends ManagerContinuity {
     }));
   }
 
-  /** The questions and plans that wait for the user in the other chats. */
+  /** The questions and plans that wait for the user's answer in the other chats (never a permission: a «sì» is not
+   *  an answer to a tool's request, the user grants those on their panel). */
   private topicQuestions(): TopicQuestion[] {
-    const asks = this.pending().filter(p => p.type !== 'command' && !this.chats.get(p.chatId)?.s.isOrchestrator).map(p => ({ chatId: p.chatId, at: p.at }));
+    const asks = this.pending().filter(p => p.type === 'question' && !this.chats.get(p.chatId)?.s.isOrchestrator).map(p => ({ chatId: p.chatId, at: p.at }));
     const plans = [...this.chats.values()].filter(c => c.s.plan?.phase === 'proposed' && !c.s.closedAt).map(c => ({ chatId: c.s.id, at: c.s.plan?.at ?? 0 }));
     return [...asks, ...plans];
   }
@@ -50,7 +51,8 @@ export abstract class ManagerTopics extends ManagerContinuity {
     const topics = this.opts.topics;
     if (!topics || !r.s.isOrchestrator) return null;
     try {
-      return topics.assign(r.s.id, text, Date.now(), { items: r.items, chats: this.topicChats(), questions: this.topicQuestions() }, topic => this.moveTurn(r, itemId, topic, 'model'));
+      if (r.topicMove && r.topicMove.itemId !== itemId) r.topicMove = undefined;
+      return topics.assign(r.s.id, text, Date.now(), { items: r.items, chats: this.topicChats(), questions: this.topicQuestions() }, topic => this.moveTurn(r, itemId, topic, 'model'), itemId);
     } catch (e) {
       log.warn('chats', 'topic not assigned', { chat: r.s.id, cause: errText(e), hint: 'the message goes without a topic; the next one tries again' });
       return null;
@@ -76,7 +78,15 @@ export abstract class ManagerTopics extends ManagerContinuity {
 
   /** An item of the Orchestrator without a topic gets the one it belongs to (ManagerCore.addItem). */
   protected override tagItem(r: Rec, item: ChatItem): ChatItem {
-    return r.s.isOrchestrator ? this.tagWith(item, r.turnTopic) : item;
+    if (!r.s.isOrchestrator) return item;
+    // the lightest model answered while the message waited for its engine: the item appears with the model's topic
+    const move = r.topicMove;
+    if (move && move.itemId === item.id && item.kind === 'user' && item.topicBy !== 'user') {
+      r.topicMove = undefined;
+      r.turnTopic = move.topic;
+      return { ...item, topic: move.topic, topicBy: 'model' };
+    }
+    return this.tagWith(item, r.turnTopic);
   }
 
   private tagWith(item: ChatItem, turnTopic: string | undefined): ChatItem {
@@ -117,12 +127,17 @@ export abstract class ManagerTopics extends ManagerContinuity {
     if (!r.s.isOrchestrator || !topics) throw new Error('Gli argomenti esistono solo nell’Orchestrator.');
     const item = r.items.find(i => i.id === itemId);
     if (!item || (item.kind !== 'user' && item.kind !== 'assistant' && item.kind !== 'system')) throw new Error('Messaggio non trovato.');
-    // a reply moves with the message it answers: the user's message before it
+    // a reply moves with the message it answers (the user's, or a chat's mail before it) and that message's other
+    // replies; a chat's result moves alone
     const idx = r.items.indexOf(item);
-    const own = item.kind === 'user' ? item : [...r.items.slice(0, idx)].reverse().find((i): i is Extract<ChatItem, { kind: 'user' }> => i.kind === 'user' && !i.from);
-    const label = topics.move(r.s.id, own?.text ?? ('text' in item ? item.text : ''), own?.at ?? item.at, topic);
-    this.moveTurn(r, own?.id ?? item.id, label, 'user');
-    if (own !== item && item.kind !== 'assistant') this.retag(r, item, label);
+    const head = item.kind === 'user' ? item : item.kind === 'assistant' ? [...r.items.slice(0, idx)].reverse().find((i): i is Extract<ChatItem, { kind: 'user' }> => i.kind === 'user') : undefined;
+    if (head) {
+      const label = topics.move(r.s.id, head.text, head.at, topic, head.id);
+      this.moveTurn(r, head.id, label, 'user');
+    } else {
+      const label = topics.move(r.s.id, 'text' in item ? item.text : '', item.at, topic, item.id);
+      this.retag(r, item, label);
+    }
     return topics.list(r.s.id);
   }
 
@@ -133,19 +148,22 @@ export abstract class ManagerTopics extends ManagerContinuity {
     this.opts.emitter.emit('chat:item', { chatId: r.s.id, item: next, replace: true });
   }
 
-  /** A message and its turn's replies (up to the user's next message) take `topic`; a model's move never undoes the
-   *  user's own (the store refuses it first: OrchestratorTopicService.refine). */
+  /** A message and the replies to it (up to the next message, the user's or a chat's mail) take `topic`; a model's
+   *  move never undoes the user's own (the store refuses it first: OrchestratorTopicService.refine). A model's move of
+   *  a message not added yet waits for it (tagItem). */
   private moveTurn(r: Rec, itemId: string, topic: string, by: 'user' | 'model'): void {
     if (this.chats.get(r.s.id) !== r) return;
     const start = r.items.findIndex(i => i.id === itemId);
-    if (start < 0) return;
+    if (start < 0) { if (by === 'model') r.topicMove = { itemId, topic }; return; }
     const first = r.items[start]!;
     if (first.kind === 'user' && first.topicBy === 'user' && by === 'model') return;
-    const last = r.items.findIndex((i, n) => n > start && i.kind === 'user' && !i.from && !i.text.startsWith('['));
-    for (const it of r.items.slice(start, last < 0 ? undefined : last)) {
+    const next = r.items.findIndex((i, n) => n > start && i.kind === 'user');
+    for (const it of r.items.slice(start, next < 0 ? undefined : next)) {
       if (it === first || it.kind === 'assistant') this.retag(r, it, topic, it === first ? by : undefined);
     }
-    if (last < 0) r.turnTopic = topic;
+    // the user's latest own message: its turn goes on under the new topic
+    const own = (i: ChatItem): boolean => i.kind === 'user' && !i.from && !i.text.startsWith('[');
+    if (own(first) && !r.items.some((i, n) => n > start && own(i))) r.turnTopic = topic;
   }
 
   /** A chat the Orchestrator starts or assigns in a turn joins that turn's topic. */
@@ -169,27 +187,43 @@ export abstract class ManagerTopics extends ManagerContinuity {
     return topicBrief({ topic, items: exclude ? r.items.filter(i => i.id !== exclude) : r.items, topics: topics.list(r.s.id).topics, chats, essentials });
   }
 
-  /** Before the user's message (manager.ts deliverNow): an idle ACP Orchestrator past its budget, or switching topic past
-   *  the smaller threshold, ends its session; the next one starts fresh and its first message carries the role text and
-   *  the brief. null = it goes on in the same session. */
-  protected async orchestratorRollover(r: Rec, topic: string): Promise<RolloverStep | null> {
+  /** Before the user's message (manager.ts deliverNow): an idle ACP Orchestrator grown past its budget since its
+   *  session started, or surely switching topic past the smaller growth, ends its session; the next one starts fresh
+   *  and its first message carries the role text and the brief. A guess of the rules (not sure, or the answer to
+   *  another chat's question) never counts as a switch. After a restart (no engine yet, nothing known of the session
+   *  but its reported size) the budget alone decides. null = it goes on in the same session. */
+  protected async orchestratorRollover(r: Rec, a: TopicAssignment): Promise<RolloverStep | null> {
     const engine = engineOf(r.s.harness);
-    if (!this.opts.topics || !r.s.isOrchestrator || !engine || r.switching || !r.session) return null;
+    if (!this.opts.topics || !r.s.isOrchestrator || !engine || r.switching || (!r.session && !r.s.sessionId)) return null;
     const policy = this.opts.rolloverPolicy ? this.opts.rolloverPolicy(engine.kind) : ROLLOVER_POLICY[engine.kind] ?? null;
+    if (!policy) return null;
+    const topic = a.topic;
+    // the session as the rule reads it: the messages since a rollover started it, its first turn's size
+    let st = r.rollTurns;
+    if (st && st.session !== undefined && st.session !== r.s.sessionId) st = undefined; // another session since (a cold switch, a new chat)
+    if (st && st.session === undefined && st.turns > 0) st = { ...st, session: r.s.sessionId };
+    if (st && st.fresh && st.base === undefined && st.turns > 0 && (r.s.contextTokens ?? 0) > 0) st = { ...st, base: r.s.contextTokens };
+    const sureSwitch = a.sure && a.by !== 'question' && !!r.turnTopic && !sameTopic(r.turnTopic, topic);
     const idle = !this.midTurn(r) && !r.pending.size && !r.commandsOpen?.size && !r.handoffTurn && !r.archiving && !r.releasing && !r.opening && !(r.s.background ?? 0) && !r.s.queued;
-    const reason = rolloverDue({ kind: engine.kind, contextTokens: r.s.contextTokens ?? 0, topicChanged: !!r.turnTopic && !sameTopic(r.turnTopic, topic), idle, remote: !!r.s.remoteControl?.on }, policy);
-    if (!reason) return null;
+    const reason = rolloverDue({
+      kind: engine.kind, contextTokens: r.s.contextTokens ?? 0, topicChanged: sureSwitch, idle, remote: !!r.s.remoteControl?.on,
+      ...(st?.fresh ? { turns: st.turns, ...(st.base ? { baseTokens: st.base } : {}) } : {}),
+    }, policy);
+    const counted: RollTurns = st ? { ...st, turns: st.turns + 1 } : { session: r.s.sessionId, turns: 1, fresh: false };
+    if (!reason) { r.rollTurns = counted; return null; }
     const run = (async (): Promise<RolloverStep | null> => {
       const old = r.s.sessionId, at = Date.now(), contextTokens = r.s.contextTokens ?? 0;
-      const prev = { sessionId: old, contextTokens: r.s.contextTokens, contextMaxTokens: r.s.contextMaxTokens, costTotalUsd: r.costTotalUsd, ctxSince: r.ctxSince, after: r.after, rolePrimed: r.rolePrimed };
+      const prev = { sessionId: old, contextTokens: r.s.contextTokens, contextMaxTokens: r.s.contextMaxTokens, costTotalUsd: r.costTotalUsd, ctxSince: r.ctxSince, after: r.after, rolePrimed: r.rolePrimed, rollTurns: counted };
       // the brief is kept as the divider's note, like a cold continuation's hand-off: written first, so a disk that
-      // refuses it leaves the session as it is
-      let notePath: string;
+      // refuses it leaves the session as it is; the note it replaces comes back if the fresh session does not start
+      let notePath: string, prevNote: HandoffInfo | null;
       try {
+        prevNote = this.handoffs.read(r.s.id);
         const note = this.handoffs.write(r.s.id, { title: r.s.title, text: this.topicBriefFor(r, topic), at, source: 'auto', ...(contextTokens ? { contextTokens } : {}) });
         notePath = old && /^[\w-]{1,64}$/.test(old) ? this.handoffs.archive(r.s.id, old) : note.path;
       } catch (e) {
         log.warn('chats', 'Orchestrator rollover note not written', { chat: r.s.id, cause: errText(e), hint: 'it goes on in the same session; the next message tries again' });
+        r.rollTurns = counted;
         return null;
       }
       const sess = r.session;
@@ -197,14 +231,16 @@ export abstract class ManagerTopics extends ManagerContinuity {
         r.autoEnding = true;
         try { await this.closeKeeping(r, sess); } finally { r.autoEnding = false; }
       }
-      if (r.pending.size || this.midTurn(r)) return null;
+      if (r.pending.size || this.midTurn(r)) { r.rollTurns = counted; return null; }
       r.s.sessionId = engine.caps.transcript ? crypto.randomUUID() : null;
       delete r.s.contextTokens; delete r.s.contextMaxTokens;
       r.costTotalUsd = 0; r.ctxSince = undefined; r.rolePrimed = undefined;
       r.after = { kind: 'continuation', left: AFTER_CALLS };
+      // this message is the fresh session's first; its id is known once the engine started (the next message reads it)
+      r.rollTurns = { session: engine.caps.transcript ? r.s.sessionId : undefined, turns: 1, fresh: true };
       this.persist(true);
-      log.info('chats', 'Orchestrator: fresh session for the topic context', { chat: r.s.id, data: { reason, contextTokens, harness: r.s.harness, from: old } });
-      return { reason, old, at, contextTokens, notePath, prev };
+      log.info('chats', 'Orchestrator: fresh session for the topic context', { chat: r.s.id, data: { reason, contextTokens, base: st?.base ?? null, harness: r.s.harness, from: old } });
+      return { reason, old, at, contextTokens, notePath, prev, prevNote };
     })();
     r.switching = run.then((): null => null);
     try { return await run; } finally { r.switching = undefined; }
@@ -223,7 +259,12 @@ export abstract class ManagerTopics extends ManagerContinuity {
     r.s.sessionId = p.sessionId;
     if (p.contextTokens !== undefined) r.s.contextTokens = p.contextTokens;
     if (p.contextMaxTokens !== undefined) r.s.contextMaxTokens = p.contextMaxTokens;
-    r.costTotalUsd = p.costTotalUsd; r.ctxSince = p.ctxSince; r.after = p.after; r.rolePrimed = p.rolePrimed;
+    r.costTotalUsd = p.costTotalUsd; r.ctxSince = p.ctxSince; r.after = p.after; r.rolePrimed = p.rolePrimed; r.rollTurns = p.rollTurns;
+    // the chat's own note as it was before the brief took its place
+    try {
+      if (step.prevNote) { const { path: _p, chatId: _c, ...note } = step.prevNote; this.handoffs.write(r.s.id, note); }
+      else this.handoffs.remove(r.s.id);
+    } catch (e) { log.warn('chats', 'hand-off note not put back', { chat: r.s.id, cause: errText(e), hint: 'the brief stays as the chat\'s note; the next hand-off replaces it' }); }
     this.persist();
     this.updated(r);
     log.warn('chats', 'Orchestrator fresh session not started', { chat: r.s.id, cause: r.s.lastError ?? 'engine did not start', hint: 'it goes on in its old session; the next message tries the fresh one again' });

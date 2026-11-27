@@ -228,6 +228,13 @@ export class HandoffStore {
     return { ...info, chatId, path: file };
   }
 
+  /** Removes the chat's own note (an Orchestrator rollover that did not start puts back the state before it). */
+  remove(chatId: string): void {
+    try { fs.rmSync(this.pathOf(chatId), { force: true }); } catch (e) {
+      log.warn('chats', 'hand-off note not removed', { chat: chatId, cause: errText(e), hint: 'the note stays; it is replaced by the next one' });
+    }
+  }
+
   read(chatId: string, session?: string): HandoffInfo | null {
     const file = this.pathOf(chatId, session);
     let raw: string;
