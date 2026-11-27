@@ -1,7 +1,7 @@
 // The Orchestrator's knowledge of the app (ADR 0149), in the real app over the app-control MCP: app_guide reads the
 // rail, Memoria's tabs and the Settings sections from the UI as drawn; app_ui "outline" lists what is on screen with
 // positions, chat strips by title and state only, and narrows a long page with a filter; a view change from an agent
-// (window.__sbSetView, the path app_config "view" takes, and ui:command 'prefs') switches the theme; a patch with an
+// (window.__sbSetView, the path app_config "view" takes, and ui:command 'prefs') switches the density; a patch with an
 // unknown field changes nothing.
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
 import { launchDemo, shot } from './helpers';
@@ -18,11 +18,13 @@ test.afterAll(async () => { await app?.close(); });
 
 test('app_guide: the rail, Memoria tabs and Settings sections as the UI draws them', async () => {
   const index = await mcp.ok('app_guide');
-  expect(index).toMatch(/Left rail now: .*\[memoria, G Y\]/);
+  // the rail holds Grindhouse; the other pages sit in the ☰ menu, read as its groups (ADR 0366)
+  expect(index).toMatch(/Left rail now: top: Grindhouse \[home, G H\]/);
+  expect(index).toMatch(/☰ [^:|]+: [^|]*\[memoria, G Y\]/);
   expect(index).toMatch(/Memoria tabs: /);
   expect(index).toMatch(/\[notifications\]/);
-  const topic = await mcp.ok('app_guide', { topic: 'tema' });
-  expect(topic).toContain('(theme)');
+  const topic = await mcp.ok('app_guide', { topic: 'lingua' });
+  expect(topic).toContain('(language)');
 });
 
 test('outline: controls with positions, chat strips by title only, a filter for one section', async () => {

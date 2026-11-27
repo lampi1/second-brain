@@ -15,7 +15,7 @@ import {
   IconBook, IconBrain, IconChess, IconChart, IconGrid, IconHistory, IconLayers, IconList, IconMap, IconMenu, IconMic, IconSettings, IconSparkle, IconTerminal, IconTicket,
 } from './Icons';
 import { t } from '../i18n';
-import { menuAlert, menuGroups } from '../lib/nav-menu';
+import { menuAlert, menuGroups, menuLabelKey, menuTasksUnread } from '../lib/nav-menu';
 import { useTasks } from '../store/tasks';
 import { SidebarTree } from './SidebarTree';
 import { useProposalCount } from '../lib/proposals';
@@ -50,9 +50,7 @@ export function Sidebar() {
   const working = useApp(s => workingCount(s.chats));
   const b = badges(feed, read);
   const proposals = useProposalCount();
-  const tasksOn = useTasks(s => s !== null && s.error?.kind !== 'script');
-  const unread = useTasks(s => s?.unread ?? 0);
-  const tasksUnread = tasksOn ? unread : 0;
+  const tasksUnread = useTasks(menuTasksUnread);
 
   useEffect(() => {
     const onResize = () => setWinW(window.innerWidth);
@@ -87,8 +85,7 @@ export function Sidebar() {
   const workingBadge = <span className="nav-badge" data-testid="nav-badge-working" aria-label={t('dialogs.sidebar.working', { count: working })}>{working > 99 ? '99+' : working}</span>;
   const homeBadge = working || waiting ? <>{working ? workingBadge : null}{waiting ? waitingBadge : null}</> : null;
 
-  const labelOf = (id: BrainPageId, fallback: string) =>
-    id === 'agenti' ? t('catalog.title') : id === 'impara' ? t('dialogs.sidebar.news') : fallback;
+  const labelOf = (id: BrainPageId, fallback: string) => { const k = menuLabelKey(id); return k ? t(k) : fallback; };
 
   const menuItem = (id: BrainPageId) => {
     const p = BRAIN_PAGES.find(x => x.id === id);

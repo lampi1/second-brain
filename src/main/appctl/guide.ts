@@ -186,7 +186,7 @@ export function search(list: Entry[], topic: string, max = 15): Entry[] {
 
 /** The index without a topic: the layout, the pages and where to look next; a few hundred tokens. */
 function index(ui: UiMap | null, d: GuideDeps, lang: GuideLang): string {
-  const lines = ['second-brain: an Electron desktop app. Layout: left rail (pages, and under Grindhouse the open agents as a tree), the page in the middle, the Orchestrator column on the right (collapsible, Ctrl+R), Ctrl+K palette = go anywhere and every action, Ctrl+/ = shortcuts, Ctrl+J = next thing waiting for the user.'];
+  const lines = ['second-brain: an Electron desktop app. Layout: left rail (Grindhouse, the ☰ menu with the other pages, and under Grindhouse the open agents as a tree), the page in the middle, the Orchestrator column on the right (collapsible, Ctrl+R), Ctrl+K palette = go anywhere and every action, Ctrl+/ = shortcuts, Ctrl+J = next thing waiting for the user.'];
   if (ui) {
     lines.push('Left rail now: ' + ui.nav.map(g => `${g.group || 'top'}: ${g.items.map(i => `${i.label} [${i.page}${i.key ? `, ${i.key}` : ''}]`).join(', ')}`).join(' | '));
     lines.push('Memoria tabs: ' + ui.memoria.map(m => m.label).join(', '));

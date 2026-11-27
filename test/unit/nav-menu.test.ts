@@ -3,7 +3,9 @@
 // remain pages of the app (reachable from the palette and the Orchestrator); Task returns while it has unread items.
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(), on: vi.fn() } }));
-import { menuAlert, menuGroups, MENU_GROUPS, MENU_HIDDEN } from '../../src/renderer/lib/nav-menu';
+import { menuAlert, menuGroups, menuLabelKey, menuTasksUnread, MENU_GROUPS, MENU_HIDDEN } from '../../src/renderer/lib/nav-menu';
+import { menuNav } from '../../src/renderer/lib/app-map';
+import type { TasksState } from '../../src/shared/contract';
 import { BRAIN_PAGES } from '../../src/renderer/brain';
 
 describe('the ☰ menu', () => {
@@ -26,5 +28,24 @@ describe('the ☰ menu', () => {
     expect(menuAlert(0, 2)).toBe(true);
     expect(menuAlert(1, 0)).toBe(true);
     expect(menuAlert(0, -1)).toBe(false);
+  });
+  it('counts unread Task items only while the Task section is on', () => {
+    const st = (over: Partial<TasksState>) => ({ unread: 4, ...over }) as TasksState;
+    expect(menuTasksUnread(null)).toBe(0);
+    expect(menuTasksUnread(st({}))).toBe(4);
+    expect(menuTasksUnread(st({ error: { kind: 'script', message: 'x' } } as Partial<TasksState>))).toBe(0);
+    expect(menuTasksUnread(st({ error: { kind: 'login', message: 'x' } } as Partial<TasksState>))).toBe(4);
+  });
+  it('names Agenti and Impara as the menu does, every other page by its own label', () => {
+    expect(menuLabelKey('agenti')).toBe('catalog.title');
+    expect(menuLabelKey('impara')).toBe('dialogs.sidebar.news');
+    expect(menuLabelKey('memoria')).toBeNull();
+  });
+  it('gives the Orchestrator the menu\'s groups, marked ☰, with each page\'s key, Task only while unread', () => {
+    const nav = menuNav(0);
+    expect(nav.map(g => g.group.startsWith('☰ '))).toEqual([true, true, true]);
+    expect(nav.flatMap(g => g.items.map(i => i.page))).toEqual(MENU_GROUPS.flatMap(g => g.pages));
+    expect(nav.flatMap(g => g.items).find(i => i.page === 'memoria')).toMatchObject({ key: 'G Y' });
+    expect(menuNav(2)[0]!.items.map(i => i.page)).toEqual(['home', 'piani', 'task']);
   });
 });
