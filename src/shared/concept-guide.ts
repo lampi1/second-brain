@@ -1310,8 +1310,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Sa anche cosa c’è sullo schermo adesso e dove sta ogni controllo, senza leggere il contenuto privato delle chat.',
         'It also knows what is on screen right now and where each control sits, without reading the chats’ private content.'),
       // src/main/appctl/config.ts app_config
-      b('Cambia per te ogni configurazione: impostazioni, vista (tema, densità), la carta di un ruolo, i connettori (aggiungere, cambiare, provare, togliere, darli a un ruolo), il tuo profilo, «Rispondi dopo». Anche le impostazioni protette cambiano subito.',
-        'It changes every configuration for you: settings, the view (theme, density), a role’s card, connectors (add, change, test, remove, give to a role), your profile, "Answer later". Protected settings change at once too.'),
+      b('Cambia per te ogni configurazione: impostazioni, vista (densità, profilo di lavoro), la carta di un ruolo, i connettori (aggiungere, cambiare, provare, togliere, darli a un ruolo), il tuo profilo, «Rispondi dopo». Anche le impostazioni protette cambiano subito.',
+        'It changes every configuration for you: settings, the view (density, work profile), a role’s card, connectors (add, change, test, remove, give to a role), your profile, "Answer later". Protected settings change at once too.'),
       // src/main/appctl/user-words.ts
       b('Cambia qualcosa solo se gliel’hai chiesto tu: un tuo messaggio, o il tuo «Sì» a una sua domanda, che sia l’ultima cosa arrivata nella sua chat; vale per dieci minuti o per tutto il lavoro che quella richiesta ha avviato. Le notizie dell’app, la posta di un agente o il «Sì» dato a un’altra chat non bastano.',
         'It changes something only if you asked: your own message, or your "Sì" to one of its questions, being the latest thing in its chat; it holds for ten minutes or for the whole piece of work that ask started. The app’s news, an agent’s mail or a "Sì" given to another chat are not enough.'),
@@ -1540,8 +1540,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Il mio profilo è come gli agenti ti conoscono (nome, ruolo, lavoro principale, modo di rispondere, in me.md); Account e strumenti mostra l’accesso di ogni motore e quanto può fare da solo e, sotto, «Altri agenti ACP (proposte)»: CLI note che parlano ACP, spente, che l’app non installa e a cui non fa l’accesso; installata la CLI e fatto l’accesso nel terminale, «Attiva» la rende un motore come gli altri.',
         'My profile is how the agents know you (name, role, main work, reply style, in me.md); Accounts and tools shows each engine’s sign-in and how much it may do on its own and, below, "Other ACP agents (proposals)": known CLIs that speak ACP, off, which the app neither installs nor signs in to; once you install the CLI and sign in in a terminal, "Turn on" makes it an engine like the others.'),
       // src/renderer/components/SettingsPage.tsx; src/renderer/components/AppearancePreview.tsx
-      b('Il mio spazio tiene la cartella del brain, la condivisione, la cartella dei progetti, la chiusura automatica delle chat ferme e la configurazione guidata da rifare; Aspetto e lingua cambia tema, lingua e densità con un’anteprima.',
-        'My workspace holds the brain folder, sharing, the projects folder, the auto-close of idle chats and the guided setup to run again; Appearance and language changes theme, language and density with a preview.'),
+      b('Il mio spazio tiene la cartella del brain, la condivisione, la cartella dei progetti, la chiusura automatica delle chat ferme e la configurazione guidata da rifare; Aspetto e lingua cambia lingua e densità con un’anteprima; il tema è solo scuro.',
+        'My workspace holds the brain folder, sharing, the projects folder, the auto-close of idle chats and the guided setup to run again; Appearance and language changes language and density with a preview; the theme is dark only.'),
       b('Le altre sezioni hanno la loro carta: Aggiornamenti, Connettori e Avanzate (server MCP), Ruoli e deleghe, Voce, Notifiche.',
         'The other sections have their own card: Updates, Connectors and Advanced (MCP servers), Roles and delegation, Voice, Notifications.'),
       // src/main/appctl/config.ts app_config

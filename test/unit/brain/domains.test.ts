@@ -83,8 +83,8 @@ describe('config.json keeps its domains list', () => {
     fs.writeFileSync(path.join(ud, 'config.json'), JSON.stringify({ brainRoot: null, domains: [dom] }));
     const c = new ConfigStore(ud, {});
     expect(c.domains()).toEqual([dom]);
-    c.set({ theme: 'light' });
-    expect(JSON.parse(fs.readFileSync(path.join(ud, 'config.json'), 'utf8'))).toMatchObject({ theme: 'light', domains: [dom] });
+    c.set({ language: 'en' });
+    expect(JSON.parse(fs.readFileSync(path.join(ud, 'config.json'), 'utf8'))).toMatchObject({ language: 'en', domains: [dom] });
     expect(new ConfigStore(ud, { SB_DOMAINS: `${dom}\nrelative` }).domains()).toEqual([dom]);
     expect(new ConfigStore(ud, { SB_DOMAINS: '' }).domains()).toEqual([]);
   });

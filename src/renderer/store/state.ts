@@ -28,7 +28,7 @@ export interface AppState {
   feed: readonly FeedEvent[];
   /** messages typed while a chat was busy, sent when it becomes idle */
   queued: Readonly<Record<string, readonly QueuedMsg[]>>;
-  /** the app settings (mute per kind, do-not-disturb, view, theme), when main has them */
+  /** the app settings (mute per kind, do-not-disturb, language), when main has them */
   settings: Settings | null;
 }
 

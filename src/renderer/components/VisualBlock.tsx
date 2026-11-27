@@ -20,7 +20,7 @@ const ImageZoom = lazy(() => import('./ImageZoom').then(m => ({ default: m.Image
 /** The fence languages drawn instead of shown as code. */
 export const isVisualLang = (lang: string): boolean => /^(?:mermaid|chart)$/i.test(lang);
 
-/** Changes when the theme does (picked in Settings, or following Windows): the drawings read the tokens again. */
+/** Changes when the tokens do (the app is dark only, ADR 0366; a data-theme change still redraws): the drawings read them again. */
 function useThemeKey(): string {
   const read = () => getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
   const [key, setKey] = useState(read);

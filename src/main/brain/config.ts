@@ -30,8 +30,9 @@ const newId = (p: string) => `${p}_${crypto.randomUUID().slice(0, 12)}`;
 const LEGACY_MUTE: Record<string, string> = { devops: 'task', 'devops-alert': 'task-alert' };
 
 /** Keys of removed features (ADR 0201), a dotted path for a nested one: never read, dropped from config.json at the
- *  next start. delegation.maxParallel: no limit on children at once (the owner, 2026-11-23). */
-export const RETIRED_KEYS: readonly string[] = ['pulse', 'headlineOn', 'headlineModel', 'headlineEffort', 'suggestModel', 'suggestDailyUsd', 'delegation.maxParallel', 'messaging'];
+ *  next start. delegation.maxParallel: no limit on children at once (the owner, 2026-11-23); theme: the app is dark
+ *  only (ADR 0366). */
+export const RETIRED_KEYS: readonly string[] = ['pulse', 'headlineOn', 'headlineModel', 'headlineEffort', 'suggestModel', 'suggestDailyUsd', 'delegation.maxParallel', 'messaging', 'theme'];
 /** Whether a saved file holds a retired key (dotted = nested). */
 export const savedHas = (raw: object, key: string): boolean => {
   let o: unknown = raw;

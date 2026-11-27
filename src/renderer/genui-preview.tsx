@@ -16,7 +16,6 @@ const { RequestPanel } = await import('./components/RequestPanel');
 
 function Preview() {
   const [language, languageSet] = useState<Lang>('it');
-  const [theme, themeSet] = useState('dark');
   const [revision, revise] = useState(0);
   const [answers, answerSet] = useState(0);
   const richQuestion = questionFixture(language);
@@ -25,7 +24,6 @@ function Preview() {
     <h1>GenUI · {language === 'it' ? 'Anteprima componenti' : 'Component preview'}</h1>
     <nav style={{ marginBottom: 24 }} aria-label="Preview controls">
       <button style={control} onClick={() => { const next = language === 'it' ? 'en' : 'it'; void loadLang(next).then(() => { setLang(next); languageSet(next); }); }}>IT / EN</button>
-      <button style={control} onClick={() => { const next = theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = next; themeSet(next); }}>{theme}</button>
       <button style={control} onClick={() => revise(n => n + 1)}>{language === 'it' ? 'Aggiorna stesso id' : 'Update same id'}</button>
       <output aria-live="polite">{language === 'it' ? 'Risposte inviate' : 'Answers submitted'}: {answers}</output>
     </nav>
@@ -45,5 +43,5 @@ function Preview() {
   </main>;
 }
 document.body.style.overflow = 'auto';
-document.documentElement.dataset.theme = 'dark';
+document.documentElement.dataset.theme = 'dark'; // dark only (ADR 0366)
 createRoot(document.getElementById('root')!).render(<Preview />);

@@ -2,7 +2,7 @@
 // at the moment it is asked from the same sources the user's screen is drawn from, never a hand-kept list: the left
 // rail as it is rendered now (groups, pages, shortcuts), every page with its shortcut and subtitle, Memoria's tabs, the
 // Settings sections (lib/settings-sections.ts), the palette's actions with their keys, the "?" help texts (explain.*),
-// and the view preferences (theme, density, work profile). screenOutline() is the live screen: headings, tabs and
+// and the view preferences (density, work profile). screenOutline() is the live screen: headings, tabs and
 // controls with their state and where they sit, never what a chat or a question says (ADR 0083: the
 // Orchestrator sees a chat's state, not its content). Main
 // calls them with executeJavaScript on window.__sbAppMap / __sbScreen / __sbView (installAppMap, from main.tsx); the

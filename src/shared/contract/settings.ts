@@ -9,7 +9,6 @@ import type { Harness } from './engines';
 // ── Settings (userData/config.json; never secrets) ─────────────────────────────────────────────────────────────────
 /** Windows toasts: only urgent kinds (default), urgent + normal, or none (in-app feed only). */
 export type ToastLevel = 'urgent' | 'normal' | 'off';
-export type ThemeMode = 'dark' | 'light' | 'system';
 /** The UI language (ADR 0057, German ADR 0117): system = Windows' language (Italian when it is Italian, German when it
  *  is German, English otherwise). 'de' is German as written in Austria (dates and numbers de-AT). */
 export type LanguageMode = 'system' | 'it' | 'en' | 'de';
@@ -27,7 +26,6 @@ export interface Settings {
   mcpPort: number;
   mute: Record<string, boolean>;   // feed kind → no toast (still in the feed)
   osToasts: ToastLevel;
-  theme: ThemeMode;
   language: LanguageMode;
   dnd: boolean;                    // do not disturb: no toasts at all
   dndUntil: number | null;         // timed do not disturb (epoch ms): no toasts until then
@@ -137,10 +135,10 @@ export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engine
   budget?: { enabled?: boolean; claude?: Partial<BudgetLimits>; cursor?: Partial<BudgetLimits> };
 };
 
-/** Every setting is one dot key ("theme", "budget.claude.dailyUsd", "mute.idea"): the unit of validation, history,
+/** Every setting is one dot key ("language", "budget.claude.dailyUsd", "mute.idea"): the unit of validation, history,
  *  undo and agent permissions. The schema (settings:schema) gives type, default, Italian label and description. */
 export type SettingKey =
-  | 'engineOrder' | 'engineThresholds' | 'jobs.fallback' | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'quipsDaily' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
+  | 'engineOrder' | 'engineThresholds' | 'jobs.fallback' | 'brainRoot' | 'mcpPort' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'quipsDaily' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
   | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'judging' | 'judgingSince' | 'judgingCapUsd' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'coldStartSlots' | 'worktreePoolPerRepo' | 'worktreePoolTotal' | 'worktreeDiskCapGb' | 'codexAutonomyRoots'
   | 'suggestOn' | 'voiceAsr' | 'voiceName' | 'voicePtt' | 'voiceSpeed' | 'awayMode'
