@@ -22,6 +22,8 @@ import { scanImports } from './import';
 import { McpOAuth, type OAuthSession } from './oauth';
 import type { ChatMcpContext } from './access';
 import { renameWithRetry } from '../agents/local-store';
+import type { FeedInput } from '../services';
+import { waitText, type ServerHealth } from './health';
 
 export interface McpServersOptions {
   userData: string;
@@ -43,6 +45,8 @@ export interface McpServersOptions {
   openExternal?: (url: string) => Promise<void> | void;
   /** tests: the network of the OAuth login */
   oauthFetch?: typeof fetch;
+  /** the one notice when a server is marked «needs-login» or «broken» (ADR 0370): a feed card, «Accedi» on a login */
+  announce?: (e: FeedInput) => void;
 }
 
 /** One undoable change: the server's id before (`id`, '' for an add) and after (`now`), and how it was before. */
@@ -75,7 +79,7 @@ export class McpServersService {
     });
     this.gateway = new McpGateway({
       mcp: opts.mcp, servers: () => this.store.servers(), roleAccess: r => this.store.roleAccess(r),
-      endpoint: id => this.endpoint(id), context: opts.context, ...(opts.connect ? { connect: opts.connect } : {}),
+      endpoint: id => this.endpoint(id), context: opts.context, ...(opts.connect ? { connect: opts.connect } : {}), ...(opts.now ? { now: opts.now } : {}),
       // a server whose program did not start for a chat, or that refused the access (its error asks for the login,
       // so the card offers «Accedi»): its card says so, as after a failed «Prova» (#417, #437)
       onBroken: (id, e) => {
@@ -83,6 +87,7 @@ export class McpServersService {
         this.store.recordTest(id, { ok: false, at: (this.opts.now ?? Date.now)(), ms: 0, tools: this.store.test(id)?.tools ?? [], error: describeError(e) });
         this.opts.emit?.(this.state());
       },
+      onMarked: (id, h, e) => this.marked(id, h, e),
       onWorks: (id, tools) => {
         if (!this.store.def(id)) return;
         this.store.recordTest(id, { ok: true, at: (this.opts.now ?? Date.now)(), ms: 0, tools: tools.map(t => ({ name: t.name, description: t.description.slice(0, 400), readOnly: t.readOnly })) });
@@ -250,6 +255,22 @@ export class McpServersService {
     const env: Record<string, string> = { ...def.env };
     for (const slot of def.secrets) env[slot.name] = values[slotKey(slot)]!;
     return { transport: 'stdio', command: def.command!, args: def.args ?? [], env, cwd: this.opts.home ?? os.homedir() };
+  }
+
+  /** A server just marked «needs-login» or «broken» (ADR 0370): ONE notice, until it works again or the user acts on it.
+   *  A login the app can do (an http server whose 401 asks for OAuth, or one already logged in) gets «Accedi». */
+  private marked(id: string, h: ServerHealth, e: unknown): void {
+    const def = this.store.def(id);
+    if (!def || !this.opts.announce) return;
+    const wait = waitText(h.until - (this.opts.now ?? Date.now)());
+    const login = h.state === 'needs-login' && def.transport === 'http' && (describeError(e).login === true || this.store.oauthLabel(id) !== null);
+    const fix = login ? `Premi «Accedi»: l’app lo riprova subito dopo, altrimenti da sola tra ${wait}.`
+      : h.state === 'needs-login' ? `Inserisci un token valido sulla sua scheda in Impostazioni → Connettori; altrimenti l’app lo riprova da sola tra ${wait}.`
+        : `L’app lo riprova da sola tra ${wait}; «Prova» sulla sua scheda in Impostazioni → Connettori lo riprova subito.`;
+    const title = h.state === 'needs-login' ? `«${def.label}» chiede di accedere di nuovo` : `«${def.label}» non funziona`;
+    const detail = `${describeError(e).message} · ${h.streak} tentativi di fila non riusciti: l’app smette di aprirlo a ogni chat. ${fix}`;
+    try { this.opts.announce({ kind: 'connector-broken', title, detail, ...(login ? { action: { kind: 'connector-login', server: id } } : {}) }); }
+    catch (err) { log.warn('mcp-servers', 'connector notice not shown', { cause: errText(err), data: { server: id }, hint: 'its card in Impostazioni → Connettori still shows the failure' }); }
   }
 
   /** «Accedi» (ADR 0273), the user's click: the MCP OAuth login in the system browser, then a «Prova». */

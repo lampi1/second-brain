@@ -13,7 +13,7 @@ describe('demo agent runs', () => {
     const by = new Map(demoAgentMetrics(NOW).map(m => [m.agentId, m.standing!]));
     expect(by.get('orchestrator')!.level).toBeGreaterThanOrEqual(5);
     expect(by.get('artisan')!.performance).toBeGreaterThan(0.5);
-    expect(by.get('herald')!.performance).toBeNull();
+    expect(by.get('sentinel')!.performance).toBeNull();
     expect(by.has('pulse')).toBe(false);
   });
 });

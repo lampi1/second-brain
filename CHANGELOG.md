@@ -6,6 +6,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- `brain_edit` (ADR 0370): the Orchestrator makes a small edit to a `.md`/`.txt` file of the brain (at most 3 files, 40
+  lines) in one step, with one compact line in the chat and «Annulla» for 24 h; settings, permissions, hooks and agent
+  definitions stay out of it.
 - Plans (page «Piani», ADR 0363): one concept replaces the project maps and the work maps. A plan has its goal, why, project,
   steps with their true state and proof, the percentage done, the steps that run together side by side, doubts and decisions,
   chats and versions; closing a plan or losing a chat never changes a step; every save is a version and changes only what it
@@ -327,6 +330,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   key is gone (ADR 0291).
 
 ### Fixed
+- A connector that keeps failing (refused login, program that won't start, timeouts) is held back with a growing wait
+  instead of being retried at every chat, and one feed card says what to do, with «Accedi» when it needs a login (ADR 0370).
 - Strategist chats on Cursor with Gemini delegate again: that engine sends nested objects and lists as null, so a
   nested argument may come as its JSON text and a tool's error names what arrived as null and how to send it (ADR 0365).
 - An answer written in the Orchestrator's field closes its question. With a question or a plan open in the

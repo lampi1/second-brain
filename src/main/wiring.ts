@@ -140,6 +140,8 @@ import { UserCorrectionStore } from './brain/user-corrections';
 import { apiSearch, brainSearchTool } from './search/hybrid/tool';
 import { BrainScripts, touchesScripts } from './brain/scripts';
 import { BrainChangelog } from './brain/changelog';
+import { BrainQuickEdit } from './brain/quick-edit-service';
+import { brainGit, brainHooks, brainLint } from './brain/quick-edit-ports';
 import { brainScriptsTool, chatScriptAddTool } from './brain/scripts-tools';
 import { BrainQueries, touchesQueries } from './brain/queries';
 import { brainQueriesTool, chatQueryAddTool } from './brain/queries-tools';
@@ -319,7 +321,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // Claude <-> Cursor rule, so a local process may not take the Orchestrator's identity
   const orchestratorTokens = new EndpointTokens();
   // the user's MCP servers (ADR 0086): reached by every chat through the app's gateway, tokens only in main
-  const mcpServers: McpServersService = new McpServersService({ userData: ctx.userData, cipher: safeStorageCipher(safeStorage), mcp, context: (id): ChatMcpContext | null => manager.mcpContext(id), emit: st => ctx.emitter.emit('mcpservers:changed', st), openExternal: url => shell.openExternal(url) });
+  const mcpServers: McpServersService = new McpServersService({ userData: ctx.userData, cipher: safeStorageCipher(safeStorage), mcp, context: (id): ChatMcpContext | null => manager.mcpContext(id), emit: st => ctx.emitter.emit('mcpservers:changed', st), openExternal: url => shell.openExternal(url), announce: e => brain.publish([e]) });
   // a chat that closes (archived or removed) ends its connector processes at once (gateway.closeChat)
   ctx.emitter.tap((ch, p) => {
     if (ch === 'chat:removed') mcpServers.gateway.closeChat((p as { chatId: string }).chatId);
@@ -859,6 +861,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       // Il mio profilo (ADR 0207): the page's own reader and writer of me.md (stateless: each save checks the revision)
       profile: (() => { const p = new ProfileService({ root: () => brain.settings().brainRoot, template: (() => { try { return fs.readFileSync(path.join(app.getAppPath(), 'brain-template', 'me.template.md'), 'utf8'); } catch { return ''; } })() }); return { get: () => p.get(), save: req => p.save(req) }; })(),
     } };
+  // brain_edit: the Orchestrator's small brain edit, committed, with «Annulla» (ADR 0370)
+  appDeps.brainEdit = new BrainQuickEdit({ root: () => brain.info().brainRoot, journalFile: path.join(ctx.userData, 'brain-quick-edits.json'), git: brainGit, lint: brainLint(electronNode()), hooks: brainHooks(os.homedir()), changelog: brainChangelog, changed: () => ctx.emitter.emit('brainmodel:changed', undefined) });
   attachAppTools(mcp, appDeps, source, false, orchestratorTokens, { compact: id => manager.chatToolsCompact(id), served: (id, names) => manager.appToolsServed(id, names) });
 
   // Task page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on

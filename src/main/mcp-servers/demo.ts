@@ -32,7 +32,7 @@ const DEMO_CIPHER: SecretCipher = { unavailable: () => null, encrypt: s => Buffe
 const SEED: McpServerDef[] = [
   { id: 'azure-devops', label: 'Azure DevOps', transport: 'stdio', command: 'npx', args: ['-y', '@azure-devops/mcp', 'contoso'], secrets: [], enabled: true, importedFrom: 'claude', purpose: 'Work item, pull request e pipeline: la pagina Task e gli agenti che lavorano sui ticket.' },
   { id: 'github', label: 'GitHub', transport: 'http', url: 'https://api.githubcopilot.com/mcp/', secrets: [{ where: 'header', name: 'Authorization', prefix: 'Bearer ' }], enabled: true, purpose: 'Issue e pull request dei repository: revisioni, ricerche, commenti.' },
-  { id: 'jira', label: 'Jira Cloud', transport: 'http', url: 'https://mcp.atlassian.com/v1/mcp', secrets: [{ where: 'header', name: 'Authorization', prefix: 'Bearer ' }], enabled: true, importedFrom: 'cursor', purpose: 'I ticket del team prodotto, per l’Herald e lo Scribe.' },
+  { id: 'jira', label: 'Jira Cloud', transport: 'http', url: 'https://mcp.atlassian.com/v1/mcp', secrets: [{ where: 'header', name: 'Authorization', prefix: 'Bearer ' }], enabled: true, importedFrom: 'cursor', purpose: 'I ticket del team prodotto, per l’Artisan e il Sentinel.' },
   { id: 'docs-search', label: 'Documentazione', transport: 'http', url: 'https://mcp.context7.com/mcp', secrets: [], enabled: true, purpose: 'Documentazione aggiornata delle librerie per Scout e Artisan.' },
 ];
 
@@ -57,7 +57,7 @@ export function demoMcpServers(o: { userData: string; mcp: McpServer; emit: (st:
     service.store.recordTest('azure-devops', ok('azure-devops', 1840, 3_600_000));
     service.store.recordTest('github', ok('github', 420, 600_000));
     service.store.recordTest('jira', { ok: false, at: o.now() - 1_200_000, ms: 0, tools: [], error: { code: 'secret', message: 'Manca il token «Authorization».', fix: 'Inseriscilo nel campo Token della scheda del server: viene cifrato sul computer.' } });
-    service.store.setAccess('herald', 'azure-devops', 'read');
+    service.store.setAccess('artisan', 'azure-devops', 'read');
     service.store.setAccess('scout', 'github', 'read');
     service.store.setAccess('sentinel', 'jira', 'none');
   }
