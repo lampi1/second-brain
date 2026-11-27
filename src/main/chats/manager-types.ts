@@ -491,8 +491,9 @@ export interface ColdStep {
 export interface RolloverStep {
   reason: 'budget' | 'topic'; old: string | null; at: number; contextTokens: number; notePath: string;
   prev: { sessionId: string | null; contextTokens: number | undefined; contextMaxTokens: number | undefined; costTotalUsd: Rec['costTotalUsd']; ctxSince: Rec['ctxSince']; after: Rec['after']; rolePrimed: Rec['rolePrimed']; rollTurns: RollTurns | undefined };
-  /** the chat's hand-off note before the brief overwrote it (handoffs/<id>.md), put back by the undo; null = there was none */
-  prevNote: HandoffInfo | null;
+  /** the chat's hand-off note file before the brief overwrote it (handoffs/<id>.md, as it was on disk, even one the app
+   *  cannot parse), put back by the undo; null = there was none */
+  prevNote: string | null;
 }
 /** An Orchestrator session as the rollover rule reads it (Rec.rollTurns). */
 export interface RollTurns { session: string | null | undefined; turns: number; base?: number; fresh: boolean }

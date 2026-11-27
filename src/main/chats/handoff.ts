@@ -228,11 +228,24 @@ export class HandoffStore {
     return { ...info, chatId, path: file };
   }
 
-  /** Removes the chat's own note (an Orchestrator rollover that did not start puts back the state before it). */
-  remove(chatId: string): void {
-    try { fs.rmSync(this.pathOf(chatId), { force: true }); } catch (e) {
-      log.warn('chats', 'hand-off note not removed', { chat: chatId, cause: errText(e), hint: 'the note stays; it is replaced by the next one' });
+  /** The chat's own note file exactly as it is on disk, null = there is none (an Orchestrator rollover keeps it to put
+   *  it back: read() cannot tell a missing note from one it cannot parse). Throws when the file exists but cannot be
+   *  read, so the caller never overwrites what it could not keep. */
+  snapshot(chatId: string): string | null {
+    try { return fs.readFileSync(this.pathOf(chatId), 'utf8'); } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw e;
     }
+  }
+
+  /** Puts the chat's own note back as snapshot() kept it: the same bytes, or no file when there was none. */
+  restore(chatId: string, raw: string | null): void {
+    const file = this.pathOf(chatId);
+    if (raw === null) { fs.rmSync(file, { force: true }); return; }
+    fs.mkdirSync(this.dir, { recursive: true });
+    const tmp = `${file}.tmp`;
+    fs.writeFileSync(tmp, raw, 'utf8');
+    renameWithRetry(tmp, file);
   }
 
   read(chatId: string, session?: string): HandoffInfo | null {

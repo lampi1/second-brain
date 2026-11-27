@@ -13,7 +13,7 @@ import { HandoffStore } from '../../../src/main/chats/handoff';
 import { OrchestratorTopicStore } from '../../../src/main/agents/orchestrator-topic-store';
 import { BRIEF_START } from '../../../src/main/agents/orchestrator-brief';
 import { ROLLOVER_NOTE, ROLLOVER_POLICY, rolloverDue } from '../../../src/main/chats/orchestrator-rollover';
-import type { ChatItem, OrchestratorTopics } from '../../../src/shared/contract';
+import type { ChatItem, OrchestratorTopics, PendingRequest } from '../../../src/shared/contract';
 import { tmp } from './helpers';
 
 const managers: ChatManager[] = [];
@@ -59,7 +59,7 @@ class SteeredTopics extends OrchestratorTopicService {
   }
 }
 
-interface FixtureOpts { userData?: string; store?: OrchestratorTopicStore; classify?: TopicClassifier; closeGate?: Promise<void>; failStart?: () => boolean }
+interface FixtureOpts { userData?: string; store?: OrchestratorTopicStore; classify?: TopicClassifier; closeGate?: Promise<void>; failStart?: () => boolean; onClose?: (s: SessionSink) => void }
 
 /** An Orchestrator on a fake ACP engine: each message is answered at once and reports `context()` tokens. */
 function fixture(fo: FixtureOpts = {}) {
@@ -90,7 +90,7 @@ function fixture(fo: FixtureOpts = {}) {
           s.item({ kind: 'result', id: `r${n}`, at: Date.now(), costUsd: 0, durationMs: 1, turns: 1, isError: false }, false);
           s.changed({ state: 'idle', contextTokens: ctx, contextMaxTokens: 1_000_000, contextEstimated: false });
         },
-        async close() { if (fo.closeGate) await fo.closeGate; alive = false; s.changed({ state: 'closed' }); s.exit({ code: 0, error: null }); },
+        async close() { if (fo.closeGate) await fo.closeGate; alive = false; s.changed({ state: 'closed' }); s.exit({ code: 0, error: null }); fo.onClose?.(s); },
         killNow() {}, interrupt: async () => {}, answer: () => false, rename: async () => {}, setModel: async () => {}, setEffort: async () => {}, setPermissionMode: async () => {}, contextUsage: async () => null, usage: async () => null,
       } as unknown as HarnessSession;
     },
@@ -236,20 +236,23 @@ describe('the Orchestrator\'s topics in the chat manager', () => {
   });
 
   it('a fresh session that does not start puts back the old one and the chat\'s own hand-off note', async () => {
-    for (const before of [true, false]) {
+    for (const before of [true, false, 'unreadable'] as const) {
       let fail = false;
       const f = fixture({ failStart: () => fail });
       const o = await f.m.create({ harness: 'opencode', cwd: f.cwd, orchestrator: true, prompt: 'controlla perché air-mcp-test risponde 401' });
       const notes = new HandoffStore(f.userData);
-      if (before) notes.write(o.id, { title: 'Orchestrator', text: 'la nota di prima', at: 1234, source: 'chat' });
+      if (before === true) notes.write(o.id, { title: 'Orchestrator', text: 'la nota di prima', at: 1234, source: 'chat' });
+      // a note the app cannot parse (read() says null, as for none): kept byte for byte, never deleted
+      if (before === 'unreadable') { fs.mkdirSync(notes.dir, { recursive: true }); fs.writeFileSync(notes.pathOf(o.id), 'scritta a mano\n'); }
       f.setContext(ROLLOVER_POLICY.acp!.budget + 1);
       await f.m.send(o.id, 'e il token è stato rinnovato?');
       fail = true;
       await f.m.send(o.id, 'e il login?').catch(() => null);
       expect(f.starts.length).toBeGreaterThanOrEqual(2); // the fresh session was tried
       expect(f.m.list().find(c => c.id === o.id)!.contextTokens).toBe(ROLLOVER_POLICY.acp!.budget + 1);
-      if (before) expect(notes.read(o.id)).toMatchObject({ text: 'la nota di prima', at: 1234, source: 'chat' });
-      else expect(notes.read(o.id)).toBeNull();
+      if (before === true) expect(notes.read(o.id)).toMatchObject({ text: 'la nota di prima', at: 1234, source: 'chat' });
+      else if (before === 'unreadable') expect(fs.readFileSync(notes.pathOf(o.id), 'utf8')).toBe('scritta a mano\n');
+      else expect(fs.existsSync(notes.pathOf(o.id))).toBe(false);
     }
   });
 
@@ -294,5 +297,26 @@ describe('the Orchestrator\'s topics in the chat manager', () => {
     expect([at(u1.id).topic, at(a1.id).topic, at(mail.id).topic, at(a2.id).topic]).toEqual(['Restyle UI', 'Restyle UI', air, air]);
     f.m.setItemTopic(o.id, a2.id, 'Fatture');
     expect([at(u1.id).topic, at(a1.id).topic, at(mail.id).topic, at(a2.id).topic]).toEqual(['Restyle UI', 'Restyle UI', 'Fatture', 'Fatture']);
+  });
+
+  it('a question that comes while the old session closes keeps it, and its hand-off note as it was', async () => {
+    let ask = false, oid = '';
+    // the chat's own record, as the manager holds it: a question lands on it while the old session closes
+    const rec = (m: ChatManager) => (m as unknown as { chats: Map<string, { pending: Map<string, PendingRequest> }> }).chats.get(oid)!;
+    const hold: { m?: ChatManager } = {};
+    const f = fixture({ onClose: () => { if (ask) rec(hold.m!).pending.set('q-late', { id: 'q-late', chatId: oid, type: 'question', tool: 'AskUserQuestion', title: 'procedo?', detail: '', input: {}, at: Date.now() }); } });
+    hold.m = f.m;
+    const o = await f.m.create({ harness: 'opencode', cwd: f.cwd, orchestrator: true, prompt: 'controlla perché air-mcp-test risponde 401' });
+    oid = o.id;
+    const notes = new HandoffStore(f.userData);
+    notes.write(o.id, { title: 'Orchestrator', text: 'la nota di prima', at: 1234, source: 'chat' });
+    const raw = fs.readFileSync(notes.pathOf(o.id), 'utf8');
+    f.setContext(ROLLOVER_POLICY.acp!.budget + 1);
+    await f.m.send(o.id, 'e il token è stato rinnovato?');
+    ask = true;
+    await f.m.send(o.id, 'e il login?').catch(() => null);
+    expect(rec(f.m).pending.has('q-late')).toBe(true); // the abort path: a question came while it closed
+    expect(f.starts.map(s => s.sessionId)).toEqual([null, 'ses_1']); // the old session resumed, never a fresh one
+    expect(fs.readFileSync(notes.pathOf(o.id), 'utf8')).toBe(raw);
   });
 });

@@ -8,7 +8,7 @@
 // user's message is delivered (manager.ts deliverNow).
 import crypto from 'node:crypto';
 import { sameTopic } from '../../shared/orchestrator-topics';
-import type { ChatItem, HandoffInfo, OrchestratorTopics, PendingRequest } from '../../shared/contract';
+import type { ChatItem, OrchestratorTopics, PendingRequest } from '../../shared/contract';
 import { engineOf } from '../engines/registry';
 import { errText, log } from '../log';
 import { topicBrief, type BriefChat } from '../agents/orchestrator-brief';
@@ -216,9 +216,9 @@ export abstract class ManagerTopics extends ManagerContinuity {
       const prev = { sessionId: old, contextTokens: r.s.contextTokens, contextMaxTokens: r.s.contextMaxTokens, costTotalUsd: r.costTotalUsd, ctxSince: r.ctxSince, after: r.after, rolePrimed: r.rolePrimed, rollTurns: counted };
       // the brief is kept as the divider's note, like a cold continuation's hand-off: written first, so a disk that
       // refuses it leaves the session as it is; the note it replaces comes back if the fresh session does not start
-      let notePath: string, prevNote: HandoffInfo | null;
+      let notePath: string, prevNote: string | null;
       try {
-        prevNote = this.handoffs.read(r.s.id);
+        prevNote = this.handoffs.snapshot(r.s.id);
         const note = this.handoffs.write(r.s.id, { title: r.s.title, text: this.topicBriefFor(r, topic), at, source: 'auto', ...(contextTokens ? { contextTokens } : {}) });
         notePath = old && /^[\w-]{1,64}$/.test(old) ? this.handoffs.archive(r.s.id, old) : note.path;
       } catch (e) {
@@ -231,7 +231,8 @@ export abstract class ManagerTopics extends ManagerContinuity {
         r.autoEnding = true;
         try { await this.closeKeeping(r, sess); } finally { r.autoEnding = false; }
       }
-      if (r.pending.size || this.midTurn(r)) { r.rollTurns = counted; return null; }
+      // a question or a turn came while the session closed: it goes on in the old one, with the note it had
+      if (r.pending.size || this.midTurn(r)) { r.rollTurns = counted; this.putNoteBack(r, prevNote); return null; }
       r.s.sessionId = engine.caps.transcript ? crypto.randomUUID() : null;
       delete r.s.contextTokens; delete r.s.contextMaxTokens;
       r.costTotalUsd = 0; r.ctxSince = undefined; r.rolePrimed = undefined;
@@ -244,6 +245,13 @@ export abstract class ManagerTopics extends ManagerContinuity {
     })();
     r.switching = run.then((): null => null);
     try { return await run; } finally { r.switching = undefined; }
+  }
+
+  /** The chat's own hand-off note as it was before the brief took its place (the same bytes, or none). */
+  private putNoteBack(r: Rec, raw: string | null): void {
+    try { this.handoffs.restore(r.s.id, raw); } catch (e) {
+      log.warn('chats', 'hand-off note not put back', { chat: r.s.id, cause: errText(e), hint: 'the brief stays as the chat\'s note; the next hand-off replaces it' });
+    }
   }
 
   /** The fresh session started: the divider folds the old one. */
@@ -260,11 +268,7 @@ export abstract class ManagerTopics extends ManagerContinuity {
     if (p.contextTokens !== undefined) r.s.contextTokens = p.contextTokens;
     if (p.contextMaxTokens !== undefined) r.s.contextMaxTokens = p.contextMaxTokens;
     r.costTotalUsd = p.costTotalUsd; r.ctxSince = p.ctxSince; r.after = p.after; r.rolePrimed = p.rolePrimed; r.rollTurns = p.rollTurns;
-    // the chat's own note as it was before the brief took its place
-    try {
-      if (step.prevNote) { const { path: _p, chatId: _c, ...note } = step.prevNote; this.handoffs.write(r.s.id, note); }
-      else this.handoffs.remove(r.s.id);
-    } catch (e) { log.warn('chats', 'hand-off note not put back', { chat: r.s.id, cause: errText(e), hint: 'the brief stays as the chat\'s note; the next hand-off replaces it' }); }
+    this.putNoteBack(r, step.prevNote);
     this.persist();
     this.updated(r);
     log.warn('chats', 'Orchestrator fresh session not started', { chat: r.s.id, cause: r.s.lastError ?? 'engine did not start', hint: 'it goes on in its old session; the next message tries the fresh one again' });
