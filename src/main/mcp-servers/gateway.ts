@@ -8,12 +8,13 @@
 // Access is checked at every request with the chat's live context (access.ts): a server the chat may not use answers
 // 404, a tool it may not use is neither listed nor callable. One upstream connection per chat and server, opened on
 // the first request, closed after 10 idle minutes, on a definition change and at shutdown. Used by service.ts.
-// A server whose process does not start or dies at once (#417: 59 warnings in 3 days for one user server that could not
-// start its program) is not started again for every chat: for BROKEN_MS each chat gets the same error at once, the
-// failure goes on its Connettori card (onBroken) and is warned once until it works again or the user changes or tries it
-// («Prova» resets it). A server that refuses the access (#437: 12 warnings in two days for one server whose login had
-// ended: HTTP 401) is the user's to fix on its card («Accedi», or the token), not an app fault: the card shows it once,
-// the chat's error says what the user must do, and the log keeps it at info until it works again.
+// A broken server is not opened again for every chat (ADR 0370, after #417 and #437; on the owner's PC one server answered
+// 401 at every chat, ~700 times in 7 hours): its failures in a row go to the health state machine (health.ts). The first
+// one goes on its Connettori card (onBroken); N in a row mark it «needs-login» (HTTP 401/403) or «broken» (its program
+// does not start, it times out or is unreachable): every chat then gets the same answer at once, nothing is opened, the
+// user gets one notice (onMarked: «Accedi» for a login), and it is tried again only when the user signs in, edits or
+// tries it (reset) or after a long back-off, one probe at a time. One log line per change of its state, never per chat;
+// a refused access is the user's to fix, never an app warning.
 import type { McpServer, McpTool } from '../mcp/server';
 import { EndpointTokens } from '../mcp/tokens';
 import { ToolRefusal, UpstreamError } from '../mcp/refusal';
@@ -22,6 +23,7 @@ import { log, errText } from '../log';
 import type { McpServerDef, RoleMcpAccess } from '../../shared/mcp-servers';
 import { serversFor, toolFor, type ChatMcpContext } from './access';
 import { connect, type Endpoint, type Upstream, type UpstreamTool } from './client';
+import { ConnectorHealth, failKind, waitText, type ServerHealth, type Transition } from './health';
 
 export interface GatewayDeps {
   mcp: McpServer;
@@ -38,6 +40,8 @@ export interface GatewayDeps {
   onBroken?: (server: string, error: unknown) => void;
   /** it started again after that: its card shows its tools again */
   onWorks?: (server: string, tools: UpstreamTool[]) => void;
+  /** it was just marked «needs-login» or «broken» (N failures in a row): the one notice to the user (service.ts) */
+  onMarked?: (server: string, health: ServerHealth, error: unknown) => void;
   now?: () => number;
   idleMs?: number;
 }
@@ -45,22 +49,16 @@ export interface GatewayDeps {
 /** listed: it gave its tools once (its program started: a later failure of it is not one that does not start) */
 interface Conn { up: Upstream; tools: Promise<UpstreamTool[]> | null; toolsAt: number; used: number; def: string; listed?: boolean }
 const TOOLS_TTL = 5 * 60_000;
-/** one warning per server this often when it does not list its tools (a slow or unreachable one) */
-const WARN_EVERY_MS = 3600_000;
-/** a server whose process did not start is not started again for this long (each chat gets the error at once) */
-export const BROKEN_MS = 10 * 60_000;
 
 export class McpGateway {
   private readonly tokens = new EndpointTokens();
   private readonly conns = new Map<string, Conn>();
-  private readonly warned = new Map<string, number>();
-  /** server → until when it is not started again, and why (its process did not start) */
-  private readonly broken = new Map<string, { until: number; cause: string }>();
-  /** servers that refused the access (their card says so) until they list again or the user changes or tries them */
-  private readonly denied = new Set<string>();
+  /** each server's failures in a row and whether it is held back (health.ts) */
+  readonly health: ConnectorHealth;
   private readonly timer: NodeJS.Timeout;
 
   constructor(private readonly deps: GatewayDeps) {
+    this.health = new ConnectorHealth(deps.now ?? Date.now);
     deps.mcp.mount('/mcp/ext/:chatId/:server/:token', {
       name: 'ext',
       instructions: 'An MCP server the user configured in the app (Impostazioni → Connettori), proxied by the app with this chat’s permissions.',
@@ -130,45 +128,32 @@ export class McpGateway {
   private async toolsFor(chatId: string, server: string): Promise<McpTool[]> {
     const ctx = this.deps.context(chatId);
     if (!ctx) return [];
-    const clock = this.deps.now ?? Date.now, b = this.broken.get(server);
-    // held back only where a new process would start: a chat whose connection is up keeps using it
-    if (b && clock() < b.until && !this.conns.has(`${chatId}|${server}`)) throw new UpstreamError(`MCP server ${server} did not start (${b.cause}); the app tries it again in ${Math.ceil((b.until - clock()) / 60_000)} min, or when the user presses «Prova» on its card (Impostazioni → Connettori).`);
+    // held back only where a new connection would open: a chat whose connection is up keeps using it
+    if (!this.conns.has(`${chatId}|${server}`)) {
+      const g = this.health.gate(server);
+      if (!g.open) throw new UpstreamError(heldText(server, g.health, g.waitMs));
+    }
     const c = this.conn(chatId, server);
     const asked = !c.tools || Date.now() - c.toolsAt > TOOLS_TTL;   // the server is asked now (else the chat's cached list)
     if (asked) { c.tools = c.up.tools(); c.toolsAt = Date.now(); }
     let list: UpstreamTool[];
     try { list = await c.tools!; }
     catch (e) {
-      // a connection the app itself closed meanwhile (the chat closed, a definition change) is not a server that died
+      // a connection the app itself closed meanwhile (the chat closed, a definition change) is not a server that failed
       const ours = this.conns.get(`${chatId}|${server}`) === c;
       this.drop(chatId, server, c);
-      // its program did not start: a fresh connection that never listed (one that worked and then exited reconnects)
-      const now = clock(), dead = ours && !c.listed && e instanceof McpClientError && e.code === 'spawn';
-      if (dead) {
-        // its program does not start: warned once until it works again or the user changes or tries it (#417)
-        const first = !this.broken.has(server);
-        this.broken.set(server, { until: now + BROKEN_MS, cause: errText(e).slice(0, 300) });
-        log[first ? 'warn' : 'info']('mcp-servers', first ? 'MCP server did not start' : 'MCP server still does not start', { chat: chatId, cause: errText(e), data: { server }, hint: 'its card in Impostazioni → Connettori shows the error; «Prova» there tries it again' });
-        if (first) try { this.deps.onBroken?.(server, e); } catch { /* the card is a convenience */ }
-      } else if (ours && e instanceof McpClientError && e.code === 'auth') {
-        // the server refuses the access (a login that ended, a wrong or missing token): the user's to fix on its card,
-        // never an app warning; the card is told once, the chat gets what the user must do (#437)
-        throw new UpstreamError(this.refused(chatId, server, e));
-      } else if (ours) {
-        // the user's server is slow or down: once an hour per server a warning, the rest at info (#347: 42 warnings, one
-        // per chat that started, for one server that did not answer); the chat gets an upstream error, never «crashed» (#329)
-        const last = this.warned.get(server) ?? -Infinity;
-        if (now - last >= WARN_EVERY_MS) this.warned.set(server, now);
-        log[now - last >= WARN_EVERY_MS ? 'warn' : 'info']('mcp-servers', 'MCP server tools not listed', { chat: chatId, cause: errText(e), data: { server }, hint: 'test the server in Impostazioni → Connettori' });
+      const code = e instanceof McpClientError ? e.code : undefined;
+      // «spawn» on a connection that listed before is its program exiting later: it reconnects, it is not one that
+      // does not start (#417); any other failure of a request made now counts
+      if (ours && !(code === 'spawn' && c.listed)) {
+        this.failed(chatId, server, e);
+        if (code === 'auth') throw new UpstreamError(refusedText(server, e as McpClientError));
       }
       throw new UpstreamError(`MCP server ${server} did not list its tools: ${errText(e)}`);
     }
-    // a new connection that listed: its program starts again (a chat's cached list says nothing about a new process)
-    const fresh = !c.listed;
     c.listed = true;
-    // a program that starts is known from a new connection, an access granted again from any list the server just gave
-    const wasDown = [fresh && this.broken.delete(server), asked && this.denied.delete(server)].some(Boolean);
-    if (wasDown) try { this.deps.onWorks?.(server, list); } catch { /* the card is a convenience */ }   // it works again: a later failure is warned again
+    // a list the server just gave says it works; a chat's cached list says nothing about it
+    if (asked) this.worked(server, list);
     return list.filter(t => toolFor(ctx, this.deps.roleAccess, server, t)).map(t => ({
       name: t.name, description: t.description, inputSchema: t.inputSchema,
       ...(t.annotations ? { annotations: t.annotations as McpTool['annotations'] } : {}),
@@ -176,30 +161,63 @@ export class McpGateway {
         // checked again at the call: the agent card may have narrowed the role since the list
         const now = this.deps.context(chatId);
         if (!now || !toolFor(now, this.deps.roleAccess, server, t) || !this.offered(chatId, server)) throw new Error(`${t.name}: not allowed for this chat’s role (Brain → Agenti → its card → MCP)`);
-        try { return { raw: await this.conn(chatId, server).up.call(t.name, args, call.signal) }; }
+        // a connection the idle sweep closed is a new one: the same hold as at the list
+        let probe = false;
+        if (!this.conns.has(`${chatId}|${server}`)) {
+          const g = this.health.gate(server);
+          if (!g.open) throw new ToolRefusal(heldText(server, g.health, g.waitMs));
+          probe = g.probe;
+        }
+        try {
+          const raw = await this.conn(chatId, server).up.call(t.name, args, call.signal);
+          // a probe that answered: the server works again (its card's tools are refreshed at the next list)
+          if (probe) this.worked(server);
+          return { raw };
+        }
         catch (e) {
           this.drop(chatId, server, c);
           // the access ended after the list (a token that expired mid-chat): the same answer as at the list (#437)
-          if (e instanceof McpClientError && e.code === 'auth') throw new ToolRefusal(this.refused(chatId, server, e));
+          if (e instanceof McpClientError && e.code === 'auth') { this.failed(chatId, server, e); throw new ToolRefusal(refusedText(server, e)); }
+          // a probe that failed: the server is still down (a plain call's error may be the tool's own: not counted)
+          if (probe) this.failed(chatId, server, e);
           throw e;
         }
       },
     }));
   }
 
-  /** The server refused the access: its card is told once, the log keeps it at info; returns what the chat reads. */
-  private refused(chatId: string, server: string, e: McpClientError): string {
-    const first = !this.denied.has(server);
-    this.denied.add(server);
-    log.info('mcp-servers', 'MCP server refuses the access', { chat: chatId, cause: errText(e), data: { server }, hint: 'its card in Impostazioni → Connettori shows it: «Accedi» there, or a valid token' });
-    if (first) try { this.deps.onBroken?.(server, e); } catch { /* the card is a convenience */ }
-    return `MCP server ${server} refused the access: ${errText(e)} Only the user can fix it, on the server's card in Impostazioni → Connettori: ${e.fix} Tell the user; do not retry before.`;
+  /** A failure of a request made now: one more in a row. Its card is told at the first failure of a run and when its
+   *  state changes, the user once when it is marked, and the log gets one line per change of state (a repeat changes
+   *  nothing, so it logs nothing). */
+  private failed(chatId: string, server: string, e: unknown): Transition {
+    const kind = failKind(e instanceof McpClientError ? e.code : undefined);
+    const t = this.health.failed(server, kind, errText(e));
+    if (t.from === t.to) return t;
+    const held = t.to === 'needs-login' || t.to === 'broken';
+    const data = { server, kind, failures: t.health.streak, ...(held ? { retryIn: waitText(t.health.until - (this.deps.now ?? Date.now)()) } : {}) };
+    const hint = kind === 'auth' ? 'its card in Impostazioni → Connettori asks for «Accedi» (or a valid token)' : 'its card in Impostazioni → Connettori shows the error; «Prova» there tries it again';
+    // a refused access is the user's to fix, never an app warning (#437)
+    const level = kind === 'auth' ? 'info' : 'warn';
+    const msg = t.to === 'failing' ? 'MCP server failed' : `MCP server marked ${t.to}: not opened again for every chat`;
+    log[level]('mcp-servers', msg, { chat: chatId, cause: errText(e), data, hint });
+    if (t.from === 'ok' || held) try { this.deps.onBroken?.(server, e); } catch { /* the card is a convenience */ }
+    if (held && (t.from === 'ok' || t.from === 'failing')) try { this.deps.onMarked?.(server, t.health, e); } catch { /* the notice is a convenience */ }
+    return t;
+  }
+
+  /** It listed on a request made now: back to ok; told (log, card) only when something was known against it. */
+  private worked(server: string, list?: UpstreamTool[]): void {
+    const t = this.health.worked(server);
+    if (t.from === 'ok') return;
+    log.info('mcp-servers', 'MCP server works again', { data: { server, was: t.from } });
+    if (list) try { this.deps.onWorks?.(server, list); } catch { /* the card is a convenience */ }
   }
 
   /** A server's definition or token changed, or it was removed: its open connections close (the next call reopens). */
   reset(server?: string): void {
     // a changed definition gets its own first warning again
-    if (server) { this.warned.delete(server); this.broken.delete(server); this.denied.delete(server); } else { this.warned.clear(); this.broken.clear(); this.denied.clear(); }
+    // the user acted on it («Accedi», a token, an edit, «Prova») or it is gone: tried again at once, told anew
+    this.health.reset(server);
     for (const [key, c] of this.conns) if (!server || key.endsWith(`|${server}`)) { c.up.close(); this.conns.delete(key); }
   }
 
@@ -219,4 +237,15 @@ export class McpGateway {
   }
 
   stop(): void { clearInterval(this.timer); this.reset(); }
+}
+
+/** What a chat reads while the server is held back. */
+function heldText(server: string, h: ServerHealth, waitMs: number): string {
+  if (h.state === 'needs-login') return `MCP server ${server} needs the user's sign-in: it refused the access ${h.streak} times in a row (${h.cause}). Only the user can fix it: «Accedi» on its notice or on its card in Impostazioni → Connettori. The app tries it again by itself in ${waitText(waitMs)}. Tell the user; do not retry before.`;
+  return `MCP server ${server} is marked broken after ${h.streak} failures in a row (${h.cause}); the app tries it again in ${waitText(waitMs)}, or when the user presses «Prova» on its card (Impostazioni → Connettori).`;
+}
+
+/** What a chat reads when the server refuses the access. */
+function refusedText(server: string, e: McpClientError): string {
+  return `MCP server ${server} refused the access: ${errText(e)} Only the user can fix it, on the server's card in Impostazioni → Connettori: ${e.fix} Tell the user; do not retry before.`;
 }

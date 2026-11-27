@@ -72,6 +72,8 @@ export const ORCHESTRATOR_APP_REQUIRED: readonly string[] = [
   'app_task_events', 'app_state', 'app_guide', 'app_agents_recap',
   'app_unblock', 'agent_catalog', 'task_estimate',
   'app_work_list', 'app_work_create', 'app_work_report',
+  // a small brain edit without a work chat (ADR 0370)
+  'brain_edit',
 ];
 
 /** The required tools that are not among `exposed`; [] = nothing missing. */

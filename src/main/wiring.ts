@@ -97,6 +97,7 @@ import { WorkDriver } from './workflows/driver';
 import { WakeLater } from './chats/wake-later';
 import { QuestionRelay } from './chats/relay';
 import { CoordinationStore } from './coordination/store';
+import { pruneAutoPermitsLater } from './coordination/prune';
 import { AGENT_LABEL } from './appctl/tools';
 import { readUi } from './appctl/guide';
 import { ChatMail, mailTools } from './chats/mail';
@@ -143,6 +144,8 @@ import { UserCorrectionStore } from './brain/user-corrections';
 import { apiSearch, brainSearchTool } from './search/hybrid/tool';
 import { BrainScripts, touchesScripts } from './brain/scripts';
 import { BrainChangelog } from './brain/changelog';
+import { BrainQuickEdit } from './brain/quick-edit-service';
+import { brainGit, brainHooks, brainLint } from './brain/quick-edit-ports';
 import { brainScriptsTool, chatScriptAddTool } from './brain/scripts-tools';
 import { BrainQueries, touchesQueries } from './brain/queries';
 import { brainQueriesTool, chatQueryAddTool } from './brain/queries-tools';
@@ -150,7 +153,9 @@ import { AutoScripts } from './brain/auto-scripts';
 import { mountRecallTool, RECALL_ENV } from './search/hybrid/recall';
 import { timersFor } from './timers';
 import { DailyQuipsService } from './quips/daily';
-const { setInterval, clearInterval } = timersFor('wiring/auto-close');
+// each poller under its own label (perf.ts «timer wiring/<label>»): a «main process blocked» line names the one that ran (ADR 0368)
+const every = (label: string, callback: () => void, ms: number): NodeJS.Timeout => timersFor(`wiring/${label}`).setInterval(callback, ms);
+const { clearInterval } = timersFor('wiring');
 
 import { attachAppTools, createLater, commandRunner, attachCommandAsks, attachOrchestratorWake, attachRunResults, attachPlans, attachArtifacts, createAppSource, createAgentCatalog } from './wiring-shared';
 import type { CommandRunner } from './run/runner';
@@ -322,7 +327,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // Claude <-> Cursor rule, so a local process may not take the Orchestrator's identity
   const orchestratorTokens = new EndpointTokens();
   // the user's MCP servers (ADR 0086): reached by every chat through the app's gateway, tokens only in main
-  const mcpServers: McpServersService = new McpServersService({ userData: ctx.userData, cipher: safeStorageCipher(safeStorage), mcp, context: (id): ChatMcpContext | null => manager.mcpContext(id), emit: st => ctx.emitter.emit('mcpservers:changed', st), openExternal: url => shell.openExternal(url) });
+  const mcpServers: McpServersService = new McpServersService({ userData: ctx.userData, cipher: safeStorageCipher(safeStorage), mcp, context: (id): ChatMcpContext | null => manager.mcpContext(id), emit: st => ctx.emitter.emit('mcpservers:changed', st), openExternal: url => shell.openExternal(url), announce: e => brain.publish([e]) });
   // a chat that closes (archived or removed) ends its connector processes at once (gateway.closeChat)
   ctx.emitter.tap((ch, p) => {
     if (ch === 'chat:removed') mcpServers.gateway.closeChat((p as { chatId: string }).chatId);
@@ -679,7 +684,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     away: () => { const w = ctx.window(); return !w || w.isDestroyed() || !w.isVisible() || w.isMinimized(); },
   });
   autoCloseRef.current = autoCloseService;
-  const autoCloseTimer = setInterval(() => { void autoCloseService.tick().catch(e => log.warn('chats', 'automatic archive suspended', { cause: errText(e) })); }, 2500);
+  const autoCloseTimer = every('auto-close', () => { void autoCloseService.tick().catch(e => log.warn('chats', 'automatic archive suspended', { cause: errText(e) })); }, 2500);
   autoCloseTimer.unref();
   agentPacks.learning.evidenceRuns = () => manager.runs.list();
   const workflows = workflowsRef = new Workflows(path.join(ctx.userData, 'work-threads.json'), rows => ctx.emitter.emit('work:changed', rows), Date.now, row => {
@@ -690,10 +695,12 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // Poll without model calls; relevant events and canonical reports wake the owning Orchestrator.
   // SB_BENCH_TIMERS=1: scripts/bench-stalls.mjs measures an idle app with these production pollers on (fake engines only)
   const prodPollers = !process.env.SB_TEST || process.env.SB_BENCH_TIMERS === '1';
+  // the journal's old auto-permitted permissions go, in small batches a few minutes after the start (ADR 0368)
+  const stopPrune = prodPollers ? pruneAutoPermitsLater(workflows.coordination) : null;
   // the app's leftover worktrees, 5 min after start (not in the start's rush), then every 6 h: only measured until the
   // user's first «Pulisci ora» in Settings → Avanzate, cleaned after it (ADR 0227)
   const worktreeCleanup = () => { void worktreePool.autoCleanup().catch(e => log.warn('agents', 'worktree cleanup failed', { cause: errText(e), hint: 'the next run tries again; Settings → Avanzate has «Pulisci ora»' })); };
-  const worktreeFirst = prodPollers ? setTimeout(worktreeCleanup, 5 * 60_000) : null, worktreeTimer = prodPollers ? setInterval(worktreeCleanup, 6 * 3600_000) : null;
+  const worktreeFirst = prodPollers ? setTimeout(worktreeCleanup, 5 * 60_000) : null, worktreeTimer = prodPollers ? every('worktree-cleanup', worktreeCleanup, 6 * 3600_000) : null;
   const wake = attachOrchestratorWake(ctx, chats, () => brain.settings().orchestratorEvents !== false && (!process.env.SB_TEST || process.env.SB_ORCHESTRATOR_EVENTS === '1'), undefined, awayOn);
   plans.tellTo(wake); // a job stopped by itself (ADR 0342): the Orchestrator takes it up again
   manager.onUserWrote(n => wake.userMessage(n)); // the user typed in a work chat: quiet news (ADR 0083)
@@ -777,9 +784,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   loopRef.current = { ended: run => { loop.hooks.ended(run); void judgeSampler.ended(run).finally(judgeSoon); }, outcome: run => loop.hooks.outcome(run) };
   // every 5 minutes, the first after the startup rush: the nightly batch needs the night window or an idle moment
   log.info('agents', judging.on ? 'judge samples scheduled' : 'judge samples off', { data: { why: judging.why } });
-  const judgeTimer = judging.on ? setInterval(judgeTick, 5 * 60_000) : null;
+  const judgeTimer = judging.on ? every('judge', judgeTick, 5 * 60_000) : null;
   judgeTimer?.unref();
-  const lifecycleTimer = prodPollers ? setInterval(() => loop.tick(), 10_000) : null;
+  const lifecycleTimer = prodPollers ? every('lifecycle', () => loop.tick(), 10_000) : null;
   lifecycleTimer?.unref();
   // approved work goes on by itself (ADR 0238): a thread with a recorded decision nothing moves is told to the
   // Orchestrator; a closed chat of it with unread mail is reopened
@@ -830,7 +837,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // Telegram ('phone') hides commands; Remote Control ('remote') shows the Orchestrator's reply whole, as the PC (#390)
     void relay.userSaid(chatId, item.text, item.via === 'phone' ? item.remote ? 'remote' : 'phone' : undefined);
   });
-  const workDriverTimer = prodPollers ? setInterval(() => {
+  const workDriverTimer = prodPollers ? every('work-driver', () => {
     try { wakeLater.tick(); workDriver.tick(); } catch (e) { log.warn('workflows', 'approved-work check failed', { cause: errText(e), hint: 'the next minute retries' }); }
   }, 60_000) : null;
   workDriverTimer?.unref();
@@ -867,6 +874,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       // Il mio profilo (ADR 0207): the page's own reader and writer of me.md (stateless: each save checks the revision)
       profile: (() => { const p = new ProfileService({ root: () => brain.settings().brainRoot, template: (() => { try { return fs.readFileSync(path.join(app.getAppPath(), 'brain-template', 'me.template.md'), 'utf8'); } catch { return ''; } })() }); return { get: () => p.get(), save: req => p.save(req) }; })(),
     } };
+  // brain_edit: the Orchestrator's small brain edit, committed, with «Annulla» (ADR 0370)
+  appDeps.brainEdit = new BrainQuickEdit({ root: () => brain.info().brainRoot, journalFile: path.join(ctx.userData, 'brain-quick-edits.json'), git: brainGit, lint: brainLint(electronNode()), hooks: brainHooks(os.homedir()), changelog: brainChangelog, changed: () => ctx.emitter.emit('brainmodel:changed', undefined) });
   attachAppTools(mcp, appDeps, source, false, orchestratorTokens, { compact: id => manager.chatToolsCompact(id), served: (id, names) => manager.appToolsServed(id, names) });
 
   // Task page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
@@ -1032,7 +1041,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { news.dispose(); plans.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (worktreeFirst) clearTimeout(worktreeFirst); if (worktreeTimer) clearInterval(worktreeTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); if (workDriverTimer) clearInterval(workDriverTimer); hybrid.stop(); userCorrections.flush(); orchestratorTopics.flush(); engines.stop(); modelLists.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { stopPrune?.(); news.dispose(); plans.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (worktreeFirst) clearTimeout(worktreeFirst); if (worktreeTimer) clearInterval(worktreeTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); if (workDriverTimer) clearInterval(workDriverTimer); hybrid.stop(); userCorrections.flush(); orchestratorTopics.flush(); engines.stop(); modelLists.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { manager.killAll(); runner.shutdown(); },
   };
 }

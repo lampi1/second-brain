@@ -661,7 +661,8 @@ export class ChatManager extends ManagerRemote implements ChatService {
     const thumbs = imgs.flatMap(im => (im.thumb ? [im.thumb] : []));
     // who started the Orchestrator's turn: the user's own words (never the app's news, labelled "[…"), or the app; a
     // message into a running turn joins it, and only the user's own makes it his (#123)
-    if (r.s.isOrchestrator) { const own = !from && !resumed && !!t && (!t.startsWith('[') || splitMode(t).mode !== null); if (own) r.turnFromUser = true; else if (!this.midTurn(r)) r.turnFromUser = false; }
+    // (queuedTurns: whose each message into a running turn is, for when it runs as one of its own: manager-sink nextQueuedTurn)
+    if (r.s.isOrchestrator) { const own = !from && !resumed && !!t && (!t.startsWith('[') || splitMode(t).mode !== null), joins = this.midTurn(r); if (joins) (r.queuedTurns ??= []).push(own); else r.queuedTurns = []; if (own) r.turnFromUser = true; else if (!joins) r.turnFromUser = false; }
     // a message from the paired phone (sendFromPhone): its bubble shows 📱, its turn's reply goes back to the phone
     const fromPhone = !!phoneVia && from === undefined && !resumed;
     const phoneVoice = fromPhone && !!phoneVia?.voice;

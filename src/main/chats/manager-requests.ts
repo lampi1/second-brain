@@ -534,11 +534,31 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
   protected answeredByGates(r: Rec, req: Omit<PendingRequest, 'chatId'>, whole = false): boolean {
     const d = this.gateDecision(r, req, whole);
     if (d.kind === 'user') return false;
-    if (d.kind === 'allow') { this.policyAnswer(r, req, { kind: 'permission', allow: true }, d.policy, d.patch); return true; }
+    if (d.kind === 'allow') { this.gateAllowed(r, req, d.policy, d.patch); return true; }
     this.addItem(r, d.item, false);
     this.policyAnswer(r, req, { kind: 'permission', allow: false, message: d.message }, d.policy);
     this.noteRefusal(r, d);
     return true;
+  }
+
+  /** A permission the app's own gate allowed (auto-permit, the role gate) goes straight to its engine, with no row in
+   *  the coordination journal (ADR 0368): it never reached the user, nothing reads its receipt again, and its four
+   *  synchronous transactions per tool call (~470 an hour) grew the journal that every projection read. Its record is
+   *  the gate's own log line («auto-permit allowed», «role gate allowed»). Refusals and everything the user or a policy
+   *  answers for him keep their receipts (policyAnswer). */
+  private gateAllowed(r: Rec, req: Omit<PendingRequest, 'chatId'>, policy: string, patch?: AnswerPatch): void {
+    const answer: Answer = { kind: 'permission', allow: true }, session = r.session;
+    const failed = (e?: unknown): void => {
+      log.warn('chats', 'allowed permission not delivered', { chat: r.s.id, cause: e ? errText(e) : 'the engine refused the answer', hint: 'the engine may ask it again', data: { request: req.id, tool: req.tool, policy } });
+    };
+    const delivered = (ok: boolean): void => {
+      if (!ok) return failed();
+      if (this.chats.get(r.s.id) === r && r.session === session) this.requestAnswered(r, req, answer, { kind: 'policy', policy });
+    };
+    try {
+      if (session?.answerConsumed) { void session.answerConsumed(req.id, answer, patch).then(delivered, failed); return; }
+      delivered(session?.answer(req.id, answer, patch) ?? false);
+    } catch (e) { failed(e); }
   }
 
   /** A brain rule refused a request: only Claude reads the refusal's message as the tool's result; Codex and the ACP

@@ -22,6 +22,7 @@
 // - A lesson in Impara when the user asks to understand something (app_learn, ADR 0190): the Orchestrator's mount only.
 // - The latest report of any chat in its tree, delegates included (app_child_output, ADR 0226); the recap (app_agents_recap, 0260).
 // - The skill library (app_skills, app_skill_write, app_skill_roles, app_skill_undo, ADR 0241): the Orchestrator's mount only.
+// - A small brain edit applied at once, committed, with «Annulla» for 24 h (brain_edit, ADR 0370): the Orchestrator's mount only.
 import { successorIn } from '../../shared/role-tools';
 import type { BrowserWindow } from 'electron';
 import type { ChatItem, ChatSummary, TasksState, Effort, EventMap, Harness, NewChat, PendingRequest, RunInfo, TaskKind, Usage } from '../../shared/contract';
@@ -87,6 +88,8 @@ import { PLAN_TOOL_PROPS, PLAN_TOOL_TEXT, planAction } from '../plans/tools';
 import { userShellName } from '../platform';
 import type { Plans } from '../plans/service';
 import { skillTools } from './skills';
+import { brainEditTool } from './brain-edit';
+import type { BrainQuickEdit } from '../brain/quick-edit-service';
 import type { SkillLibrary } from '../skills/library';
 
 export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
@@ -136,6 +139,8 @@ export interface AppCtlDeps {
   recordings?: RecordingsRead;
   /** the skill library (ADR 0241): app_skills / app_skill_write / app_skill_roles / app_skill_undo on the Orchestrator's own endpoint */
   skillLibrary?: SkillLibrary;
+  /** brain_edit, the Orchestrator's small brain edit (ADR 0370) */
+  brainEdit?: BrainQuickEdit;
   /** the «Giornale» (ADR 0280): app_news, app_news_edition, app_news_source, app_news_refresh on the Orchestrator's own endpoint */
   news?: NewsControl;
   /** the configuration the Orchestrator changes for the user (app_config, ADR 0149); settings come from `brain` */
@@ -275,6 +280,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     ...(d.plans && authed() ? [{ name: 'plans', description: PLAN_TOOL_TEXT, inputSchema: obj(PLAN_TOOL_PROPS, ['action']), annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false }, run: (a: Record<string, unknown>) => planAction(d.plans!, { kind: 'orchestrator' }, a) } satisfies ToolDef] : []),
     ...(d.news && authed() ? newsTools(d.news, d.emitUi) : []),
     ...(d.skillLibrary && authed() ? skillTools(d.skillLibrary, () => caller()?.title || 'Orchestrator') : []),
+    ...(d.brainEdit && authed() ? [brainEditTool(d.brainEdit, () => caller()?.title || 'Orchestrator')] : []),
     ...(authed() ? [childOutputTool({ chats: () => d.chats.list(), runs: () => d.runFeedback?.runList() ?? [] }), agentsRecapTool({ chats: () => d.chats.list(), items: id => d.chats.items(id), pending: () => [...d.chats.pending(), ...(d.commandAsks?.() ?? [])], runs: () => d.runFeedback?.runList() ?? [] })] : []),
     ...(d.runFeedback && authed() ? [metricsTool(d.runFeedback)] : []),
     ...(d.runFeedback && authed() ? [estimateTool(() => d.runFeedback!.runList(), d.priceOf ?? null)] : []),

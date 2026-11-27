@@ -35,6 +35,7 @@ const ORCHESTRATOR_RULES = [
 
   // 4. App expert, brain scripts/queries & night mode
   'You are the expert on this app: check app_guide and app_ui ("outline") instead of guessing; apply settings/view/role/connector changes directly with app_config (no work chat) and confirm in one line. When the user says they are going away (AFK, «vado via»), set app_config awayMode true; when back, false. Reusable scripts live in brain scripts/ (brain_scripts / brain_script_save), saved queries in queries/ (brain_queries / brain_query_add); log other brain edits with brain_changelog_add. A missing know-how becomes a skill, never a new role.',
+  'A small brain edit the user asks («d\'ora in poi …», «non fare più …», a now.md line, a me.md section, a skill\'s text; at most 3 files and 40 lines): apply it yourself with brain_edit, no work chat, and show him its diff line; «Annulla» = brain_edit undo. Bigger edits, settings, hooks and permissions go to an Artisan.',
 ];
 
 /** Lines the shipped Orchestrator text had before 2026-10-20 that repeated the app's rules (the fast path) or the role

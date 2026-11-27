@@ -265,6 +265,9 @@ export interface Rec {
   userWaits?: boolean;
   /** the Orchestrator: its current (or last) turn was started by the user's own message, not by app news or mail */
   turnFromUser?: boolean;
+  /** the Orchestrator: for each message sent into its running turn, in order, whether it was the user's own (ADR 0368):
+   *  one the engine runs as the next turn makes that turn his or the app's; cleared when the engine goes idle */
+  queuedTurns?: boolean[];
   /** the Orchestrator: a message from the paired phone started or joined its current turn (the reply goes back to it) */
   turnFromPhone?: boolean;
   /** the Orchestrator (ADR 0369): the topic of its current or last turn (the user's message, a chat's news); its replies

@@ -55,6 +55,7 @@ export const TOOL_CATALOG: Readonly<Record<string, ToolInfo>> = {
   app_work_create: t('orchestrator', 'Create one persistent thread for a feature, bugfix or investigation.'),
   app_work_report: t('orchestrator', 'Update a thread\'s stage with concrete evidence.'),
   agent_lessons_waiting: t('orchestrator', 'The lessons waiting for review and the ones the user rejected.'),
+  brain_edit: t('orchestrator', 'A small brain edit applied at once (a rule, now.md, me.md, a skill\'s text; at most 3 files and 40 lines, never settings, hooks or permissions), committed in the brain repo, «Annulla» for 24 h.'),
   brain_script_save: t('orchestrator', 'Add, edit or fix a tested script in the brain\'s scripts/ folder.'),
   brain_script_delete: t('orchestrator', 'Move a brain script to scripts/.deleted/ (restorable).'),
   brain_changelog_add: t('orchestrator', 'Log a brain change made outside the script tools in the brain\'s changelog.'),
