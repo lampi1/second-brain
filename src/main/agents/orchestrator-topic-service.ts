@@ -44,20 +44,21 @@ export class OrchestratorTopicService {
   }
 
   /** The user's own message to the Orchestrator: the rules choose now (stored), the lightest model later when they were
-   *  not sure; `moved` gets the model's other choice (the manager re-tags the message and its turn). */
-  assign(chatId: string, text: string, at: number, world: Omit<TopicWorld, 'topics' | 'now'>, moved?: (topic: string) => void): TopicAssignment {
+   *  not sure; `moved` gets the model's other choice (the manager re-tags the message and its turn). `id` = the item
+   *  the message becomes (its mark is its own, whatever other message has the same words). */
+  assign(chatId: string, text: string, at: number, world: Omit<TopicWorld, 'topics' | 'now'>, moved?: (topic: string) => void, id?: string): TopicAssignment {
     const w: TopicWorld = { ...world, chats: this.chatsWithTopics(world.chats), topics: this.d.store.openLabels(), now: at };
     const a = assignTopic(text, w);
     const words = replyQuote(text)?.body ?? text;
     const label = this.d.store.touch(a.topic, at, words);
-    this.d.store.mark(text, at, label, a.by);
+    this.d.store.mark(text, at, label, a.by, id, true);
     const out = { ...a, topic: label };
     this.changed(chatId);
-    if (!a.sure && a.candidates.length && this.classify && moved) void this.refine(chatId, text, at, out, moved);
+    if (!a.sure && a.candidates.length && this.classify && moved) void this.refine(chatId, text, at, out, moved, id);
     return out;
   }
 
-  private async refine(chatId: string, text: string, at: number, a: TopicAssignment, moved: (topic: string) => void): Promise<void> {
+  private async refine(chatId: string, text: string, at: number, a: TopicAssignment, moved: (topic: string) => void, id?: string): Promise<void> {
     const topics = this.d.store.list();
     const rows = a.candidates.map(label => ({ label, ...(topics.find(t => sameTopic(t.label, label))?.gist ? { gist: topics.find(t => sameTopic(t.label, label))!.gist! } : {}) }));
     const { system, prompt } = classifyPrompt(replyQuote(text)?.body ?? text, rows);
@@ -70,21 +71,26 @@ export class OrchestratorTopicService {
     log.info('chats', 'topic chosen by the light model', { data: { by: a.by, sure: false, picked: pick ? (pick.isNew ? 'new' : 'existing') : 'none', moved: !!pick && !sameTopic(pick.topic, a.topic) } });
     if (!pick || sameTopic(pick.topic, a.topic)) return;
     // the user moved it meanwhile: his choice stays
-    if (this.d.store.recall(text, at)?.by === 'user') return;
+    if (this.d.store.recall(text, at, id)?.by === 'user') return;
     // a new label the model invented for a message the rules already put in a new topic: keep the rules' words
     if (pick.isNew && a.by === 'new') return;
     const label = this.d.store.touch(pick.topic, at);
-    this.d.store.mark(text, at, label, 'model');
+    this.d.store.mark(text, at, label, 'model', id);
+    // the rules' provisional topic holds nothing else: never left as an empty open topic
+    this.d.store.dropIfEmpty(a.topic);
     moved(label);
     this.changed(chatId);
   }
 
-  /** The user moved a message to `topic` (a new label makes a new topic): stored as his own choice. */
-  move(chatId: string, text: string, at: number, topic: string): string {
+  /** The user moved a message to `topic` (a new label makes a new topic): stored as his own choice; the topic it left
+   *  goes when nothing else is filed under it. */
+  move(chatId: string, text: string, at: number, topic: string, id?: string): string {
     const clean = cleanTopic(topic);
     if (!clean) throw new Error('Argomento non valido.');
+    const was = this.d.store.recall(text, at, id)?.topic;
     const label = this.d.store.touch(clean, at);
-    this.d.store.mark(text, at, label, 'user');
+    this.d.store.mark(text, at, label, 'user', id);
+    if (was && !sameTopic(was, label)) this.d.store.dropIfEmpty(was);
     this.changed(chatId);
     return label;
   }
@@ -102,7 +108,7 @@ export class OrchestratorTopicService {
   itemTopic(item: ChatItem, turnTopic: string | undefined, chatTopicOf: (item: ChatItem) => string | undefined): { topic: string; by?: TopicSource } | null {
     if ((item.kind !== 'user' && item.kind !== 'assistant' && item.kind !== 'system') || item.topic) return null;
     if (item.kind === 'user' && !item.from) {
-      const r = this.d.store.recall(item.text, item.at);
+      const r = this.d.store.recall(item.text, item.at, item.id);
       return r ? { topic: r.topic, by: r.by } : null;
     }
     const fromChat = chatTopicOf(item);

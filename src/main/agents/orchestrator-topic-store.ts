@@ -18,8 +18,9 @@ const MAX_TOPICS = 200, MAX_MARKS = 4000, MAX_CHATS = 2000, GIST = 120;
 const RECALL_MS = 5 * 60_000;
 
 interface StoredTopic { label: string; createdAt: number; lastAt: number; chatIds: string[]; gist?: string }
-/** One message's topic: the fingerprint of its text, its time, the topic, how it was chosen. */
-interface Mark { key: string; at: number; topic: string; by: TopicSource }
+/** One message's topic: the fingerprint of its text, its time, the topic, how it was chosen, and the id of the item it
+ *  was given to (two equal messages a minute apart, «sì» and «sì», keep a mark each). */
+interface Mark { key: string; at: number; topic: string; by: TopicSource; id?: string }
 interface Stored { version: 1; topics: StoredTopic[]; marks: Mark[]; chats: Record<string, string> }
 
 /** The fingerprint of a message: its first 160 characters, spaces collapsed, the app's hints after them never count. */
@@ -40,7 +41,8 @@ function readStored(value: unknown): Stored {
   }).slice(-MAX_TOPICS) : [];
   const marks = Array.isArray(o.marks) ? o.marks.flatMap((m): Mark[] => {
     const r = m as Record<string, unknown>, at = num(r?.at), topic = cleanTopic(String(r?.topic ?? ''));
-    return typeof r?.key === 'string' && /^[a-f0-9]{20}$/.test(r.key) && at !== null && topic && typeof r.by === 'string' ? [{ key: r.key, at, topic, by: r.by as TopicSource }] : [];
+    const id = typeof r?.id === 'string' && r.id.length <= 64 ? { id: r.id } : {};
+    return typeof r?.key === 'string' && /^[a-f0-9]{20}$/.test(r.key) && at !== null && topic && typeof r.by === 'string' ? [{ key: r.key, at, topic, by: r.by as TopicSource, ...id }] : [];
   }).slice(-MAX_MARKS) : [];
   const chats: Record<string, string> = {};
   if (o.chats && typeof o.chats === 'object') for (const [id, t] of Object.entries(o.chats as Record<string, unknown>).slice(-MAX_CHATS)) {
@@ -96,22 +98,49 @@ export class OrchestratorTopicStore {
     return t.label;
   }
 
-  /** Remembers a message's topic, found again by recall(text, at) after a restart. */
-  mark(text: string, at: number, topic: string, by: TopicSource): void {
+  /** The mark of one message: by its item's id, else (an item read back from a transcript has another id) the nearest
+   *  mark of the same text within RECALL_MS; -1 = none. A new item's id never takes another item's mark. */
+  private markOf(key: string, at: number, id: string | undefined, fresh: boolean): number {
+    if (id) { const i = this.data.marks.findIndex(m => m.id === id); if (i >= 0 || fresh) return i; }
+    let best = -1;
+    this.data.marks.forEach((m, i) => { if (m.key === key && Math.abs(m.at - at) <= RECALL_MS && (best < 0 || Math.abs(m.at - at) < Math.abs(this.data.marks[best]!.at - at))) best = i; });
+    return best;
+  }
+
+  /** Remembers a message's topic, found again by recall(text, at) after a restart. `id` = its item's id; `fresh` = a
+   *  message just sent (its own mark, never another one's of the same words). */
+  mark(text: string, at: number, topic: string, by: TopicSource, id?: string, fresh = false): void {
     const key = textKey(text), label = this.touch(topic, at);
-    const i = this.data.marks.findIndex(m => m.key === key && Math.abs(m.at - at) <= RECALL_MS);
-    if (i >= 0) this.data.marks[i] = { key, at, topic: label, by };
-    else this.data.marks.push({ key, at, topic: label, by });
+    const i = this.markOf(key, at, id, fresh);
+    const keepId = id ?? (i >= 0 ? this.data.marks[i]!.id : undefined);
+    const next: Mark = { key, at, topic: label, by, ...(keepId ? { id: keepId } : {}) };
+    if (i >= 0) this.data.marks[i] = next;
+    else this.data.marks.push(next);
     if (this.data.marks.length > MAX_MARKS) this.data.marks.splice(0, this.data.marks.length - MAX_MARKS);
     this.save();
   }
 
-  /** A message's topic, by its text and time (the nearest mark of the same text), null = never marked. */
-  recall(text: string, at: number): { topic: string; by: TopicSource } | null {
+  /** A message's topic, by its item's id when marked with it, else by its text and time (the nearest mark of the same
+   *  text), null = never marked. */
+  recall(text: string, at: number, id?: string): { topic: string; by: TopicSource } | null {
+    const byId = id ? this.data.marks.find(m => m.id === id) : undefined;
+    if (byId) return { topic: byId.topic, by: byId.by };
     const key = textKey(text);
     let best: Mark | null = null;
     for (const m of this.data.marks) if (m.key === key && (!best || Math.abs(m.at - at) < Math.abs(best.at - at))) best = m;
     return best ? { topic: best.topic, by: best.by } : null;
+  }
+
+  /** Drops a topic no message and no chat is filed under any more (a provisional topic the model or the user moved its
+   *  only message out of). Returns whether it was dropped. */
+  dropIfEmpty(label: string): boolean {
+    const i = this.data.topics.findIndex(t => sameTopic(t.label, label));
+    if (i < 0) return false;
+    const t = this.data.topics[i]!;
+    if (t.chatIds.length || this.data.marks.some(m => sameTopic(m.topic, t.label)) || Object.values(this.data.chats).some(c => sameTopic(c, t.label))) return false;
+    this.data.topics.splice(i, 1);
+    this.save();
+    return true;
   }
 
   /** A chat (and its plan) belongs to this topic from now on. */

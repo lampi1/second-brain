@@ -45,6 +45,35 @@ describe('the topic store', () => {
     expect(() => s.touch('[ ]')).toThrow();
   });
 
+  it('two equal short messages a minute apart keep a mark each, by their item id and their time', () => {
+    const file = path.join(tmp('topics-twins'), 'orchestrator-topics.json');
+    const s = new OrchestratorTopicStore(file, () => NOW);
+    s.mark('sì', NOW, 'Restyle UI', 'follow', 'u-1', true);
+    s.mark('sì', NOW + 60_000, 'Air 401', 'question', 'u-2', true);
+    expect(s.recall('sì', NOW, 'u-1')).toEqual({ topic: 'Restyle UI', by: 'follow' });
+    expect(s.recall('sì', NOW + 60_000, 'u-2')).toEqual({ topic: 'Air 401', by: 'question' });
+    // the model's or the user's later move of one changes that one only
+    s.mark('sì', NOW, 'Fatture', 'user', 'u-1');
+    expect(s.recall('sì', NOW + 60_000, 'u-2')).toEqual({ topic: 'Air 401', by: 'question' });
+    s.flush();
+    // after a restart the transcript's items have other ids: their times tell them apart
+    const b = new OrchestratorTopicStore(file, () => NOW);
+    expect(b.recall('sì', NOW + 800, 'h-1')).toEqual({ topic: 'Fatture', by: 'user' });
+    expect(b.recall('sì', NOW + 60_700, 'h-2')).toEqual({ topic: 'Air 401', by: 'question' });
+  });
+
+  it('drops a topic only when no message and no chat is filed under it', () => {
+    const s = new OrchestratorTopicStore(null, () => NOW);
+    s.touch('Vuoto', NOW);
+    s.mark('ciao', NOW, 'Pieno', 'new');
+    s.linkChat('c-1', 'Con chat');
+    expect(s.dropIfEmpty('vuoto')).toBe(true);
+    expect(s.dropIfEmpty('Pieno')).toBe(false);
+    expect(s.dropIfEmpty('Con chat')).toBe(false);
+    expect(s.dropIfEmpty('Mai visto')).toBe(false);
+    expect(s.list().map(t => t.label).sort()).toEqual(['Con chat', 'Pieno']);
+  });
+
   it('never overwrites a file it could not read', () => {
     const file = path.join(tmp('topics-bad'), 'orchestrator-topics.json');
     fs.writeFileSync(file, '{not json');
@@ -77,6 +106,9 @@ describe('the topic service', () => {
     await new Promise(r => setImmediate(r));
     expect(moved).toEqual(['Air 401']);
     expect(store.recall('controlla anche il token del login', NOW + 2)).toEqual({ topic: 'Air 401', by: 'model' });
+    // the provisional topic the rules opened for it holds nothing else: it is gone, never an empty open topic
+    expect(store.has(a.topic)).toBe(false);
+    expect(store.openLabels()).not.toContain(a.topic);
     // the user's move wins over a later model answer
     const late: string[] = [];
     let release!: () => void;
@@ -87,6 +119,8 @@ describe('the topic service', () => {
     await new Promise(r => setImmediate(r));
     expect(late).toEqual([]);
     expect(store.recall('e la fattura di ottobre', NOW + 3)).toEqual({ topic: 'Fatture', by: 'user' });
+    // the topic the user moved it out of was its own only: gone too
+    expect(store.openLabels().filter(l => /fattura/i.test(l) && l !== 'Fatture')).toEqual([]);
     // a model that answers something else, or fails, leaves the rules' choice
     answer = 'boh';
     const none: string[] = [];
