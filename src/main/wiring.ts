@@ -14,6 +14,7 @@ import { engineReadiness } from './engines/readiness';
 import { engineInfos, engineOf, enginePathsFromEnv, engines as engineList, priceEnginesOf } from './engines/registry';
 import { ModelLists } from './engines/model-lists';
 import { cliListText, cliProbe, fetchJson } from './engines/model-probe';
+import { attachWatchedAsks } from './agents/watched-asks';
 import { RunFeedback } from './agents/run-feedback';
 import { qualifiedSkillsLine, runtimePluginName } from './agents/role-gate';
 import { createAgentPacks } from './agents/pack/wiring';
@@ -704,14 +705,24 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const wake = attachOrchestratorWake(ctx, chats, () => brain.settings().orchestratorEvents !== false && (!process.env.SB_TEST || process.env.SB_ORCHESTRATOR_EVENTS === '1'), undefined, awayOn);
   plans.tellTo(wake); // a job stopped by itself (ADR 0342): the Orchestrator takes it up again
   manager.onUserWrote(n => wake.userMessage(n)); // the user typed in a work chat: quiet news (ADR 0083)
+  // what he asks the Orchestrator about is told in one short line when it is done (ADR 0371 point 4)
+  const watched = attachWatchedAsks(manager, { list: () => manager.list(), orchestrator: () => manager.list().find(c => c.isOrchestrator && !c.closedAt)?.id ?? null,
+    send: (id, text) => chats.send(id, text, undefined, false, 'App', false, { kind: 'app' }), log: (what, data) => log.info('agents', what, { data }) });
   // a root chat's clean result wakes the Orchestrator during an active workflow, or while the user is away (ADR 0191): the
   // Orchestrator carries the work on to its end instead of waiting for the user's next message
-  manager.onCleanReport(n => wake.cleanReport({ ...n, workflow: awayOn() || workflows.list().some(r => r.status === 'active' && r.chatIds.includes(n.chatId)) }));
+  // a result he asked about rides the same wake with its one-line note (ADR 0371 point 4): one turn, never two
+  manager.onCleanReport(n => {
+    const asked = watched.claim(n.chatId);
+    const took = wake.cleanReport({ ...n, workflow: awayOn() || workflows.list().some(r => r.status === 'active' && r.chatIds.includes(n.chatId)), ...(asked ? { asked } : {}) });
+    if (asked && !took) watched.tell(n);
+    return took;
+  });
   attachAway({ on: awayOn, log: awayLog, chats: manager, onSettingChange: f => brain.onSettingChange(f), blocker: powerSaveBlocker });
 
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'), asks);
   const heldNews = attachHeldNews(ctx.emitter, wake, mail);
-  const source = createAppSource(ctx, () => brain.settings().appRepo ?? null);
+  // «Aggiorna» waits for the chats running a turn (ADR 0371 point 8)
+  const source = createAppSource(ctx, () => brain.settings().appRepo ?? null, () => manager.list().filter(c => !c.closedAt && (c.state === 'running' || c.state === 'starting')).length);
   // a chat id passed as a runId: the chat (any state, its run mirror) names the run to use (unknownRunError)
   const chatOf = (id: string) => chats.list().find(c => c.id === id);
   // an agent run's verdict (the user's, a reviewed one, the Orchestrator's) is the known outcome of its chat's ledger

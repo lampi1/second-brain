@@ -20,6 +20,7 @@ import type { AgentContextSnapshot } from '../../shared/agent-context';
 import type { ModelTier } from '../../shared/roles';
 import type { AgentOwnerSnapshot } from '../../shared/agents';
 import type { IntakeSource, StrategyPlan } from '../../shared/strategy';
+import type { policyReadOffThread } from './permit-policy';
 
 /** Internal outbox receipts are tied to engine submission, never CPU queue admission. */
 export interface SubmissionReceipt { beforeSubmit(): void; submitted(): void; failed(error: unknown): void }
@@ -27,6 +28,10 @@ export interface SubmissionReceipt { beforeSubmit(): void; submitted(): void; fa
 export interface ResultIndex { byChat: Map<string, AgentRun[]>; roots: AgentRun[] }
 
 export interface ChatManagerOptions {
+  /** the clock of the brain rules' time budget (permit-policy.ts policyRead); the tests' own, else the real one */
+  permitClock?: () => number;
+  /** the night's read of the brain rules off the main thread (permit-policy.ts policyReadOffThread); the tests' own */
+  offThreadRead?: typeof policyReadOffThread;
   /** > 0: chats.json and agent-runs.json are written at most once per this many ms, asynchronously (one write per burst
    *  of changes, never blocking the main process on the disk); strict checkpoints, the quit and the exit write at once.
    *  0 / absent: every save is synchronous (unit tests read the files right after an action). */
@@ -443,6 +448,9 @@ export interface Rec {
   continuationPending?: string | undefined;
   /** Deduplicates diagnostic deferrals for one session and reason; not an inferred quality score. */
   freshDeferred?: string | undefined;
+  /** How many times this engine session compacted its context (handoff.ts FRESH_AFTER_COMPACTIONS, ADR 0371 point 6);
+   *  a new session counts from zero. In memory: after a restart the count starts again. */
+  compactions?: { session: string; n: number } | undefined;
   /** Exact request scope and user decisions, private to this chat; never shared through user-event tools. */
   continuationDecisions?: string | undefined;
   intakeKey?: string;

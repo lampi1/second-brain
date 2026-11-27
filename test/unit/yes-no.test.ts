@@ -1,6 +1,6 @@
 // Yes/no questions only (shared/yes-no.ts, ADR 0135): the shape check the question gates use and when the gate is on.
 import { describe, expect, it } from 'vitest';
-import { LADDER_TOOL, QUESTION_RULE, YESNO_REFUSAL, isNativeQuestion, isUserQuestion, isYesNo, ranCommandQuestion, yesNoGateOn, yesNoOf, yesNoShape } from '../../src/shared/yes-no';
+import { LADDER_TOOL, QUESTION_RULE, YESNO_REFUSAL, isNativeQuestion, isUserQuestion, isYesNo, notYesNoWhy, ranCommandQuestion, yesNoGateOn, yesNoOf, yesNoRefusal, yesNoShape } from '../../src/shared/yes-no';
 
 const q = (...labels: string[]) => ({ options: labels.map(label => ({ label })), multiSelect: false });
 
@@ -79,4 +79,18 @@ it('recommends forward progress unless a concrete reason to stop is explained', 
     expect(rule).toContain('moves the task forward');
     expect(rule).toContain('concrete reason');
   }
+});
+
+describe('#492 point 2: a refused question is told which rule it broke (ADR 0371)', () => {
+  const one = (question: string, ...labels: string[]) => [{ question, ...q(...labels) }];
+  it('names its own fault, and none when the shape is right', () => {
+    expect(notYesNoWhy([...one('Pubblico?', 'Sì', 'No'), ...one('Chiudo?', 'Sì', 'No')])).toMatch(/2 questions: ask exactly one/);
+    expect(notYesNoWhy(one('Quale tema uso?', 'Chiaro', 'Scuro'))).toMatch(/"Chiaro", "Scuro": use exactly two, "Sì" and "No"/);
+    expect(notYesNoWhy(one('Fatto?', 'Sì', 'No'))).toMatch(/does not say what it decides/);
+    expect(notYesNoWhy(one('Hai eseguito il comando sopra?', 'Sì', 'No'))).toMatch(/whether the user ran a command/);
+    expect(notYesNoWhy(one('x'.repeat(200) + '?', 'Sì', 'No'))).toMatch(/201 characters; the limit is 160/);
+    expect(notYesNoWhy(one('Pubblico la pagina del modulo Ordini?', 'Sì (consigliato)', 'No'))).toBeNull();
+    expect(yesNoRefusal(one('Quale tema uso?', 'Chiaro', 'Scuro')).endsWith(YESNO_REFUSAL)).toBe(true);
+    expect(yesNoRefusal(one('Pubblico la pagina?', 'Sì', 'No'))).toBe(YESNO_REFUSAL);
+  });
 });

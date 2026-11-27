@@ -2,7 +2,7 @@
 // its JSON text is read back by the schema, and a null where a value was expected is named in the tool's error with how
 // to send it. Pins src/main/mcp/json-args.ts and its use in mcp/server.ts.
 import { describe, expect, it } from 'vitest';
-import { nullsHint, schemaArgs } from '../../../src/main/mcp/json-args';
+import { badJsonHint, nullsHint, repairJson, schemaArgs } from '../../../src/main/mcp/json-args';
 import { McpServer, type McpTool } from '../../../src/main/mcp/server';
 
 const DELEGATE = { type: 'object', properties: { tasks: { type: 'array', items: { type: 'object', properties: {
@@ -14,9 +14,20 @@ describe('schemaArgs', () => {
   it('reads back a nested object or list sent as JSON text, where the schema wants one', () => {
     const contract = { goal: 'g', doneWhen: ['a'] };
     const r = schemaArgs({ tasks: [{ role: 'scout', contract: JSON.stringify(contract) }] }, DELEGATE);
-    expect(r).toEqual({ args: { tasks: [{ role: 'scout', contract }] }, nulls: [] });
+    expect(r).toEqual({ args: { tasks: [{ role: 'scout', contract }] }, nulls: [], badJson: [] });
     expect(schemaArgs({ tasks: JSON.stringify([{ role: 'scout', contract }]) }, DELEGATE).args).toEqual({ tasks: [{ role: 'scout', contract }] });
     expect(schemaArgs({ title: 't', props: '{"done":["x"]}' }, SHOW).args).toEqual({ title: 't', props: { done: ['x'] } });
+  });
+  it('#492 point 2: a contract written by hand as JSON text with raw line breaks or a trailing comma is read as meant; one that still does not parse is named', () => {
+    // red before ADR 0371: app_create_chat got the string and refused it as «contract: object required»
+    const raw = '{"goal": "Trova il bug\nnel login", "doneWhen": ["test verde",],}';
+    const r = schemaArgs({ tasks: [{ role: 'scout', contract: raw }] }, DELEGATE);
+    expect(r.args).toEqual({ tasks: [{ role: 'scout', contract: { goal: 'Trova il bug\nnel login', doneWhen: ['test verde'] } }] });
+    expect(repairJson('{"a": "x, ]"}')).toBe('{"a": "x, ]"}');
+    const bad = schemaArgs({ title: 't', props: '{"done": [x]}' }, SHOW);
+    expect(bad.args.props).toBe('{"done": [x]}');
+    expect(bad.badJson).toEqual([{ at: 'props', why: expect.any(String) }]);
+    expect(badJsonHint(bad.badJson)).toMatch(/props .* does not parse\. Send it as an object/);
   });
   it('leaves text where text is wanted, and what is not JSON of the wanted kind', () => {
     const args = { title: '{"a":1}', props: { done: ['[1]'] } };

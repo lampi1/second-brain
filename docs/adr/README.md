@@ -345,6 +345,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0368](0368-main-process-speed-journal-checkpoint-stop.md) The journal reads only open requests, a clean tree's checkpoint is HEAD, a stop ends within a second — accepted
 - [0369](0369-the-app-gives-each-message-its-topic.md) The app gives each Orchestrator message its topic, and a fresh context starts from that topic — accepted
 - [0370](0370-small-brain-edits-and-broken-connectors.md) The Orchestrator applies small brain edits itself; a connector that keeps failing is held back with one notice — accepted
+- [0371](0371-agent-communication-after-the-26-nov-update.md) Agent communication after the 26 Nov update: his words count, tools right the first time, short messages, told when done — accepted
 
 ## Replaced
 

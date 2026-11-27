@@ -101,6 +101,26 @@ export function vagueQuestion(q: string): boolean {
 export const yesNoShape = (qs: readonly { question?: string; options: readonly { label: string }[]; multiSelect?: boolean }[]): boolean =>
   qs.length === 1 && isYesNo(qs[0]!) && shortQuestion(qs[0]!.question ?? '');
 
+/** Why a question panel is not one short yes/no question, in one sentence the agent fixes on its next try (ADR 0371
+ *  point 2: the refusal said every rule at once, never which one this question broke, and the retry broke another).
+ *  Null when the shape is right (a missing brief is BRIEF_REFUSAL's business). */
+export function notYesNoWhy(qs: readonly { question?: string; options: readonly { label: string }[]; multiSelect?: boolean }[]): string | null {
+  if (qs.length !== 1) return `This panel has ${qs.length} questions: ask exactly one.`;
+  const q = qs[0]!, text = (q.question ?? '').replace(/!\[[^\]]*\]\([^)]*\)/g, '').trim();
+  if (q.multiSelect) return 'This question allows several answers (multiSelect): ask a single-choice one.';
+  if (!isYesNo(q)) return `Its options are ${q.options.map(o => JSON.stringify(o.label)).join(', ') || 'none'}: use exactly two, "Sì" and "No" (one marked "(consigliato)").`;
+  if (ranCommandQuestion(text)) return 'It asks whether the user ran a command: leave the command in a code block instead (the app runs it with Esegui and sends you the result).';
+  if (vagueQuestion(text)) return `"${text}" does not say what it decides: name the action ("Pubblico la pagina?").`;
+  if (q.question?.includes('```')) return 'It holds a code block: the code goes in the brief, the question stays plain words.';
+  if (!shortQuestion(q.question ?? '')) return `It has ${text.length} characters; the limit is ${MAX_QUESTION_CHARS}: move the context to the brief's why.`;
+  return null;
+}
+/** The refusal of a question panel: its own reason first, then the whole rule. */
+export const yesNoRefusal = (qs: Parameters<typeof notYesNoWhy>[0]): string => {
+  const why = notYesNoWhy(qs);
+  return why ? `${why} ${YESNO_REFUSAL}` : YESNO_REFUSAL;
+};
+
 /** The engine's own labels for Sì and No, declared in the question's brief (yesOption / noOption, #378): a tool that
  *  records approval only from its own picker labels («Approve Plan» / «Request Changes») gets them back, while the user
  *  still answers a Sì / No card. */

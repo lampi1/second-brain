@@ -42,6 +42,27 @@ async function expectUnconfirmedPlan(f: ReturnType<typeof fixture>, chatId: stri
 }
 
 describe('a Strategist\'s plan with the user', () => {
+  it('#492 point 3: agent_report is refused while the proposed plan waits for the user\'s approval; after it the report goes', async () => {
+    const f = fixture(), s = await f.root('strategist');
+    f.m.planPropose(s.id, [{ id: 's1', title: 'Trovo dove si calcola lo sconto', state: 'todo' }]);
+    expect(planOf(f, s.id).phase).toBe('proposed');
+    const report = { outcome: 'partial', summary: 'Piano proposto', output: 'Il piano è sulla sua pagina.', doneWhen: [] };
+    // red before ADR 0371: the report closed the job while its plan waited for the user
+    await expect(f.call('agent_report', s.id, report)).rejects.toThrow(/plan waits for the user's approval/);
+    expect(planOf(f, s.id).phase).toBe('proposed');
+    expect(f.m.list().find(c => c.id === s.id)!.run?.report).toBeUndefined();
+    await decide(f, s.id, 'approve');
+    expect(planOf(f, s.id).phase).toBe('running');
+    await expect(f.call('agent_report', s.id, report)).resolves.toMatchObject({ reported: true });
+  });
+  it('#492 review: once he answered «cambia» the plan is revising and a report goes (he may have said to drop it and report)', async () => {
+    const f = fixture(), s = await f.root('strategist');
+    f.m.planPropose(s.id, [{ id: 's1', title: 'Trovo dove si calcola lo sconto', state: 'todo' }]);
+    await decide(f, s.id, 'change', 'lascia perdere, dimmi cosa hai trovato');
+    expect(planOf(f, s.id).phase).toBe('revising');
+    const report = { outcome: 'partial', summary: 'Quello che ho trovato', output: 'Lo sconto si calcola in prezzi.ts.', doneWhen: [] };
+    await expect(f.call('agent_report', s.id, report)).resolves.toMatchObject({ reported: true });
+  });
   it('accepts the original plan after a workflow link while retaining its original job scope', async () => {
     const f = fixture(), s = await f.root('strategist');
     const plan = f.m.planPropose(s.id, [{ id: 's1', title: 'Existing scoped work', state: 'todo' }]);

@@ -597,6 +597,18 @@ describe('OrchestratorWake: quiet results and app-started chats (token plan 2026
     expect(w.queued().some(e => e.chatId === 'fix')).toBe(false);
   });
 
+  it('#492 point 4 (review): a result the user asked about wakes once, its one-line note in the same message', async () => {
+    const { w, sent, up } = make();
+    up({ id: 'fix', title: 'Ordini · fix', state: 'running' });
+    expect(w.cleanReport({ chatId: 'fix', title: 'Ordini · fix', role: 'Artisan', summary: 'Totale corretto', asked: true })).toBe(true);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).toContain('ha consegnato: «Totale corretto»');
+    expect(sent[0]!.text).toContain("L'utente ti aveva chiesto di «Ordini · fix»: diglielo ora in UNA riga breve");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(sent).toHaveLength(1);
+  });
+
   it('a clean report keeps its own slot: a later error of the same chat never hides it', async () => {
     const { w, up, sent } = make();
     up({ id: 'fix', title: 'App · fix', state: 'running' });

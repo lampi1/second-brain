@@ -7,7 +7,7 @@ import type { ChatSummary, ContextStats, HandoffInfo, NewChat } from '../../shar
 import { sysEn } from '../../shared/sys';
 import { errText, log } from '../log';
 import { AFTER_CALLS, CACHE_TTL_MS, coldArmed, coldRoute, continuityStep, type ColdView, ORCHESTRATOR_COMPACT, ORCHESTRATOR_PAUSE_COMPACT, romeDay } from './continuity';
-import { autoHandoff, contextBudgetDue, continuePrompt, FRESH_HANDOFF_MARK, FRESH_IDLE_MS, protectedHandoff, extractHandoff, handoffRequest, nextTitle } from './handoff';
+import { autoHandoff, continuePrompt, FRESH_HANDOFF_MARK, FRESH_IDLE_MS, freshDue, protectedHandoff, extractHandoff, handoffRequest, nextTitle } from './handoff';
 import { isUuid, nextId, type HarnessSession } from './session';
 import { forEngine } from './agent-message';
 import { engineOf } from '../engines/registry';
@@ -230,7 +230,12 @@ export abstract class ManagerContinuity extends ManagerRequests {
       && !r.askedParentAt && !this.freshWorkBehind(r) && !r.s.waitsOn && r.s.plan?.phase !== 'proposed'
       && !r.unfinished && !r.s.lastError && !!r.s.lastResult && !r.s.lastResult.isError && !r.s.lastResult.interrupted
       && r.s.agentChildren?.coverage !== 'unknown' && this.childrenDone(r) && !this.observedChildrenBusy(r)
-      && !!r.lastTurnAt && now - r.lastTurnAt >= FRESH_IDLE_MS && contextBudgetDue(r.s);
+      && !!r.lastTurnAt && now - r.lastTurnAt >= FRESH_IDLE_MS && this.freshDueOf(r);
+  }
+
+  /** The context budget, or this session's compactions (ADR 0371 point 6). */
+  private freshDueOf(r: Rec): boolean {
+    return freshDue(r.s, r.compactions?.session === (r.s.sessionId ?? '') ? r.compactions.n : 0);
   }
 
   /** Deterministic state, rebuilt immediately before switching so an intervening user decision cannot go stale. */
@@ -280,7 +285,7 @@ export abstract class ManagerContinuity extends ManagerRequests {
         if (existing?.text.startsWith(FRESH_HANDOFF_MARK) && existing.at >= r.lastTurnAt) continue;
         if (this.freshHandoff(r)) { n++; continue; }
       }
-      if (this.opts.freshSessions?.() && contextBudgetDue(r.s) && now - r.lastTurnAt >= FRESH_IDLE_MS) {
+      if (this.opts.freshSessions?.() && this.freshDueOf(r) && now - r.lastTurnAt >= FRESH_IDLE_MS) {
         const reason = this.freshReady(r, now) ? 'protected-context-unavailable-or-too-large' : 'chat-not-idle-or-unsettled-work';
         const key = `${r.s.sessionId}:${reason}`;
         if (r.freshDeferred !== key) { r.freshDeferred = key; log.info('chats', 'fresh session deferred', { chat: r.s.id, data: { reason, coverage: r.s.agentChildren?.coverage ?? 'unknown' } }); }

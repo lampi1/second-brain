@@ -118,7 +118,8 @@ function checkOne(v: unknown, i: number): Omit<PlanStep, 'id' | 'after'> & { aft
   const s = v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : null, at = `steps[${i}]`;
   if (!s) throw new Error(`${at}: object required.`);
   const extra = Object.keys(s).find(k => !STEP_FIELDS.includes(k));
-  if (extra) throw new Error(`${at}: unknown field ${extra}${extra === 'keep' ? ' (keep is for revise: true)' : ''}.`);
+  // the fields it takes, so the next proposal is right (ADR 0371 point 2)
+  if (extra) throw new Error(`${at}: unknown field ${extra}${extra === 'keep' ? ' (keep is for revise: true)' : ''}. A step's fields: ${STEP_FIELDS.join(', ')} (title and after required).`);
   if (s.role !== undefined && !isWorkRole(s.role)) throw new Error(`${at}.role: one of the work roles, or leave it out for a step you do yourself.`);
   if (s.preset !== undefined && !isPresetId(s.preset)) throw new Error(`${at}.preset: one of ${PRESET_IDS.join(' | ')} (the role card's presets).`);
   const detail = s.detail === undefined || s.detail === '' ? undefined : line(s.detail, DETAIL_ASK, `${at}.detail`);
@@ -127,7 +128,7 @@ function checkOne(v: unknown, i: number): Omit<PlanStep, 'id' | 'after'> & { aft
     ...(s.minutes !== undefined ? { minutes: s.minutes as number } : {}), ...(s.preset !== undefined ? { preset: s.preset as PresetId } : {}) };
 }
 function afterOf(v: unknown, at: string): number[] {
-  if (!Array.isArray(v) || !v.every(n => Number.isInteger(n) && (n as number) > 0)) throw new Error(`${at}.after: the numbers of the steps it waits for; [] when it can start at once.`);
+  if (!Array.isArray(v) || !v.every(n => Number.isInteger(n) && (n as number) > 0)) throw new Error(`${at}.after: required on every step: the numbers of the steps it waits for; [] when it can start at once.`);
   return [...new Set(v as number[])];
 }
 function touchesOf(v: unknown, at: string): { touches?: string[] } {
