@@ -21,6 +21,7 @@
 // - The user's call recordings and their local transcripts (app_recordings, ADR 0154): the Orchestrator's mount only.
 // - A lesson in Impara when the user asks to understand something (app_learn, ADR 0190): the Orchestrator's mount only.
 // - The latest report of any chat in its tree, delegates included (app_child_output, ADR 0226); the recap (app_agents_recap, 0260).
+// - The user's test credentials on a card only he sees (app_show_credentials, ADR 0367): the Orchestrator's mount only.
 // - The skill library (app_skills, app_skill_write, app_skill_roles, app_skill_undo, ADR 0241): the Orchestrator's mount only.
 // - A small brain edit applied at once, committed, with «Annulla» for 24 h (brain_edit, ADR 0370): the Orchestrator's mount only.
 import { successorIn } from '../../shared/role-tools';
@@ -36,6 +37,7 @@ import { answerableInWords, sameWords } from '../../shared/answer-in-words';
 import { heldQuestions, openQuestions } from '../../shared/question-ladder';
 import { isPlanApproval } from '../../shared/strategy';
 import { withPasswordsHidden } from '../browser/shot-mask';
+import { withCredentialsHidden } from './ui-shot-mask';
 import { fmtFactor, previewOf } from '../browser/preview';
 import { healthSnapshot } from '../health';
 import { timerSnapshot } from '../timers';
@@ -83,6 +85,7 @@ import { answeredText, lastAnswered, lastTyped, ownItem, userAsked } from './use
 import { recordingTools, type RecordingsRead } from './recordings';
 import { newsTools, type NewsControl } from './news';
 import { childOutputTool } from './child-output';
+import { credentialsCardTool } from './credential-card-tool';
 import { agentsRecapTool } from './agents-recap';
 import { PLAN_TOOL_PROPS, PLAN_TOOL_TEXT, planAction } from '../plans/tools';
 import { userShellName } from '../platform';
@@ -282,6 +285,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     ...(d.skillLibrary && authed() ? skillTools(d.skillLibrary, () => caller()?.title || 'Orchestrator') : []),
     ...(d.brainEdit && authed() ? [brainEditTool(d.brainEdit, () => caller()?.title || 'Orchestrator')] : []),
     ...(authed() ? [childOutputTool({ chats: () => d.chats.list(), runs: () => d.runFeedback?.runList() ?? [] }), agentsRecapTool({ chats: () => d.chats.list(), items: id => d.chats.items(id), pending: () => [...d.chats.pending(), ...(d.commandAsks?.() ?? [])], runs: () => d.runFeedback?.runList() ?? [] })] : []),
+    // the credentials card (ADR 0367): the values go from the file to the user's screen, never to the model
+    ...(authed() ? [credentialsCardTool({ match: ref => d.browser.credentialCardMatch(ref), orchestratorId: () => (authed() && d.chats.appNotice ? callerId! : null),
+      show: (chatId, item) => d.chats.appNotice?.(chatId, item) })] : []),
     ...(d.runFeedback && authed() ? [metricsTool(d.runFeedback)] : []),
     ...(d.runFeedback && authed() ? [estimateTool(() => d.runFeedback!.runList(), d.priceOf ?? null)] : []),
     {
@@ -515,7 +521,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (!win) return 'no window';
         const images: { data: string; mimeType: string; caption: string }[] = [];
         const left: string[] = [];
-        const ui = await win.webContents.capturePage();
+        // a live credential card shows values: hidden for the capture, or the screenshot is refused (ADR 0367)
+        const ui = await withCredentialsHidden(script => frameRun(win.webContents.mainFrame, script), () => win.webContents.capturePage());
         const p = previewOf(ui);
         images.push({ data: p.data, mimeType: p.mimeType, caption: `app UI ${ui.getSize().width}x${ui.getSize().height}, image ${p.width}x${p.height} (UI px = image px × ${fmtFactor(p.factor)})` });
         for (const v of win.contentView.children) {

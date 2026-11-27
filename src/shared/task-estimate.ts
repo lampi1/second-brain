@@ -4,7 +4,7 @@
 // Also the estimate's measured accuracy week by week (a backtest of the same estimator on the past runs). Computed in
 // main (src/main/agents/task-estimate.ts, estimate-accuracy.ts); read by the Grindhouse strips and the Orchestrator's plan
 // (renderer lib/run-estimates.ts) over IPC agents:estimates, and by the Orchestrator through the task_estimate tool.
-import type { TaskKind } from './contract';
+import type { EstimateMeta, TaskKind } from './contract';
 
 /** Which past runs the estimate rests on: the same agent on the same model, the same agent on any model, the same kind
  *  of work on any agent (ADR 0285). */
@@ -84,5 +84,14 @@ export const QUICK_USD = 0.5;
  *  less per request). The chat view never shows it: the item keeps the user's text, a transcript re-read drops it. */
 export const ESTIMATE_LINE_TAG = '[app estimate';
 export const estimateLine = (e: Pick<TaskEstimate, 'path' | 'why'>): string => `${ESTIMATE_LINE_TAG} · path "${e.path}"] ${e.why}`;
+/** The app's estimate line, wherever it sits in a text the engine echoes back (ACP, Codex) or a transcript holds. */
+const ESTIMATE_RE = /(?:^|\n+)\[app estimate · path "([a-z-]+)"\] ?([^\n]*)/;
 /** The user's text without the app's estimate line. */
-export const withoutEstimateLine = (text: string): string => text.replace(/\n*\[app estimate · path "[a-z-]+"\][^\n]*$/, '');
+export const withoutEstimateLine = (text: string): string => splitEstimate(text).text;
+/** The user's words and the app's estimate apart (ADR 0367): the bubble shows the words, a closed chip the estimate.
+ *  A text without the line comes back as it is. */
+export function splitEstimate(text: string): { text: string; estimate?: EstimateMeta } {
+  const m = ESTIMATE_RE.exec(text);
+  if (!m) return { text };
+  return { text: (text.slice(0, m.index) + text.slice(m.index + m[0].length)).trim(), estimate: { path: m[1]!, why: m[2]!.trim() } };
+}

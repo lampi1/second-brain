@@ -114,9 +114,8 @@ try {
   await page.getByTestId('tile-chat-tree-plan').getByTestId('plan-tree-plan').waitFor(); // the plan's dots on its strip (ADR 0366)
   await page.getByTestId('tile-chat-tree-plan').scrollIntoViewIfNeeded();
   await capture('plan-compact');
-  const ready = page.getByTestId('tile-orchestrator').getByTestId('result-ready').filter({
-    has: page.locator('[data-testid="chatref-open"][data-chat-id="tree-plan"]'),
-  });
+  // the thin result row (ResultRow.tsx, ADR 0367) names its source chat on the row itself
+  const ready = page.getByTestId('tile-orchestrator').locator('[data-testid="result-ready"][data-chat-id="tree-plan"]');
   await ready.getByTestId('result-ready-toggle').click();
   const result = ready.getByTestId('canonical-result');
   await result.waitFor();

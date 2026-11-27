@@ -51,8 +51,14 @@ export interface CreditWait {
   waiting?: { out: string[]; first: number | null };
 }
 
+/** The app's routing estimate of a user's request (shared/task-estimate.ts): the path it suggests and why, one line. */
+export interface EstimateMeta { path: string; why: string }
+
 export interface ChatSummary {
   launchContext?: AgentContextSnapshot;
+  /** «Stai aspettando» (ADR 0367): a root chat the Orchestrator opened or assigned while answering the user's own
+   *  message (main's userWaits); doneAt = when its result reached the Orchestrator (a green ✓ for a while) */
+  userWait?: { since: number; doneAt?: number };
   userEvents?: { latestSeq: number; acknowledgedSeq: number };
   /** Root results the user can synthesize; private delegated results are excluded. */
   availableResultIds?: string[];
@@ -259,7 +265,10 @@ export type ChatItem =
    *  Telegram, whose filter hides commands (#390) */
   /** topic (the Orchestrator only, ADR 0369): the topic the app gave the message (topicBy: how), the user's own pick
    *  when topicBy is 'user'; absent = none (another chat, or an Orchestrator item from before topics) */
-  | { kind: 'user'; id: string; at: number; text: string; images?: number; thumbs?: string[]; from?: string; via?: 'phone'; remote?: true; voice?: boolean; topic?: string; topicBy?: TopicSource }
+  | { kind: 'user'; id: string; at: number; text: string; images?: number; thumbs?: string[]; from?: string; via?: 'phone'; remote?: true; voice?: boolean; topic?: string; topicBy?: TopicSource;
+      /** the app's routing estimate for this request (ADR 0367): metadata beside the user's words, never inside them;
+       *  the model gets it as its own block (shared/task-estimate.ts estimateLine), the bubble shows a small closed chip */
+      estimate?: EstimateMeta }
   | { kind: 'assistant'; id: string; at: number; text: string; streaming?: boolean; topic?: string }
   | { kind: 'thinking'; id: string; at: number; text: string }
   /** exitCode: a shell command's exit code, only when its engine said it (Claude's Bash result, Codex's exitCode, an ACP

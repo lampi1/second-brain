@@ -52,7 +52,6 @@ import { ChatMenu, TitleInput } from './ChatMenu';
 import { planQuestion } from '../lib/plan-ask';
 import { StrategyPanel } from './StrategyPanel';
 import { ChildStrips } from './ChildStrips';
-import { TaskContext } from './TaskContext';
 import { InWindowLine } from './QuestionsWindow';
 import { RunHereCtx } from './CodeBlock';
 import { childRequestsFor, requestHost, type ChildRequest } from '../lib/child-requests';
@@ -316,7 +315,6 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded,
       <div className={`chat-work${expanded?' expanded':''}`} id={`chat-work-${chatId}`} inert={!expanded} aria-hidden={!expanded} style={expanded && shownView === 'split' ? { flexGrow: share } : undefined}><div className="chat-work-inner">
       {expanded && <>
         {!compact && <ChatLinks chat={chat} />}
-        <TaskContext chat={chat} onContinue={() => reveal(true)} />
         {!compact && chat.handoffBusy && <ContextNotice chat={chat} />}
         {/* no Esegui in a work chat: its commands wait in the Orchestrator (ADR 0269) */}
         <RunHereCtx.Provider value={false}><ChatTranscript key={chatId} chatId={chatId} busy={showsWork(chat)} expanded={expanded} /></RunHereCtx.Provider>

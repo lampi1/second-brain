@@ -6,13 +6,13 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { ChatItem } from '../../shared/contract';
+import type { ChatItem, EstimateMeta } from '../../shared/contract';
 import { sysEn, type SysCode } from '../../shared/sys';
 import { diffFor, diffFromResult, resultText, toolSummary } from './claude-map';
 import { lastLine, trimInput } from './session';
 import { withoutAgentMessage } from './agent-message';
 import { coldUserText } from './handoff';
-import { withoutEstimateLine } from '../../shared/task-estimate';
+import { splitEstimate } from '../../shared/task-estimate';
 import { maskTypedItem } from './typed-text';
 
 type Obj = Record<string, unknown>;
@@ -75,11 +75,18 @@ const REMINDER = /<system-reminder>[\s\S]*?<\/system-reminder>/g;
 /** User text as typed (a cold continuation's note left out): slash commands shown as "/name args", injected reminders
  *  dropped. A system result (interrupted, a command's output) carries sysCode when it is a fixed frame, or a plain
  *  system text when it is the command's own output (passthrough). */
-export function userText(raw: string): { text: string; system?: string; sysCode?: SysCode } | null {
+export function userText(raw: string): { text: string; system?: string; sysCode?: SysCode; estimate?: EstimateMeta } | null {
   // a cold continuation's first message (ADR 0031): only the user's part, the note stays behind the divider
   // a message the app wrapped for the engine (ADR 0261) shows without the envelope
-  const t = withoutEstimateLine(coldUserText(withoutAgentMessage(raw.replace(REMINDER, '').trim()))).trim();
+  // the app's estimate line (ADR 0367) leaves the user's words and comes back as the item's metadata
+  const split = splitEstimate(coldUserText(withoutAgentMessage(raw.replace(REMINDER, '').trim())));
+  const t = split.text.trim();
   if (!t) return null;
+  const u = userTextOf(t);
+  return u && split.estimate ? { ...u, estimate: split.estimate } : u;
+}
+
+function userTextOf(t: string): { text: string; system?: string; sysCode?: SysCode } | null {
   if (/^\[Request interrupted/.test(t)) return { text: '', sysCode: 'interrupted' };
   const cmd = t.match(/<command-name>([\s\S]*?)<\/command-name>/);
   if (cmd) {
@@ -120,7 +127,7 @@ export function readHistory(file: string, opts: { cwd?: string; maxItems?: numbe
         const u = userText(content);
         if (u?.sysCode) items.push({ kind: 'system', id: `h-${uuid}`, at, text: sysEn(u.sysCode), level: 'info', code: u.sysCode });
         else if (u?.system) items.push({ kind: 'system', id: `h-${uuid}`, at, text: u.system, level: 'info' });
-        else if (u?.text) items.push({ kind: 'user', id: `h-${uuid}`, at, text: u.text });
+        else if (u?.text) items.push({ kind: 'user', id: `h-${uuid}`, at, text: u.text, ...(u.estimate ? { estimate: u.estimate } : {}) });
         continue;
       }
       const texts: string[] = [];
@@ -143,7 +150,7 @@ export function readHistory(file: string, opts: { cwd?: string; maxItems?: numbe
       const u = texts.length ? userText(texts.join('\n')) : null;
       if (u?.sysCode) items.push({ kind: 'system', id: `h-${uuid}`, at, text: sysEn(u.sysCode), level: 'info', code: u.sysCode });
       else if (u?.system) items.push({ kind: 'system', id: `h-${uuid}`, at, text: u.system, level: 'info' });
-      else if (u?.text || images) items.push({ kind: 'user', id: `h-${uuid}`, at, text: u?.text ?? '', ...(images ? { images } : {}) });
+      else if (u?.text || images) items.push({ kind: 'user', id: `h-${uuid}`, at, text: u?.text ?? '', ...(images ? { images } : {}), ...(u?.estimate ? { estimate: u.estimate } : {}) });
       continue;
     }
     let i = 0;

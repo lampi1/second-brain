@@ -74,6 +74,8 @@ export const ORCHESTRATOR_APP_REQUIRED: readonly string[] = [
   'app_work_list', 'app_work_create', 'app_work_report',
   // a small brain edit without a work chat (ADR 0370)
   'brain_edit',
+  // the credentials card (ADR 0367): «dammi le credenziali di test 3» answered with values the model never sees
+  'app_show_credentials',
 ];
 
 /** The required tools that are not among `exposed`; [] = nothing missing. */

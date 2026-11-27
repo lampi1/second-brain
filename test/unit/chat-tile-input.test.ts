@@ -44,15 +44,12 @@ describe('chat tile input', () => {
   it('the first-run guide without a task run can receive an answer', () => {
     expect(render()).toContain('data-testid="chat-input-guide"');
   });
-  it('a user-started chat keeps its input and Continue action', () => {
-    const html = render('user');
-    expect(html).toContain('data-testid="chat-input-guide"');
-    expect(html).toContain('>Continue here</button>');
-  });
-  it.each(['orchestrator', 'parent', 'app'] as const)('a %s worker keeps its input and Continue action', startedBy => {
+  // «Incarico corrente» is gone from the open chat (ADR 0367, the owner: useless); the input stays
+  it.each(['user', 'orchestrator', 'parent', 'app'] as const)('a %s-started chat keeps its input, with no «current assignment» box', startedBy => {
     const html = render(startedBy);
     expect(html).toContain('data-testid="chat-input-guide"');
-    expect(html).toContain('>Continue here</button>');
+    expect(html).not.toContain('task-context');
+    expect(html).not.toContain('Current assignment');
   });
 });
 

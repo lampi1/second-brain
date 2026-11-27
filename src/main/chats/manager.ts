@@ -45,6 +45,7 @@ import { FAIL_CLOSED, aboveCeiling, belowParent, narrowest, type AgentPolicy } f
 import { runPresetOf } from '../../shared/model-presets';
 import type { RunLinks } from '../agents/runs';
 import { newRequest } from '../agents/task-estimate';
+import { splitEstimate } from '../../shared/task-estimate';
 import { AWAY_BACK, AWAY_RULE } from '../../shared/away';
 import { ownerSource, type TaskSource } from '../../shared/delegation';
 import { answerableInWords } from '../../shared/answer-in-words';
@@ -568,6 +569,13 @@ export class ChatManager extends ManagerRemote implements ChatService {
     return lines.length ? `\n\n[${lines.join('\n')}]` : '';
   }
 
+  /** An app notice in a chat's transcript, with no turn and no token: the Orchestrator's credentials card (ADR 0367). */
+  appNotice(chatId: string, item: Extract<ChatItem, { kind: 'system' }>): void {
+    const r = this.need(chatId);
+    this.addItem(r, item, r.items.some(i => i.id === item.id));
+    this.updated(r);
+  }
+
   /** What the user has on screen when he writes from the PC (ADR 0276; chat:send's `where`, written by the renderer). */
   userWhere(chatId: string, where: unknown): void {
     const r = this.chats.get(chatId);
@@ -669,8 +677,16 @@ export class ChatManager extends ManagerRemote implements ChatService {
     const fromPhone = !!phoneVia && from === undefined && !resumed;
     const phoneVoice = fromPhone && !!phoneVia?.voice;
     if (fromPhone) r.turnFromPhone = true; else if (!this.midTurn(r)) delete r.turnFromPhone;
+    // the user's own NEW request to the Orchestrator carries the app's estimate (zero tokens), never the app's news or
+    // mail, nor a short follow-up ("ok", "vai", an answer) in a conversation going on (ADR 0186)
+    // the user's own messages only: an agent's mail (from) or an app note ([…) is not the user going on
+    const said = r.items.filter(i => i.kind === 'user' && !i.from && !i.text.startsWith('[')), before = said.at(-1);
+    const ongoing = !!before && before.at >= Date.now() - FOLLOW_UP_WINDOW_MS;
+    const estimate = r.s.isOrchestrator && !from && !resumed && t && !t.startsWith('[') && newRequest(t, ongoing) ? this.requestEstimate(t) : null;
+    // the estimate rides beside the user's words as metadata (ADR 0367): his bubble keeps his text, a chip shows it
+    const estimateMeta = estimate ? splitEstimate(estimate).estimate : undefined;
     if (topic) r.turnTopic = topic.topic; else if (news && !this.midTurn(r)) r.turnTopic = news;
-    this.addItem(r, { kind: 'user', id: userItemId, at: Date.now(), text: t, ...(imgs.length ? { images: imgs.length } : {}), ...(thumbs.length ? { thumbs } : {}), ...(from ? { from: from.slice(0, 80) } : {}), ...(fromPhone ? { via: 'phone' as const, ...(phoneVoice ? { voice: true } : {}) } : {}), ...(topic ? { topic: topic.topic, topicBy: topic.by } : news ? { topic: news, topicBy: 'chat' as const } : {}) }, false);
+    this.addItem(r, { kind: 'user', id: userItemId, at: Date.now(), text: t, ...(estimateMeta ? { estimate: estimateMeta } : {}), ...(imgs.length ? { images: imgs.length } : {}), ...(thumbs.length ? { thumbs } : {}), ...(from ? { from: from.slice(0, 80) } : {}), ...(fromPhone ? { via: 'phone' as const, ...(phoneVoice ? { voice: true } : {}) } : {}), ...(topic ? { topic: topic.topic, topicBy: topic.by } : news ? { topic: news, topicBy: 'chat' as const } : {}) }, false);
     // the topic brief of a fresh context leaves this message out (it is sent right after it); the item's own topic,
     // the lightest model's when it answered while the engine started (ManagerTopics.tagItem)
     const added = topic ? r.items.findLast(i => i.id === userItemId) : undefined;
@@ -687,12 +703,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     // the user put the files back before the last turn: the chat learns it with its next message
     const noted = r.undoNote ? `${r.undoNote}\n\n${noted0}` : noted0;
     r.undoNote = undefined;
-    // the user's own NEW request to the Orchestrator carries the app's estimate (zero tokens), never the app's news or
-    // mail, nor a short follow-up ("ok", "vai", an answer) in a conversation going on (ADR 0186)
-    // the user's own messages only: an agent's mail (from) or an app note ([…) is not the user going on
-    const said = r.items.filter(i => i.kind === 'user' && !i.from && !i.text.startsWith('[')), before = said.at(-2);
-    const ongoing = !!before && before.at >= Date.now() - FOLLOW_UP_WINDOW_MS;
-    const estimate = r.s.isOrchestrator && !from && !resumed && t && !t.startsWith('[') && newRequest(t, ongoing) ? this.requestEstimate(t) : null;
+    // the model reads the estimate as the app's own block after the user's words, never inside them
     const asked0 = [noted, estimate].filter(Boolean).join('\n\n');
     const body = asked0;
     // the role once per context: the Orchestrator's with the role catalog, a role chat's composed instructions; a

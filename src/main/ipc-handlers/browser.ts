@@ -17,5 +17,7 @@ export function browserHandlers({ s }: HandlerContext): HandlersOf<'browser' | '
     'browser:envList': () => s.browser.envs(),
     'credentials:list': () => s.browser.credentials(),
     'credentials:copy': a => s.browser.copyCredential(a.id, a.field),
+    'credentials:card': a => s.browser.credentialCardFields(a.id),
+    'credentials:reveal': a => s.browser.credentialReveal(a.id),
   };
 }
