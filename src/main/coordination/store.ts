@@ -23,8 +23,14 @@ const decodeRequests = (rows: JoinedRequest[]): RequestRecord[] => rows.map(r =>
   ...(r.decision_json ? { decision: JSON.parse(r.decision_json) as DecisionReceipt } : {}),
   ...(r.delivery_json ? { delivery: JSON.parse(r.delivery_json) as DeliveryReceipt } : {}) }));
 
+/** Changes whenever the file changed: another connection's commit (data_version) or this connection's own write
+ *  (total_changes). Two cheap pragma reads, no table scanned. */
+const changeStamp = (db: DatabaseSync): string =>
+  `${(db.prepare('pragma data_version').get() as { data_version: number }).data_version}:${(db.prepare('select total_changes() n').get() as { n: number }).n}`;
+
 export class CoordinationStore {
   private handle: DatabaseSync;
+  private openCache?: { db: DatabaseSync; stamp: string; cap: number; rows: RequestRecord[] };
   constructor(readonly file: string, private now = Date.now) {
     const opened = openAppDb(file);
     this.handle = opened.db;
@@ -121,16 +127,45 @@ export class CoordinationStore {
       ${jobId ? 'where r.job_id = ?' : ''} order by r.at desc limit ?`;
     return decodeRequests((jobId ? this.db.prepare(sql).all(jobId, cap) : this.db.prepare(sql).all(cap)) as JoinedRequest[]);
   }
-  /** Pending and unconfirmed deliveries are never displaced by recent auto-permitted tool traffic. */
+  /** The open requests only (pending, or accepted and not delivered or applied: coordination_open_requests), newest
+   *  first: everything a projection acts on. Read by every projection (the work driver's minute tick, app_digest,
+   *  work:list); it used to decode the last 2000 rows of the whole journal, which blocked the window (ADR 0368), so
+   *  closed history is read only by requests(). Cached until a connection commits to the file (data_version) or this
+   *  one writes (total_changes). The rows are shared: callers only read them. */
   projectionRequests(limit = 2000): RequestRecord[] {
     const cap = Math.max(1, Math.min(2000, limit));
-    const current = decodeRequests(this.db.prepare(`select r.json request_json, d.json decision_json, l.json delivery_json
-      from coordination_open_requests o join coordination_requests r on r.id=o.request_id
+    const db = this.db, stamp = changeStamp(db), cached = this.openCache;
+    if (cached && cached.db === db && cached.stamp === stamp && cached.cap === cap) return cached.rows;
+    // cross join: the few open rows drive the query (a plain join let SQLite walk every request by its time, 37 ms)
+    const rows = decodeRequests(db.prepare(`select r.json request_json, d.json decision_json, l.json delivery_json
+      from coordination_open_requests o cross join coordination_requests r on r.id=o.request_id
       left join coordination_decisions d on d.request_id=r.id left join coordination_deliveries l on l.decision_id=d.id
       order by r.at desc limit ?`).all(cap) as JoinedRequest[]);
-    const ids = new Set(current.map(r => r.id));
-    return [...current, ...this.requests(undefined, cap).filter(r => !ids.has(r.id)).slice(0, cap - current.length)];
+    this.openCache = { db, stamp, cap, rows };
+    return rows;
   }
+  /** One batch of the clean-up of old auto-permitted permissions (ADR 0368; prune.ts runs it off the hot path): a
+   *  permission the app's own gate allowed (policy auto-permit or role-gate), delivered, asked before `before`, leaves
+   *  the journal with its decision, delivery and execution rows. User decisions, refusals and anything still open stay.
+   *  Returns how many requests it removed: fewer than `batch` means nothing is left. */
+  pruneAutoPermits(before: number, batch = 500): number {
+    return tx(this.db, () => {
+      const rows = this.db.prepare(`select r.id rid, d.id did from coordination_requests r
+        join coordination_decisions d on d.request_id=r.id join coordination_deliveries l on l.decision_id=d.id
+        where r.state='accepted' and r.at < ? and json_extract(r.json,'$.kind')='permission'
+          and json_extract(d.json,'$.actor.kind')='policy' and json_extract(d.json,'$.actor.policy') in ('auto-permit','role-gate')
+          and json_extract(d.json,'$.answer.allow')=1 and json_extract(l.json,'$.state')='delivered'
+        limit ?`).all(before, Math.max(1, Math.trunc(batch))) as { rid: string; did: string }[];
+      const byDecision = ['delete from coordination_execution where decision_id = ?', 'delete from coordination_deliveries where decision_id = ?',
+        'delete from coordination_decisions where id = ?'].map(sql => this.db.prepare(sql));
+      const request = this.db.prepare('delete from coordination_requests where id = ?'), open = this.db.prepare('delete from coordination_open_requests where request_id = ?');
+      for (const { rid, did } of rows) { for (const st of byDecision) st.run(did); request.run(rid); open.run(rid); }
+      return rows.length;
+    });
+  }
+  /** A one-time job's mark in coordination_meta (prune.ts). */
+  done(key: string): boolean { return !!this.db.prepare('select 1 from coordination_meta where key = ?').get(key); }
+  markDone(key: string): void { this.db.prepare('insert into coordination_meta(key,value) values(?,?) on conflict(key) do nothing').run(key, 'done'); }
   cancelPending(chatId: string, originalId: string): void {
     const rows = this.db.prepare("select json from coordination_requests where chat_id = ? and original_id = ? and state = 'pending'").all(chatId, originalId) as { json: string }[];
     for (const { json } of rows) {
