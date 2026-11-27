@@ -18,22 +18,7 @@ export const agentsGridEn: typeof agentsGridIt = {
   'agentsGrid.levelHelpOrchestrator': 'Orchestrator: earns with the runs it started that are verified successes, plus 1 XP for a plan approved with no change. Half the XP when the task went to another role or was redone.',
   'agentsGrid.levelHelpEx': ({ xp, wins, runs, level, next, left }) =>
     `${xp} XP from ${wins} verified ${wins === 1 ? 'success' : 'successes'} out of ${runs} ${runs === 1 ? 'run' : 'runs'} ended: Lv ${level}` + (next === null ? ', the top.' : `; ${left} XP more for Lv ${next}.`),
-  'agentsGrid.perf': 'Performance',
-  'agentsGrid.perfBand': ({ v }) => v >= 0.85 ? 'Excellent' : v >= 0.7 ? 'Good' : v >= 0.5 ? 'Fair' : 'Needs work',
-  'agentsGrid.perfWarmup': 'Warming up',
-  'agentsGrid.perfWarmupCount': ({ n }) => n === 1 ? '1 verdict, too few' : `${n} verdicts, too few`,
-  'agentsGrid.perfJudged': ({ n }) => n === 1 ? '1 verdict' : `${n} verdicts`,
-  'agentsGrid.perfSpread': ({ v }) => `±${v}`,
-  'agentsGrid.perfSpreadTip': ({ v }) => `Uncertainty: ±${v} points`,
-  'agentsGrid.perfHelpTitle': 'How the performance is computed',
-  'agentsGrid.perfHelp1': 'An estimate from the verdicts on its runs (success 100%, partial 50%, failure 0%). It starts at 50% and moves with the verdicts: a few move it a little. The ± says how uncertain it still is.',
-  'agentsGrid.perfHelp2': 'Each verdict weighs by who gave it: you and an independent review × 1, a Sentinel\'s review graded by what happened × 0.8, the app\'s receipts × 0.7, the Orchestrator × 0.6, a signal on the Orchestrator\'s choices (a task handed to another role, a plan approved) and a verified parent × 0.5; the agent on itself does not count. A 30-day-old verdict weighs half.',
-  'agentsGrid.perfHelp3': ({ min, spread }) => `It shows with at least ${min} verdicts and an uncertainty of at most ±${spread}; before that it is "warming up". Bands: 85% and up excellent, 70–84% good, 50–69% fair, below 50% needs work.`,
-  'agentsGrid.perfSources': ({ human, review, receipts, graded, orchestrator, decision, chain, self }) =>
-    `Verdicts so far: ${human} yours, ${review} from independent reviews, ${receipts} from test receipts, ${graded} reviews graded by what happened, ${chain} from a verified parent, ${orchestrator} from the Orchestrator`
-    + (decision ? `, ${decision} on its choices` : '') + (self ? `; ${self} only from the agent itself, which do not count.` : '.'),
   // the user's pats and whacks on the role's little person (ADR 0297)
-  'agentsGrid.perfTouches': ({ pat, whack }) => `Pats and whacks on its little person: ${pat} and ${whack}. Each weighs a twentieth of a verdict of yours, once per job, all together half a verdict at most, and is not counted among the verdicts.`,
   'agentsGrid.success': 'Success',
   'agentsGrid.successFew': ({ n, min }: { n: number; min: number }) => `Too few verified outcomes: ${n} of ${min}`,
   'agentsGrid.successNote': ({ n, min }: { n: number; min: number }) => `verified: ${n} of ${min} needed`,

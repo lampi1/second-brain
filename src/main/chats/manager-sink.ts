@@ -214,7 +214,7 @@ export abstract class ManagerSink extends ManagerLadder {
           if (addSkill(r.s.run, skillOfRead(item.input, item.name))) { this.runSaveSoon(); this.updated(r); }
         }
         if (item.kind === 'tool' && r.s.run) this.noteReceipt(r, item);
-        if (item.kind === 'result' && !replace) { delete r.crashResumed; this.turnEnded(r, item); if (r.replaying !== r.session) this.toolTurnEnded(r); }
+        if (item.kind === 'result' && !replace) { delete r.crashResumed; this.turnEnded(r, item); if (r.replaying !== r.session) this.toolTurnEnded(r); this.nextQueuedTurn(r); }
       },
       toolsLoaded: names => { if (live()) this.toolsLoaded(r, names); },
       pending: (req, whole) => {
@@ -260,6 +260,7 @@ export abstract class ManagerSink extends ManagerLadder {
         if (!live()) return;
         // kept as the replaying session: an engine that exits mid-replay leaves no flag on its successor
         if (p.replaying !== undefined) { r.replaying = p.replaying ? r.session ?? undefined : undefined; return; }
+        if (p.queuedTurns !== undefined) { if (r.queuedTurns) r.queuedTurns = p.queuedTurns > 0 ? r.queuedTurns.slice(-p.queuedTurns) : []; return; }
         this.applyPatch(r, p);
       },
       exit: ({ error }) => {
@@ -324,6 +325,17 @@ export abstract class ManagerSink extends ManagerLadder {
         if (r.s.resumedAt) { delete r.s.resumedAt; this.updated(r); }
       });
     }, 0);
+  }
+
+  /** The Orchestrator's turn ended and the engine goes on with a message queued behind it (no idle in between): that
+   *  turn is the user's or the app's as its message was, so his next message interrupts only the app's news (ADR 0368).
+   *  The messages the engine read inside the ending turn are already dropped (SessionPatch.queuedTurns). */
+  private nextQueuedTurn(r: Rec): void {
+    if (!r.s.isOrchestrator || !r.queuedTurns?.length) return;
+    const own = r.queuedTurns.shift()!;
+    if (own === !!r.turnFromUser) return;
+    r.turnFromUser = own;
+    this.updated(r);
   }
 
   /** An engine that ignored the user's stop (SessionPatch.restart): it ends now, the next message (the user's «Invia
@@ -484,6 +496,7 @@ export abstract class ManagerSink extends ManagerLadder {
     // the turn that reported is over: its result goes now, after the chat shows as finished (#123)
     if (r.heldResult && p.state && p.state !== 'running' && p.state !== 'starting' && !this.midTurn(r)) this.releaseResult(r);
     // the Orchestrator's turn ended: a later turn the CLI starts by itself is not the user's (#123)
-    if (r.s.isOrchestrator && r.turnFromUser && p.state && p.state !== 'running' && p.state !== 'starting' && !this.midTurn(r)) r.turnFromUser = false;
+    if (r.s.isOrchestrator && r.turnFromUser && p.state && p.state !== 'running' && p.state !== 'starting' && !this.midTurn(r)) { r.turnFromUser = false; this.updated(r); } // the summary says it too (ADR 0368)
+    if (r.queuedTurns?.length && p.state && p.state !== 'running' && p.state !== 'starting' && !this.midTurn(r)) r.queuedTurns = [];
   }
 }

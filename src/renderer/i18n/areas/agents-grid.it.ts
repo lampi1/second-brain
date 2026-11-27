@@ -19,22 +19,7 @@ export const agentsGridIt = {
   'agentsGrid.levelHelpOrchestrator': 'Orchestrator: guadagna con i lavori che ha avviato e sono riusciti verificati, più 1 XP per un piano approvato senza modifiche. XP dimezzati se il compito è passato a un altro ruolo o è stato rifatto.',
   'agentsGrid.levelHelpEx': ({ xp, wins, runs, level, next, left }: { xp: number; wins: number; runs: number; level: number; next: number | null; left: number }) =>
     `${xp} XP da ${wins} ${wins === 1 ? 'riuscito verificato' : 'riusciti verificati'} su ${runs} ${runs === 1 ? 'lavoro concluso' : 'lavori conclusi'}: Lv ${level}` + (next === null ? ', il massimo.' : `; mancano ${left} XP per il Lv ${next}.`),
-  'agentsGrid.perf': 'Performance',
-  'agentsGrid.perfBand': ({ v }: { v: number }): string => v >= 0.85 ? 'Ottima' : v >= 0.7 ? 'Buona' : v >= 0.5 ? 'Discreta' : 'Da rivedere',
-  'agentsGrid.perfWarmup': 'In rodaggio',
-  'agentsGrid.perfWarmupCount': ({ n }: { n: number }) => n === 1 ? '1 voto, ancora pochi' : `${n} voti, ancora pochi`,
-  'agentsGrid.perfJudged': ({ n }: { n: number }) => n === 1 ? '1 voto' : `${n} voti`,
-  'agentsGrid.perfSpread': ({ v }: { v: number }) => `±${v}`,
-  'agentsGrid.perfSpreadTip': ({ v }: { v: number }) => `Margine di incertezza: ±${v} punti`,
-  'agentsGrid.perfHelpTitle': 'Come si calcola la performance',
-  'agentsGrid.perfHelp1': 'È una stima dai voti ai suoi lavori (riuscito 100%, in parte 50%, fallito 0%). Parte dal 50% e si sposta coi voti: pochi voti la muovono poco. Il ± dice quanto è ancora incerta.',
-  'agentsGrid.perfHelp2': 'Ogni voto pesa per chi l\'ha dato: tu e una revisione indipendente × 1, una revisione del Sentinel giudicata dai fatti × 0,8, le ricevute dell\'app × 0,7, l\'Orchestrator × 0,6, un segnale sulle scelte dell\'Orchestrator (compito passato a un altro ruolo, piano approvato) e il genitore verificato × 0,5; l\'agente su sé stesso non conta. Un voto di 30 giorni fa pesa la metà.',
-  'agentsGrid.perfHelp3': ({ min, spread }: { min: number; spread: number }) => `Compare con almeno ${min} voti e un margine non oltre ±${spread}; prima è «in rodaggio». Fasce: 85% e oltre ottima, 70–84% buona, 50–69% discreta, sotto il 50% da rivedere.`,
-  'agentsGrid.perfSources': ({ human, review, receipts, graded, orchestrator, decision, chain, self }: { human: number; review: number; receipts: number; graded: number; facts: number; orchestrator: number; decision: number; chain: number; self: number }) =>
-    `Voti finora: ${human} tuoi, ${review} di revisioni indipendenti, ${receipts} dalle ricevute dei test, ${graded} revisioni giudicate dai fatti, ${chain} dal genitore verificato, ${orchestrator} dell'Orchestrator`
-    + (decision ? `, ${decision} sulle sue scelte` : '') + (self ? `; ${self} solo dell'agente stesso, che non contano.` : '.'),
   // the user's pats and whacks on the role's little person (ADR 0297)
-  'agentsGrid.perfTouches': ({ pat, whack }: { pat: number; whack: number }) => `Buffetti e bastonate sull'omino: ${pat} e ${whack}. Ognuno pesa un ventesimo di un tuo voto, una volta per lavoro, tutti insieme al massimo mezzo voto, e non conta tra i voti.`,
   'agentsGrid.success': 'Riuscite',
   'agentsGrid.successFew': ({ n, min }: { n: number; min: number }) => `Troppo pochi esiti verificati: ${n} su ${min}`,
   'agentsGrid.successNote': ({ n, min }: { n: number; min: number }) => `verificati: ${n} su ${min} necessari`,

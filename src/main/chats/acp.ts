@@ -164,8 +164,9 @@ const NET_RETRY_DELAYS = [5000, 20000];
 /** The prompt that continues a turn the engine ended while its own background command still runs (waitBackground). */
 export const bgWaitPrompt = (tasks: readonly string[]): string =>
   `Il comando in background ${tasks.join(', ')} è ancora in corso: il turno non è finito. Aspettalo (controllane lo stato con il tool dei task) e poi completa il lavoro; chiudi il turno solo quando è finito.`;
-/** a user's stop waits this long for the engine to end its prompt, then the engine is restarted (watchCancel) */
-const CANCEL_GRACE_MS = 5000;
+/** a user's stop waits this long for the engine to end its prompt, then the engine is restarted (watchCancel). 1 s
+ *  (ADR 0368; was 5 s): OpenCode ignored cancel 13 times in a day on the owner's PC, each a 5 s wait before his next turn */
+export const CANCEL_GRACE_MS = 1000;
 
 const STREAM_ERROR_GRACE_MS = 10000;
 

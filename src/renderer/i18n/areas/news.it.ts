@@ -1,8 +1,5 @@
 // The «Giornale» (ADR 0265, editions ADR 0280): the «Giornale» and «Pull Request» tabs, the sources panel, the refresh and its cost.
 export const newsIt = {
-  'impara.tab.giornale': 'Giornale',
-  'impara.tab.pr': 'Pull Request',
-  'impara.tab.lezioni': 'Lezioni',
 
   'news.title': 'News',
   'news.lastAt': ({ when }: { when: string }) => `aggiornato ${when}`,
@@ -42,7 +39,6 @@ export const newsIt = {
   'news.why': 'Perché conta per te',
   'news.noSummary': 'Il riassunto AI arriva al prossimo aggiornamento. Qui sopra le parole della fonte.',
   'news.explain': 'Approfondisci',
-  'news.openLesson': 'Apri la lezione',
   'news.save': 'Salva per dopo',
   'news.savedOn': 'Salvata',
   'news.markRead': 'Segna letta',
@@ -128,23 +124,4 @@ export const newsIt = {
   'news.src.triedBad': ({ why }: { why: string }) => `Non riesco a leggerla: ${why}`,
   'news.src.none': 'Nessuna fonte. Incolla un link qui sopra, oppure chiedi all\'Orchestrator «trova le fonti per questa edizione».',
 
-  'impara.prs.filters': 'Filtri',
-  'impara.prs.filter.todo': 'Da studiare',
-  'impara.prs.filter.half': 'A metà',
-  'impara.prs.filter.done': 'Studiate',
-  'impara.prs.filter.all': 'Tutte',
-  'impara.prs.list': 'Le tue pull request',
-  'impara.prs.refresh': 'Leggi le PR ora',
-  'impara.prs.none': 'Nessuna pull request: arrivano dalla pagina Task. Per una PR di GitHub incolla il link in «Lezioni».',
-  'impara.prs.noneHere': 'Nessuna pull request con questo filtro.',
-  'impara.prs.pick': 'Scegli una pull request a sinistra.',
-  'impara.prs.draft': 'bozza',
-  'impara.prs.lesson': 'La tua lezione',
-  'impara.prs.notYet': 'Non l\'hai ancora studiata. «Impara» prepara la lezione dal suo diff.',
-  'impara.prs.seen': ({ seen, planned }: { seen: number; planned: number }) => `${seen} di ${planned} pezzi visti`,
-  'impara.prs.study': 'Impara',
-  'impara.prs.open': 'Apri la PR',
-  'impara.prs.reviewers': 'Revisori',
-  'impara.prs.build': 'Build',
-  'impara.prs.items': 'Work item',
 };
