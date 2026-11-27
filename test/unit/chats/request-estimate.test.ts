@@ -43,6 +43,9 @@ describe('the estimate line under a request to the Orchestrator', () => {
     // the item the chat view shows keeps the user's words
     const items = m.items(orch.id).filter(i => i.kind === 'user');
     expect(items.at(-1)).toMatchObject({ text: ask });
+    // and the estimate beside them as metadata, for the chip under the bubble (ADR 0367)
+    expect(items.at(-1)).toMatchObject({ estimate: { path: 'self' } });
+    expect(JSON.stringify(items.at(-1))).not.toContain('[app estimate');
     // a short follow-up in the conversation going on is no new request (ADR 0186)
     await m.send(orch.id, 'ok vai');
     await m.send(orch.id, 'il secondo');
@@ -67,7 +70,9 @@ describe('the estimate line under a request to the Orchestrator', () => {
 
   it('a transcript re-read drops the line', () => {
     expect(withoutEstimateLine(`domanda\n\n${LINE}`)).toBe('domanda');
-    expect(userText(`domanda\n\n${LINE}`)).toEqual({ text: 'domanda' });
+    expect(userText(`domanda\n\n${LINE}`)).toEqual({ text: 'domanda', estimate: { path: 'self', why: expect.stringContaining('A short question') } });
+    // anywhere in the text: the app's later hints after it never keep it in the bubble
+    expect(withoutEstimateLine(`domanda\n\n${LINE}\n\n[app · the user looks at: Grindhouse]`)).toBe('domanda\n\n[app · the user looks at: Grindhouse]');
     expect(withoutEstimateLine('[app estimate] scritto dall\'utente')).toBe('[app estimate] scritto dall\'utente');
   });
 });

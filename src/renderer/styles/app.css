@@ -1373,10 +1373,6 @@ html.overlay body:focus-within .layer-hint { display: none; }
 .result-ready-full small { opacity: .6; overflow-wrap: anywhere; }
 
 /* Task authority stays compact; explicit synthesis is a separate user action. */
-.task-context { padding: 6px 12px; font-size: 12px; border-bottom: 1px solid var(--line); }
-.task-context summary { cursor: pointer; }
-.task-context p { margin: 6px 0; overflow-wrap: anywhere; }
-.task-context-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .result-synth-btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 14px; border-radius: var(--r-m); border: 0; cursor: pointer;
   background: linear-gradient(135deg, var(--violet), color-mix(in srgb, var(--violet) 60%, var(--accent))); color: #fff; font: 600 12.5px var(--font);
   box-shadow: 0 1px 2px rgba(0, 0, 0, .18), 0 4px 14px color-mix(in srgb, var(--violet) 30%, transparent); transition: filter .12s, transform .12s; }

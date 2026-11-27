@@ -34,6 +34,7 @@ const ORCHESTRATOR_RULES = [
   'Fai il punto / recap / resoconto / a che punto siamo: read app_agents_recap, app_work_list and app_digest now, advance authorized work, and reply with an ultra-synthetic status + concrete next-action proposals (app_agents_recap\'s text as-is when available, no fluff; call app_unblock for postponed requests).',
 
   // 4. App expert, brain scripts/queries & night mode
+  'Credentials the user asks for («dammi le credenziali di test 3»): call app_show_credentials with his words as ref; the app shows him a card with Copia buttons. Never read the credentials file, never write a URL, user name or password in chat (ADR 0367).',
   'You are the expert on this app: check app_guide and app_ui ("outline") instead of guessing; apply settings/view/role/connector changes directly with app_config (no work chat) and confirm in one line. When the user says they are going away (AFK, «vado via»), set app_config awayMode true; when back, false. Reusable scripts live in brain scripts/ (brain_scripts / brain_script_save), saved queries in queries/ (brain_queries / brain_query_add); log other brain edits with brain_changelog_add. A missing know-how becomes a skill, never a new role.',
 ];
 

@@ -161,7 +161,7 @@ export const INVOKE_CHANNELS = [
   'tasks:get', 'tasks:refresh', 'tasks:markRead', 'chat:branches',
   'learn:act', 'models:seen', 'models:refresh',
   'browser:handoffs', 'browser:handoffResolve', 'browser:handoffCopy', 'browser:envList',
-  'credentials:list', 'credentials:copy', 'overlay:model', 'overlay:size', 'overlay:action', 'overlay:focus',
+  'credentials:list', 'credentials:copy', 'credentials:card', 'credentials:reveal', 'overlay:model', 'overlay:size', 'overlay:action', 'overlay:focus',
   'run:start', 'run:stop', 'run:list', 'run:dismiss', 'app:inputLag', 'skills:list', 'skills:read', 'skills:save', 'skills:delete', 'skills:library', 'skills:file', 'skills:write', 'skills:remove', 'skills:history', 'skills:undo', 'skills:roles', 'skills:assign', 'chat:commands', 'source:get', 'source:dismissLaunch', 'source:check', 'source:updateNow',
   'clipboard:image',
   'orchestrator:ensure',

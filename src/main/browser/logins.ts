@@ -16,6 +16,9 @@
 // refusal carries a link offer; the browser shows the user a Sì/No banner on the tab (hand-off kind "link": the user's
 // click only, never an agent or the Orchestrator), and Sì makes linkSite() add the page's origin to the entry's loginUrl
 // (a string, or a list once it has several). Only that key of that entry changes; the password is never read for it.
+// The Orchestrator's credentials card (ADR 0367): cardMatch() finds the entry the user asked for («le credenziali di test
+// 3») by a reference (a host, a user name or the words of its group), returning only its id and group to the tool;
+// cardFields() gives the renderer its URL and user name, byId() its password, only on the user's click.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -138,6 +141,38 @@ export function looksProduction(e: Pick<Entry, 'group' | 'url' | 'loginUrls'>): 
   return word.test(e.group) || [hostOf(e.url), ...(e.loginUrls ?? []).map(hostOf)].some(h => word.test(h));
 }
 
+/** What app_show_credentials learns of the entry it showed: an id (opaque) and the group label; or why none. */
+export type CardMatch = { id: string; group: string } | { refusal: string };
+
+const words = (s: string): string[] => s.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter(w => w && !STOP.has(w));
+const STOP = new Set(['di', 'del', 'della', 'per', 'le', 'la', 'il', 'lo', 'gli', 'i', 'of', 'the', 'for', 'credenziali', 'credentials', 'account', 'login', 'utente', 'user', 'password', 'https', 'http', 'www']);
+
+/** The entry a reference names: an exact user name or host (with port) first, then every word of the reference found in
+ *  its group, hosts and user name ("test 3" also matches "test3"). One hit, or a refusal that names the candidates by
+ *  group only (never a user name, URL or password). Production-looking entries are never shown (rule 2). Pure. */
+export function cardMatch(all: Entry[], ref: string): CardMatch {
+  const want = ref.trim().toLowerCase();
+  if (!want) return { refusal: 'Refused: ref is empty. Pass the host, the user name or the words the user used ("test 3").' };
+  const indexed = all.map((e, i) => ({ e, i }));
+  const host = hostOf(/^https?:\/\//.test(want) ? want : `https://${want}`);
+  let hits = indexed.filter(({ e }) => e.user.toLowerCase() === want || (!!host && hostsOf(e).includes(host)));
+  if (!hits.length) {
+    const ws = words(want);
+    const hay = (e: Entry) => { const w = words([e.group, ...hostsOf(e), e.user].join(' ')); return { w, joined: w.join(' ') }; };
+    // whole words first ("test 3" = the words test and 3, or the word test3), then words inside longer ones
+    const strict = ({ e }: { e: Entry }) => { const h = hay(e); return ws.every(x => h.w.includes(x)) || h.w.includes(ws.join('')); };
+    const loose = ({ e }: { e: Entry }) => { const h = hay(e); return ws.every(x => h.joined.includes(x)); };
+    hits = !ws.length ? [] : indexed.filter(strict);
+    if (!hits.length && ws.length) hits = indexed.filter(loose);
+  }
+  const safe = hits.filter(({ e }) => !looksProduction(e));
+  if (!safe.length) return { refusal: hits.length ? 'Refused: the matching entry looks like a production account; the app shows test accounts only. Tell the user to open the credentials file himself.'
+    : `Refused: no entry of the user's credentials file matches "${oneLine(ref, 80)}". Ask him which environment (in one line), never for a password.` };
+  if (safe.length > 1) return { refusal: `Several entries match "${oneLine(ref, 80)}": ${safe.slice(0, 6).map(({ e }) => `«${e.group || 'senza gruppo'}»`).join(', ')}. Call again with a narrower ref (the host or the group's words).` };
+  const { e, i } = safe[0]!;
+  return { id: entryId(e, i), group: e.group };
+}
+
 /** Writes the file where it really is (a link to a file outside the brain stays a link, the secrets stay out of the
  *  brain) with its own mode, through a temporary file beside it and a rename. */
 function writeKeeping(f: string, text: string): void {
@@ -251,6 +286,19 @@ export class Credentials {
     if (next === null) return { error: 'the entry could not be found in the file' };
     try { this.write(f, next); } catch (e) { return { error: `the credentials file cannot be written: ${e instanceof Error ? e.message : String(e)}` }; }
     return { ok: true };
+  }
+
+  /** The entry the Orchestrator's card shows for a reference (ADR 0367): its id and group only, never a value. */
+  cardMatch(ref: string): CardMatch {
+    if (!this.file()) return { refusal: 'There is no credentials file (no brain folder, or credentialsFile points outside it): tell the user in one line.' };
+    return cardMatch(this.entries(), ref);
+  }
+
+  /** The card's URL and user name of an entry, read from the file now (renderer only, never a tool result). */
+  cardFields(id: string): { user: string; url?: string } | null {
+    const all = this.entries();
+    const hits = all.filter((e, n) => entryId(e, n) === id);
+    return hits.length === 1 ? { user: hits[0]!.user, ...(hits[0]!.url ? { url: hits[0]!.url } : {}) } : null;
   }
 
   /** Every entry for the "Credenziali" panel: group, user, URL, note and an id (never the password). */

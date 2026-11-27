@@ -112,5 +112,10 @@ export interface BrowserInvokeMap {
   'credentials:list': [void, CredentialEntry[]];
   /** main copies an entry's user name or password (read from the file now); a password is cleared from the clipboard
    *  after 30 s if still there. Returns false when it could not (no such entry, e.g. the file changed). */
-  'credentials:copy': [{ id: string; field: 'user' | 'password' }, boolean];
+  'credentials:copy': [{ id: string; field: 'user' | 'password' | 'url' }, boolean];
+  /** the Orchestrator's credentials card (ADR 0367): an entry's sign-in URL and user name, only while a card for that
+   *  entry is live (shown by app_show_credentials less than 10 minutes ago); null otherwise. Never reaches a model. */
+  'credentials:card': [{ id: string }, { user: string; url?: string } | null];
+  /** the card's «Mostra»: the password, read from the file now, only while its card is live; null otherwise */
+  'credentials:reveal': [{ id: string }, string | null];
 }

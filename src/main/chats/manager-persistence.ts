@@ -240,6 +240,8 @@ export abstract class ManagerPersistence extends ManagerCore {
         ...(c.parentId ? { parentId: c.parentId } : {}),
         ...(c.delegation ? { delegation: c.delegation } : {}),
         ...(c.plan ? { plan: c.plan } : {}), ...(c.questions?.length ? { questions: c.questions } : {}),
+        // «Stai aspettando» across a restart (ADR 0367): the wait is persisted as userWaits, its start is not
+        ...(c.userWaits || c.heldResult?.userWaits ? { userWait: { since: c.createdAt } } : {}),
         ...(c.waitsOn ? { waitsOn: c.waitsOn } : {}), ...(c.waitsOnWork ? { waitsOnWork: true } : {}), ...(c.creditWait ? { creditWait: c.creditWait } : {}), ...(c.creditMoved ? { creditMoved: c.creditMoved } : {}), ...(c.userModel ? { userModel: c.userModel } : {}), ...(c.routing ? { routing: c.routing } : {}), ...(c.pick ? { pick: c.pick } : {}),
         ...(c.remoteControl ? { remoteControl: pausedState(c.remoteControl)! } : {}),
         ...(c.agentAssets && c.agentSkills?.length ? { loadedSkills: [...c.agentSkills] } : {}),

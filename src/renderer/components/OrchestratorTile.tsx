@@ -3,7 +3,8 @@
 // the default focus; every chat's open questions, permissions, commands and plans show at its bottom as one row each,
 // opened in place (OrchestratorAsks, ADR 0269: no window over the page); its own messages' shell blocks have
 // "Esegui" too (the run and "Manda l'esito alla chat" belong to the Orchestrator). Completed results appear as compact
-// source-chat links in the transcript. Its ⋯ menu is the chat menu (ChatMenu) plus "Ricomincia da
+// source-chat links in the transcript, one thin row each (ResultRow.tsx); under the topic pills the «Stai aspettando» row
+// (WaitingRow.tsx, ADR 0367). Its ⋯ menu is the chat menu (ChatMenu) plus "Ricomincia da
 // capo", "Cambia motore" (both open the Nuovo Orchestrator confirm) and "Pulisci"; the eraser on its head is "Pulisci" in
 // one click, without the confirm (clearOrchestratorNow, the quick /clear). With no Orchestrator yet it offers to create
 // one. In its head, one line with its model, the chats it started today by state and the cost apart, its own and theirs (#153,
@@ -30,6 +31,7 @@ import { ORCHESTRATOR_ROLE_ID } from '@shared/roles';
 import { AgentIdentity } from './AgentIdentity';
 import {AgentAvatar}from'./AgentAvatar';
 import { ChildStrips } from './ChildStrips';
+import { WaitingRow } from './WaitingRow';
 import { PlansButton } from './PlansButton';
 import { MorningLine } from './MorningBlock';
 import { useFlash } from './ChatTile';
@@ -201,6 +203,8 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
             )}
           </div>
         )}
+        {/* «Stai aspettando» (ADR 0367): the chats the user waits for, under the topic pills */}
+        <WaitingRow />
         <div className="th-sub sr-only" data-testid="orchestrator-sub">
           <span className="th-engine" data-tip={t('dialogs.orchestrator.engineTip', { name: engineName(chat.harness) })} aria-label={t('dialogs.orchestrator.engineTip', { name: engineName(chat.harness) })} role="img" data-engine={chat.harness} data-testid="orchestrator-engine"><HarnessMark harness={chat.harness} size={14} /></span>
           <span className="th-sub-text">{[!['Orchestrator', 'Orchestrator'].includes(chat.title.trim()) ? chat.title : '', modelWithEffort(chat), chatCost(chat)].filter(Boolean).join(' · ')}</span>

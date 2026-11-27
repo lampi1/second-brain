@@ -21,6 +21,7 @@
 // - The user's call recordings and their local transcripts (app_recordings, ADR 0154): the Orchestrator's mount only.
 // - A lesson in Impara when the user asks to understand something (app_learn, ADR 0190): the Orchestrator's mount only.
 // - The latest report of any chat in its tree, delegates included (app_child_output, ADR 0226); the recap (app_agents_recap, 0260).
+// - The user's test credentials on a card only he sees (app_show_credentials, ADR 0367): the Orchestrator's mount only.
 // - The skill library (app_skills, app_skill_write, app_skill_roles, app_skill_undo, ADR 0241): the Orchestrator's mount only.
 import { successorIn } from '../../shared/role-tools';
 import type { BrowserWindow } from 'electron';
@@ -82,6 +83,7 @@ import { answeredText, lastAnswered, lastTyped, userAsked } from './user-words';
 import { recordingTools, type RecordingsRead } from './recordings';
 import { newsTools, type NewsControl } from './news';
 import { childOutputTool } from './child-output';
+import { credentialsCardTool } from './credential-card-tool';
 import { agentsRecapTool } from './agents-recap';
 import { PLAN_TOOL_PROPS, PLAN_TOOL_TEXT, planAction } from '../plans/tools';
 import { userShellName } from '../platform';
@@ -276,6 +278,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     ...(d.news && authed() ? newsTools(d.news, d.emitUi) : []),
     ...(d.skillLibrary && authed() ? skillTools(d.skillLibrary, () => caller()?.title || 'Orchestrator') : []),
     ...(authed() ? [childOutputTool({ chats: () => d.chats.list(), runs: () => d.runFeedback?.runList() ?? [] }), agentsRecapTool({ chats: () => d.chats.list(), items: id => d.chats.items(id), pending: () => [...d.chats.pending(), ...(d.commandAsks?.() ?? [])], runs: () => d.runFeedback?.runList() ?? [] })] : []),
+    // the credentials card (ADR 0367): the values go from the file to the user's screen, never to the model
+    ...(authed() ? [credentialsCardTool({ match: ref => d.browser.credentialCardMatch(ref), orchestratorId: () => (authed() && d.chats.appNotice ? callerId! : null),
+      show: (chatId, item) => d.chats.appNotice?.(chatId, item) })] : []),
     ...(d.runFeedback && authed() ? [metricsTool(d.runFeedback)] : []),
     ...(d.runFeedback && authed() ? [estimateTool(() => d.runFeedback!.runList(), d.priceOf ?? null)] : []),
     {

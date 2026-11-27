@@ -213,6 +213,7 @@ export abstract class ManagerCore {
       r.s.workMs = (r.s.workMs ?? 0) + now - r.s.workSince;
       delete r.s.workSince;
     }
+    syncUserWait(r, now);
     this.flushItems(r.s.id); // streamed words held for the next step reach the UI before the new state ("finito")
     this.opts.emitter.emit('chat:updated', { ...r.s });
   }
@@ -335,4 +336,12 @@ export abstract class ManagerCore {
   abstract staleRuns(now?: number): number;
   protected abstract prewarmOrchestrator(): void;
   protected abstract idleAgain(r: Rec): void;
+}
+
+/** «Stai aspettando» (ADR 0367): the summary mirrors main's userWaits (the user waits for this root chat's answer); a
+ *  finished wait (doneAt, set when its result reached the Orchestrator) stays until a new wait starts. Exported for tests. */
+export function syncUserWait(r: Pick<Rec, 'userWaits' | 'heldResult'> & { s: Pick<Rec['s'], 'userWait'> }, now: number): void {
+  const waits = !!r.userWaits || !!r.heldResult?.userWaits;
+  if (waits && (!r.s.userWait || r.s.userWait.doneAt !== undefined)) r.s.userWait = { since: now };
+  else if (!waits && r.s.userWait && r.s.userWait.doneAt === undefined) delete r.s.userWait;
 }
