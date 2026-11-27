@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { StrategyPlan } from '../../src/shared/strategy';
-import { keepQuestionsAside, launch, setQuestionsAside, openOrchestrator, openNotesMap, setSize, waitThumbs, goPage, goImpara } from '../e2e/helpers';
+import { keepQuestionsAside, launch, setQuestionsAside, openOrchestrator, setSize, waitThumbs, goPage } from '../e2e/helpers';
 // @ts-expect-error plain ESM helper without types
 import { demoBrain } from '../../scripts/demo-brain.mjs';
 
@@ -95,8 +95,6 @@ async function saveBuffers(name: string, buffers: Buffer[]): Promise<void> {
 
 const demo = <T,>(fn: string, ...args: unknown[]): Promise<T> =>
   app.evaluate((_e, [f, a]) => ((globalThis as unknown as { __sbDemo: Record<string, (...x: unknown[]) => unknown> }).__sbDemo[f as string]!)(...(a as unknown[])), [fn, args] as const) as Promise<T>;
-const tool = (chatId: string, t: { id: string; name: string; input: unknown; summary?: string }) =>
-  app.evaluate((_e, [c, x]) => (globalThis as unknown as { __sbDemo: { tool(c: string, t: unknown): void } }).__sbDemo.tool(c, x), [chatId, t] as const);
 
 test('README screenshots', async () => {
   test.setTimeout(180_000);
@@ -141,18 +139,6 @@ test('README screenshots', async () => {
   await save('browser', page.getByTestId('maximized'));
   await page.getByTestId('focus-exit').click();
   await setSize(app, W, H);
-
-  // 4. The 3D brain map, lit where the chats are working right now
-  await tool('fix', { id: 'shot-read', name: 'Read', input: { file_path: 'C:\\brains\\demo\\now.md' }, summary: 'now.md' });
-  await tool('fix', { id: 'shot-agent', name: 'Agent', input: { subagent_type: 'reviewer' }, summary: 'reviewer' });
-  await tool('orchestrator', { id: 'shot-send', name: 'mcp__second-brain-app__app_send_to_chat', input: { chatId: 'feedback', text: 'go' }, summary: 'App · Feedback' });
-  await openNotesMap(page);
-  await page.getByRole('button', { name: 'Explore in 3D' }).click();
-  await expect(page.getByTestId('brain-map').getByTestId('bx-map-canvas').locator('canvas')).toHaveCount(1, { timeout: 30_000 });
-  await page.waitForTimeout(5000); // the layout settles
-  await save('brain-map', page.getByTestId('brain-map'));
-  await page.keyboard.press('Escape');
-  await expect(page.getByTestId('brain-map')).toHaveCount(0);
 
 
 });
@@ -287,7 +273,7 @@ test('README showcase: the Strategist\'s plan to approve on its map', async () =
   await save('plan', await frameOf(page.getByTestId('plans-page')));
 });
 
-test('README showcase: voice, Log, recordings, quality, learn, news, costs, trends, the maintenance notice', async () => {
+test('README showcase: voice, Log, recordings, quality, news, costs, trends, the maintenance notice', async () => {
   test.setTimeout(180_000);
   // the plan's questions window is done: every request from here on is set aside, as a user busy elsewhere would
   await keepQuestionsAside(page);
@@ -335,19 +321,9 @@ test('README showcase: voice, Log, recordings, quality, learn, news, costs, tren
   await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 });
   await save('quality', await frameOf(page.getByTestId('an-panel-qualita').getByTestId('bx-q-trovati')));
 
-  // Learn: a saved lesson about a PR on the blackboard, its diagram growing piece by piece
-  await goImpara(page);
-  await expect(page.getByTestId('impara-lessons').locator('.ip-card').first()).toBeVisible({ timeout: 30_000 });
-  await page.getByTestId('impara-lessons').locator('.ip-card').first().locator('.ip-card-open').click();
-  await expect(page.getByTestId('impara-player')).toBeVisible({ timeout: 15_000 });
-  await page.waitForTimeout(1500); // the diagram draws in
-  // the player as it is laid out now (the board, the piece and the Studio beside it), not the Log's column
-  const pb = (await page.getByTestId('impara-player').boundingBox())!;
-  await save('learn', { x: Math.round(pb.x), y: Math.round(pb.y), width: Math.round(pb.width), height: Math.round(Math.min(pb.height, H - pb.y)) });
-
   // News: Impara's «Giornale», the AI news in three columns (sections, stories, the open one with why it matters)
-  await page.keyboard.press('Escape');
-  await goImpara(page, 'giornale');
+  // (Impara is the Giornale only since 93eceaf8: its lessons and their tabs are gone)
+  await goPage(page, 'impara');
   await expect(page.getByTestId('news-reader')).toBeVisible({ timeout: 30_000 });
   await save('news');
 
