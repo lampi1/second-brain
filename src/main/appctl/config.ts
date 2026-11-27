@@ -203,7 +203,7 @@ export function configTool(d: ConfigDeps): ToolDef {
   const asked = (what: string, strict = false) => {
     if (d.userAsked(strict)) return;
     throw new Error(strict
-      ? `bloccato: ${what} allarga ciò che gli agenti possono fare: lo cambi solo su un suo messaggio o un suo «Sì» a una tua domanda, senza nessun altro messaggio dopo (né di agenti né dell'app), negli ultimi ${CONFIG_ASK_MIN} minuti o nello stesso turno; chiediglielo con una domanda Sì/No`
+      ? `bloccato: cambia ${what} solo quando l'utente te lo chiede, senza nessun altro messaggio dopo (né di agenti né dell'app), perché questa modifica allarga ciò che gli agenti possono fare: un suo messaggio o un suo «Sì» a una tua domanda, negli ultimi ${CONFIG_ASK_MIN} minuti o nello stesso turno; chiediglielo con una domanda Sì/No`
       : `bloccato: cambia ${what} solo quando l'utente te lo chiede: un suo messaggio o un suo «Sì» a una tua domanda, negli ultimi ${CONFIG_ASK_MIN} minuti (anche se dopo sono arrivati messaggi di agenti o dell'app) o nello stesso turno senza altri messaggi dopo; chiediglielo con una domanda Sì/No`);
   };
   const role = (id: unknown): AgentProfile => {
