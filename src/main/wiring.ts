@@ -693,11 +693,17 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   plans.tellTo(wake); // a job stopped by itself (ADR 0342): the Orchestrator takes it up again
   manager.onUserWrote(n => wake.userMessage(n)); // the user typed in a work chat: quiet news (ADR 0083)
   // what he asks the Orchestrator about is told in one short line when it is done (ADR 0371 point 4)
-  attachWatchedAsks(manager, { list: () => manager.list(), orchestrator: () => manager.list().find(c => c.isOrchestrator && !c.closedAt)?.id ?? null,
+  const watched = attachWatchedAsks(manager, { list: () => manager.list(), orchestrator: () => manager.list().find(c => c.isOrchestrator && !c.closedAt)?.id ?? null,
     send: (id, text) => chats.send(id, text, undefined, false, 'App', false, { kind: 'app' }), log: (what, data) => log.info('agents', what, { data }) });
   // a root chat's clean result wakes the Orchestrator during an active workflow, or while the user is away (ADR 0191): the
   // Orchestrator carries the work on to its end instead of waiting for the user's next message
-  manager.onCleanReport(n => wake.cleanReport({ ...n, workflow: awayOn() || workflows.list().some(r => r.status === 'active' && r.chatIds.includes(n.chatId)) }));
+  // a result he asked about rides the same wake with its one-line note (ADR 0371 point 4): one turn, never two
+  manager.onCleanReport(n => {
+    const asked = watched.claim(n.chatId);
+    const took = wake.cleanReport({ ...n, workflow: awayOn() || workflows.list().some(r => r.status === 'active' && r.chatIds.includes(n.chatId)), ...(asked ? { asked } : {}) });
+    if (asked && !took) watched.tell(n);
+    return took;
+  });
   attachAway({ on: awayOn, log: awayLog, chats: manager, onSettingChange: f => brain.onSettingChange(f), blocker: powerSaveBlocker });
 
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'), asks);

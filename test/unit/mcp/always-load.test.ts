@@ -113,7 +113,7 @@ describe('#492 point 2: the required app tool schemas are always loaded, the res
     // every schema (the first commit of ADR 0371) against the required ones (this one). Measured 2026-11-27, of the tools
     // built here (no browser tools, no connectors: the real full lists are larger): worker 5.9k → 2.5k, Strategist with
     // a plan 10.5k → 5.2k, Orchestrator 10.7k → 6.7k
-    for (const [all, up] of Object.values(m)) expect(up).toBeLessThan(all * 0.7);
+    for (const [all, up] of Object.values(m) as [number, number][]) expect(up).toBeLessThan(all * 0.7);
     expect(m.worker[1]).toBeLessThan(4_000);
     expect(m.strategist[1]).toBeLessThan(9_000);
     expect(m.orchestrator[1]).toBeLessThan(14_000);

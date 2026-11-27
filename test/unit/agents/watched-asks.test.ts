@@ -11,6 +11,8 @@ const chats: WatchedChat[] = [
   { id: 'c', title: 'Report mensile', state: 'idle' },
   { id: 'k', title: 'Ordini · sotto-compito', state: 'running', parentId: 'a' },
   { id: 'x', title: 'Vecchia', state: 'closed', closedAt: 1 },
+  { id: 't', title: 'Test', state: 'running' },
+  { id: 'p', title: 'Piano · review', state: 'running' },
 ];
 function make() {
   let t = 0;
@@ -25,10 +27,28 @@ describe('#492 point 4: watched asks (ADR 0371)', () => {
     const { w } = make();
     expect(w.noteUserText('come va il login?')).toEqual(['b']);
     expect(w.noteUserText('a che punto è «Ordini»?')).toEqual(['a']);
-    expect(w.noteUserText('mi fai il punto?')).toEqual(['a', 'b']);
-    expect(w.noteUserText('Novità?')).toEqual(['a', 'b']);
+    expect(w.noteUserText('mi fai il punto?')).toEqual(['a', 'b', 't', 'p']);
+    expect(w.noteUserText('Novità?')).toEqual(['a', 'b', 't', 'p']);
     expect(w.noteUserText('apri il file ordinamento.ts')).toEqual([]);   // a word that only starts like a title
     expect(w.noteUserText('scrivi una mail a Marco')).toEqual([]);
+  });
+
+  it('(review) a short or common title never matches his ordinary words; «aggiornamenti», «situazione», «come va» watch nothing', () => {
+    const { w } = make();
+    expect(w.noteUserText('lancia i test')).toEqual([]);
+    expect(w.noteUserText('fai la review del piano')).toEqual([]);
+    expect(w.noteUserText('ci sono aggiornamenti da installare?')).toEqual([]);
+    expect(w.noteUserText("com'è la situazione col cliente?")).toEqual([]);
+    expect(w.noteUserText('ciao, come va?')).toEqual([]);
+    expect(w.noteUserText('novità sui lavori?')).toEqual(['a', 'b', 't', 'p']);
+  });
+
+  it('(review) a watch with no result ends after its time too', () => {
+    const { w, pass } = make();
+    w.noteUserText('come procede il login?');
+    expect(w.size).toBe(1);
+    pass(WATCH_TTL_MS + 1);
+    expect(w.size).toBe(0);
   });
 
   it('a watched quiet result is one note to the Orchestrator, once; an unwatched one, a synthesized one or a late one none', () => {
