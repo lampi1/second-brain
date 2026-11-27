@@ -9,7 +9,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { ResearchStore } from '../../src/main/brainmodel/research-store';
 import { expect, test, type Page } from '@playwright/test';
-import { launchDemo, setQuestionsAside, shot } from './helpers';
+import { launchDemo, navMenu, setQuestionsAside, shot } from './helpers';
 
 const SHOTS = process.env.SB_SHOTS_COPY;
 async function snap(page: Page, name: string): Promise<void> {
@@ -18,7 +18,7 @@ async function snap(page: Page, name: string): Promise<void> {
 }
 /** The deck: Memoria, its Proposte tab (the hub's tab bar, ADR 0122). */
 async function openDeck(page: Page): Promise<void> {
-  await page.getByTestId('nav-memoria').click();
+  await navMenu(page, 'memoria');
   const tab = page.getByTestId('mh-tab-proposte');
   if (await tab.count()) await tab.click();
   await expect(page.getByTestId('proposals-deck')).toBeVisible();
@@ -28,6 +28,16 @@ async function theme(page: Page, scheme: 'dark' | 'light'): Promise<void> {
   await page.waitForTimeout(250);
 }
 const top = (page: Page) => page.getByTestId('pd-card-top');
+/** The count on Memoria's entry in the rail's ☰ menu (ADR 0366; null: no count), read with the menu opened and then
+ *  closed again by its button; while proposals wait, ☰ wears its dot (unread Task items light it too). */
+async function badge(page: Page, text: string | null): Promise<void> {
+  if (text !== null) await expect(page.getByTestId('nav-menu-dot')).toBeVisible();
+  await page.getByTestId('nav-menu-btn').click();
+  const b = page.getByTestId('nav-badge-proposals');
+  if (text === null) await expect(b).toHaveCount(0); else await expect(b).toHaveText(text);
+  await page.getByTestId('nav-menu-btn').click();
+  await expect(page.getByTestId('nav-menu')).toHaveCount(0);
+}
 async function drag(page: Page, dx: number, release = true): Promise<void> {
   // centred: the cards are tall (ADR 0132) and the sticky tab bar may cover a title that is only "in view"
   await top(page).locator('.pd-title').evaluate(e => e.scrollIntoView({ block: 'center' }));
@@ -57,7 +67,7 @@ test('the deck: every source in one stack, swipe / buttons / keys, undo, the end
     // newest first, provenance resolved to the demo's chats
     const at = first.items.map(c => c.provenance.at);
     expect([...at].sort().reverse()).toEqual(at);
-    await expect(page.getByTestId('nav-badge-proposals')).toHaveText(String(first.items.length));
+    await badge(page, String(first.items.length));
     await expect(page.getByTestId('pd-chip-all')).toContainText(String(first.items.length));
 
     // the top card is the newest: who, where, when, evidence
@@ -82,10 +92,10 @@ test('the deck: every source in one stack, swipe / buttons / keys, undo, the end
     expect(setting.source).toBe('setting');
     await page.getByTestId('pd-approve').click();
     await expect(top(page)).not.toHaveAttribute('data-card', setting.id);
-    await expect(page.getByTestId('nav-badge-proposals')).toHaveText(String(first.items.length - 1));
+    await badge(page, String(first.items.length - 1));
     await page.getByTestId('pd-undo').click();
     await expect(top(page)).toHaveAttribute('data-card', setting.id);
-    await expect(page.getByTestId('nav-badge-proposals')).toHaveText(String(first.items.length));
+    await badge(page, String(first.items.length));
     await page.keyboard.press('ArrowRight');
     await expect(top(page)).not.toHaveAttribute('data-card', setting.id);
     // ← on the next one, then Ctrl+Z brings it back
@@ -140,7 +150,7 @@ test('the deck: every source in one stack, swipe / buttons / keys, undo, the end
 
     // everything reached main through its own source: nothing open any more, the badge is gone
     await expect.poll(async () => (await list(page)).items.length, { timeout: 15_000 }).toBe(0);
-    await expect(page.getByTestId('nav-badge-proposals')).toHaveCount(0);
+    await badge(page, null);
     const changes = (await page.evaluate(() => window.sb.invoke('brainmodel:state', undefined))).changes;
     expect(changes.find(c => c.id === 'demo-p1')?.rolledBackAt).toBeTruthy(); // the candidate's rejection undid its change
     expect(changes.find(c => c.id === 'demo-l6')?.rolledBackAt).toBeFalsy(); // kept

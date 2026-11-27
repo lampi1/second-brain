@@ -27,7 +27,8 @@ test('Andamento: one page with five tabs, old ids as aliases, and the usage coun
   test.setTimeout(120_000);
   const { app, page } = await launchDemo({ height: 1100, env: { SB_BRAIN: fixtureBrain() } });
   try {
-    // the rail: one entry in ANDAMENTO, Classificatori out of BRAIN
+    // the ☰ menu: one entry for Andamento, Classificatori nowhere (ADR 0366)
+    await page.getByTestId('nav-menu-btn').click();
     await expect(page.getByTestId('nav-andamento')).toBeVisible();
     for (const gone of ['costi', 'qualita', 'classificatori']) await expect(page.getByTestId(`nav-${gone}`)).toHaveCount(0);
     await page.getByTestId('nav-andamento').click();
