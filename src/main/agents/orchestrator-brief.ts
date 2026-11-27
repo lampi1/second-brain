@@ -43,7 +43,6 @@ function words(item: Extract<ChatItem, { kind: 'user' | 'assistant' }>): string 
   return body.split(/\n\n\[(?:app|Done when|Task version)\b/)[0] ?? body;
 }
 
-/** The current topic's last exchanges, oldest first: his messages, its replies, the chats' news on it. */
 /** The current topic's last exchanges, oldest first: his messages, its replies, the chats' news on it. Each keeps its
  *  head and its end; the latest reply keeps more (what the user answers next is usually at its end). */
 function exchanges(topic: string, items: readonly ChatItem[]): string[] {
