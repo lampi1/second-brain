@@ -1195,6 +1195,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/chats/handoff.ts: token-free fallback note
       b('Se la chat non può rispondere, l’app scrive la nota da ciò che ha visto (file, comandi, ultimi messaggi) e lo dice.',
         'When the chat cannot answer, the app writes the note from what it saw (files, commands, last messages) and says so.'),
+      // src/main/agents/orchestrator-topics.ts, src/main/chats/manager-topics.ts, src/main/chats/orchestrator-rollover.ts (ADR 0369)
+      b('Nell’Orchestrator l’app dà a ogni tuo messaggio il suo argomento (quello che nomini, il messaggio a cui rispondi con «Rispondi», la domanda aperta a cui rispondi, il seguito del tuo ultimo; un modello leggero solo quando è incerta): lo vedi sul messaggio e nelle pill, e un clic sul chip lo sposta. Su Antigravity, OpenCode e Cursor, oltre 60k token (30k quando cambi argomento) l’Orchestrator riparte in una sessione nuova con il riassunto dell’argomento, una riga per gli altri aperti e l’essenziale di me.md e now.md.',
+        'In the Orchestrator the app gives each of your messages its topic (the one you name, the message you answer with «Rispondi», the open question you answer, the follow-up of your last; a light model only when unsure): you see it on the message and in the pills, and one click on the chip moves it. On Antigravity, OpenCode and Cursor, past 60k tokens (30k when you switch topic) the Orchestrator goes on in a fresh session with the topic’s summary, one line for the other open ones and the essentials of me.md and now.md.'),
       // src/main/chats/manager-sink.ts decideFor; src/main/chats/manager-requests.ts gateDecision; src/main/code-mode/sandbox.ts (ADR 0331)
       b('Code Mode (per ruolo, sulla sua card: Agenti → il ruolo → Configurazione; spento di serie, mai sull’Orchestrator): le chat del ruolo, su ogni motore con agente, scrivono un piccolo programma che fa molte letture e ricerche in un passo solo, così la storia cresce meno. Ogni chiamata passa dalle stesse regole di sempre: un rifiuto resta un rifiuto, una richiesta ti arriva come pannello, un’azione da Esegui ferma il programma e trovi il solito bottone Esegui. Su Claude è pieno, sugli altri motori «parziale» (la card lo dice). Vale per le chat avviate dopo.',
         'Code Mode (per role, on its card: Agents → the role → Configuration; off by default, never on the Orchestrator): the role’s chats, on every engine that runs an agent, write a small program that makes many reads and searches in one step, so the history grows less. Every call meets the usual rules: a refusal stays a refusal, a request reaches you as a panel, an Esegui action stops the program and you find the usual Esegui button. It is full on Claude, "partial" on the other engines (the card says so). It applies to chats started afterwards.'),
@@ -1206,7 +1209,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'Amber at 80% of the window (NEAR_COMPACTION); contextWarnTokens = 200,000; coldHandoffMin = 50; note at most 6000 chars.'),
       tech(FILES, 'userData/handoffs/<chatId>.md.', 'userData/handoffs/<chatId>.md.'),
     ],
-    sources: ['src/shared/context.ts', 'src/main/chats/continuity.ts', 'src/main/chats/handoff.ts', 'src/renderer/components/ContextBar.tsx', 'src/main/code-mode/sandbox.ts'],
+    sources: ['src/shared/context.ts', 'src/main/chats/continuity.ts', 'src/main/chats/handoff.ts', 'src/renderer/components/ContextBar.tsx', 'src/main/code-mode/sandbox.ts', 'src/main/agents/orchestrator-topics.ts', 'src/main/chats/orchestrator-rollover.ts'],
   },
   {
     id: 'quality',

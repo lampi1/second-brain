@@ -20,7 +20,8 @@ import { setFocused, ui } from '../store/ui';
 import { t } from '../i18n';
 import { pairHover, usePair } from '../lib/pairs';
 import { awaitingCard, clearOrchestratorNow, go } from '../actions';
-import { ItemList, itemMatches, topicOfText, turnActivity, Typing } from './ChatItems';
+import { ItemList, itemMatches, turnActivity, Typing } from './ChatItems';
+import { useOrchestratorTopics } from '../lib/orchestrator-topics';
 import { SpriteCtx } from './AgentSprite';
 import { useOwnPicture } from '../lib/agent-images';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
@@ -101,17 +102,8 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [topicFilter, setTopicFilter] = useState('');
-  // collect distinct [Topic] tags in the Orchestrator transcript (zero tokens)
-  const topics = useMemo(() => {
-    const out: string[] = [], seen = new Set<string>();
-    for (const it of items ?? []) {
-      if ((it.kind === 'user' || it.kind === 'assistant') && typeof it.text === 'string') {
-        const tag = topicOfText(it.text)?.topic;
-        if (tag && !seen.has(tag.toLowerCase())) { seen.add(tag.toLowerCase()); out.push(tag); }
-      }
-    }
-    return out.slice(-8);
-  }, [items]);
+  // the topics the app gave the messages (ADR 0369), with the old [Topic] prefixes: the same labels for the pills
+  const topics = useOrchestratorTopics(chat?.id ?? null, items).labels;
   const searchMatchCount = useMemo(() => {
     const q = searchQuery.trim().toLowerCase(), tp = topicFilter.trim();
     if (!q && !tp) return null;

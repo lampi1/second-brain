@@ -1,0 +1,286 @@
+{
+ "about": "A synthetic Orchestrator day on an ACP engine (Antigravity), shaped on the owner's measurements of 2026-11-27 (p50 ~500k input tokens per turn, 2-8 model calls per turn, tool outputs of app_chats/app_chat_items/app_digest). Invented words: the sizes drive the measurement (ADR 0369).",
+ "engine": "antigravity",
+ "kind": "acp",
+ "start": 1800000000000,
+ "baseTokens": 22000,
+ "turns": [
+  {
+   "min": 0,
+   "text": "controlla perché air-mcp-test risponde 401 a ogni chat",
+   "reply": "Ho aperto uno Scout su air-mcp-test: legge i log del gateway e il token. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 14000,
+   "calls": 6,
+   "opens": {
+    "id": "c-air",
+    "title": "Scout · air-mcp-test 401",
+    "cwd": "C:\\repos\\air-mcp-test"
+   }
+  },
+  {
+   "min": 4,
+   "text": "ok",
+   "reply": "👍",
+   "toolChars": 2500,
+   "calls": 2
+  },
+  {
+   "min": 9,
+   "text": "Token del connettore scaduto da ieri: il refresh fallisce con invalid_grant.",
+   "reply": "Il token di air-mcp-test è scaduto: serve un nuovo login dal connettore. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 9000,
+   "calls": 4,
+   "from": "Scout · air-mcp-test 401"
+  },
+  {
+   "min": 11,
+   "text": "rifai tu il login allora",
+   "reply": "Non posso: il login è tuo (Impostazioni → Connettori → Accedi). Il resto lo preparo io. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 6000,
+   "calls": 3
+  },
+  {
+   "min": 15,
+   "text": "prepara il piano per la nuova UI squadrata, angoli un pelino più arrotondati del mockup",
+   "reply": "Ho aperto un Strategist per il restyle: piano in 4 passi con radii 3/4/6px. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 18000,
+   "calls": 7,
+   "opens": {
+    "id": "c-ui",
+    "title": "Strategist · restyle UI squadrata",
+    "cwd": "C:\\repos\\second-brain"
+   }
+  },
+  {
+   "min": 19,
+   "text": "sì procedi",
+   "reply": "Avviato.",
+   "toolChars": 3000,
+   "calls": 2
+  },
+  {
+   "min": 26,
+   "text": "Piano pronto: 1) token radii 2) OrchestratorTile 3) pill 4) screenshot README.",
+   "reply": "Il piano del restyle è pronto per la tua approvazione. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 12000,
+   "calls": 5,
+   "from": "Strategist · restyle UI squadrata"
+  },
+  {
+   "min": 28,
+   "text": "approvalo ma niente colori nuovi",
+   "reply": "Approvato con il vincolo: niente colori nuovi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 7000,
+   "calls": 4
+  },
+  {
+   "min": 40,
+   "text": "scrivi la mail al commercialista per le fatture di ottobre con gli allegati del portale",
+   "reply": "Ho aperto un Herald per la bozza della mail al commercialista. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 15000,
+   "calls": 6,
+   "opens": {
+    "id": "c-fat",
+    "title": "Herald · mail commercialista fatture ottobre",
+    "cwd": "C:\\repos\\documenti"
+   }
+  },
+  {
+   "min": 44,
+   "text": "aggiungi anche quella di Telepass",
+   "reply": "Aggiunta.",
+   "toolChars": 4000,
+   "calls": 3
+  },
+  {
+   "min": 52,
+   "text": "> Il token di air-mcp-test è scaduto: serve un nuovo login dal connettore.\n\nfatto il login, riprova",
+   "reply": "Riprovo con lo Scout: ora risponde 200. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 11000,
+   "calls": 5
+  },
+  {
+   "min": 55,
+   "text": "Ora risponde 200 su 20 chiamate di prova.",
+   "reply": "air-mcp-test risponde di nuovo: 200 su 20 prove. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 8000,
+   "calls": 3,
+   "from": "Scout · air-mcp-test 401"
+  },
+  {
+   "min": 70,
+   "text": "perché l'Orchestrator ci mette 38 secondi a rispondere su Antigravity?",
+   "reply": "Ho aperto uno Scout sui tempi: legge i log di timing e i token per turno. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 16000,
+   "calls": 7,
+   "opens": {
+    "id": "c-perf",
+    "title": "Scout · tempi Orchestrator Antigravity",
+    "cwd": "C:\\repos\\second-brain"
+   }
+  },
+  {
+   "min": 78,
+   "text": "Ogni turno rilegge ~500k token: nessuna compattazione sui motori ACP.",
+   "reply": "Il collo di bottiglia è il contesto: 500k token a turno su Antigravity. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 10000,
+   "calls": 4,
+   "from": "Scout · tempi Orchestrator Antigravity"
+  },
+  {
+   "min": 80,
+   "text": "proponimi come ridurlo",
+   "reply": "Tre strade: argomenti per messaggio, contesto per argomento, rollover ACP. Ti apro un piano? Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 9000,
+   "calls": 4
+  },
+  {
+   "min": 82,
+   "text": "sì",
+   "reply": "Aperto il piano.",
+   "toolChars": 5000,
+   "calls": 3
+  },
+  {
+   "min": 95,
+   "text": "a che punto è il restyle?",
+   "reply": "Passi 1 e 2 fatti; in corso le pill. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 14000,
+   "calls": 6
+  },
+  {
+   "min": 97,
+   "text": "fammi vedere lo screenshot",
+   "reply": "Eccolo: il link al file nel viewer. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 6000,
+   "calls": 3
+  },
+  {
+   "min": 110,
+   "text": "Passi 3 e 4 fatti, screenshot aggiornati.",
+   "reply": "Il restyle è completo: 4 passi su 4. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 9000,
+   "calls": 4,
+   "from": "Strategist · restyle UI squadrata"
+  },
+  {
+   "min": 120,
+   "text": "> Ho aperto un Herald per la bozza della mail al commercialista.\n\nla bozza è pronta?",
+   "reply": "Sì: oggetto «Fatture ottobre», 6 allegati. La mando? Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 8000,
+   "calls": 4
+  },
+  {
+   "min": 122,
+   "text": "no, aspetta domani",
+   "reply": "Resta in bozza fino a domani. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 3000,
+   "calls": 2
+  },
+  {
+   "min": 140,
+   "text": "oris-knowledge non parte mai, guardaci",
+   "reply": "Ho aperto uno Scout sui log di oris-knowledge. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 15000,
+   "calls": 6,
+   "opens": {
+    "id": "c-oris",
+    "title": "Scout · oris-knowledge non parte",
+    "cwd": "C:\\repos\\oris-knowledge"
+   }
+  },
+  {
+   "min": 150,
+   "text": "Manca la variabile ORIS_DB_PATH nel servizio: esce con codice 1.",
+   "reply": "oris-knowledge esce subito: manca ORIS_DB_PATH. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 9000,
+   "calls": 4,
+   "from": "Scout · oris-knowledge non parte"
+  },
+  {
+   "min": 152,
+   "text": "aggiungila nel suo .env di sviluppo",
+   "reply": "Ho passato il lavoro a un Artisan nello stesso repo. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 10000,
+   "calls": 5
+  },
+  {
+   "min": 170,
+   "text": "il piano per l'Orchestrator veloce come va?",
+   "reply": "Il piano è in attesa: 3 parti, la prima in corso. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 14000,
+   "calls": 6
+  },
+  {
+   "min": 175,
+   "text": "ok, priorità alta",
+   "reply": "Segnato.",
+   "toolChars": 3000,
+   "calls": 2
+  },
+  {
+   "min": 190,
+   "text": "air-mcp-test risponde ancora 401 da una chat nuova",
+   "reply": "Riapro lo Scout su air-mcp-test. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 12000,
+   "calls": 5
+  },
+  {
+   "min": 200,
+   "text": "Una chat vecchia teneva il token scaduto in cache: riavviata, ora 200.",
+   "reply": "Era la cache di una chat vecchia: ora 200. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 9000,
+   "calls": 4,
+   "from": "Scout · air-mcp-test 401"
+  },
+  {
+   "min": 220,
+   "text": "fai il punto di tutto",
+   "reply": "Air: risolto. Restyle: completo. Fatture: bozza in attesa. oris-knowledge: fix in corso. Orchestrator veloce: piano in corso. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 26000,
+   "calls": 8
+  },
+  {
+   "min": 230,
+   "text": "> Fatture: bozza in attesa.\n\nmandala adesso",
+   "reply": "Inviata al commercialista. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 7000,
+   "calls": 4
+  },
+  {
+   "min": 240,
+   "text": "oris-knowledge ora parte?",
+   "reply": "Sì: parte e risponde sulla porta di sviluppo. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 11000,
+   "calls": 5
+  },
+  {
+   "min": 245,
+   "text": "bene",
+   "reply": "👍",
+   "toolChars": 2000,
+   "calls": 2
+  },
+  {
+   "min": 260,
+   "text": "per il restyle cambia anche il colore del focus? no lascia stare, solo i radii",
+   "reply": "Lasciati i colori, solo i radii. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 6000,
+   "calls": 3
+  },
+  {
+   "min": 270,
+   "text": "domani mattina ricordami le fatture di novembre",
+   "reply": "Segnato in now.md per domattina. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 8000,
+   "calls": 4
+  },
+  {
+   "min": 280,
+   "text": "chiudi le chat finite",
+   "reply": "Chiuse 4 chat finite. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi. Dettagli del lavoro e prossimi passi.",
+   "toolChars": 12000,
+   "calls": 5
+  }
+ ]
+}

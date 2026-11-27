@@ -64,6 +64,9 @@ import { EngineSweeper } from './chats/sweep';
 import { jobGuard } from './chats/jobguard';
 import { readLeasedPids, setLeaseReader } from './chats/leased-procs';
 import { ChatManager, workBehind } from './chats/manager';
+import { OrchestratorTopicService } from './agents/orchestrator-topic-service';
+import { OrchestratorTopicStore } from './agents/orchestrator-topic-store';
+import { brainEssentials } from './agents/orchestrator-brief';
 import type { BrainService, ChatService } from './services';
 import { SkillsService } from './skills/service';
 import { SkillLibrary } from './skills/library';
@@ -358,7 +361,12 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const runsRef: { current: CommandRunner | null } = { current: null };
   // list prices for the runs whose engine reported tokens and no cost (ADR 0284): the standings and the estimates
   const priceOf = tokenPriceOf(() => brain.modelRegistry());
+  // the Orchestrator's topics (ADR 0369): the app gives each message its topic; the lightest model is attached once the
+  // one-shot service exists (below)
+  const orchestratorTopics = new OrchestratorTopicService({ store: new OrchestratorTopicStore(path.join(ctx.userData, 'orchestrator-topics.json')), emit: t => ctx.emitter.emit('orchestrator:topicsChanged', t) });
   const manager: ChatManager = new ChatManager({
+    topics: orchestratorTopics,
+    orchestratorEssentials: () => brainEssentials(brain.info().brainRoot),
     runs: chatId => runsRef.current?.list(chatId) ?? [],
     writeDelayMs: 250, // chats.json and agent-runs.json: one asynchronous write per burst (the main-process freezes, 2026-10-27)
     priceOf,
@@ -911,6 +919,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     settings: () => brain.settings(), registry: () => brain.modelRegistry(),
     hasKey: id => engines.hasKey(id), addApiSpend: (id, usd) => engines.addSpend(id, usd), fallback: () => brain.settings().jobs?.fallback ?? 'auto',
     headless, text: engines.text, runs: manager.runs });
+  // the topic of a message the rules are not sure of (ADR 0369): one light one-shot, never in a test run
+  if (!process.env.SB_TEST) orchestratorTopics.setClassifier(async (system, prompt) => {
+    const r = await oneShot.runOnce({ agentId: 'artisan', purpose: 'topic', light: true, system, prompt, maxOutputTokens: 40, timeoutMs: 60_000 });
+    return r.ok ? r.text : null;
+  });
   // the little people's lines of the day (ADR 0305): three light one-shots a day per language on the Artisan's engine
   // (twice when the first try was not whole), when the setting is on; never in a test run
   const quips = new DailyQuipsService({ file: path.join(ctx.userData, 'quips-daily.json'), runOnce: r => oneShot.runOnce(r), on: () => !process.env.SB_TEST && brain.settings().quipsDaily !== false });
@@ -1028,7 +1041,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { stopPrune?.(); news.dispose(); plans.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (worktreeFirst) clearTimeout(worktreeFirst); if (worktreeTimer) clearInterval(worktreeTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); if (workDriverTimer) clearInterval(workDriverTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); modelLists.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { stopPrune?.(); news.dispose(); plans.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (worktreeFirst) clearTimeout(worktreeFirst); if (worktreeTimer) clearInterval(worktreeTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); if (workDriverTimer) clearInterval(workDriverTimer); hybrid.stop(); userCorrections.flush(); orchestratorTopics.flush(); engines.stop(); modelLists.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { manager.killAll(); runner.shutdown(); },
   };
 }

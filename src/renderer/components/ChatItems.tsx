@@ -53,6 +53,8 @@ import { correctedThoughts, parseCorrection } from '../lib/correction';
 import { agents } from '../store/agents';
 import { guideChatId, visibleGuideItems } from '../../modules/ai-first/presentation';
 import { replyToMessage } from './ChatInput';
+import { TopicChip } from './TopicChip';
+import { matchesSearch } from '@shared/orchestrator-topics';
 
 type Tool = Extract<ChatItem, { kind: 'tool' }>;
 
@@ -366,6 +368,9 @@ function ReplyButton({ text }: { text: string }) {
 }
 
 export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction }: { item: ChatItem; beforeAsk?: boolean; refs?: readonly string[]; marks?: readonly string[]; reaction?: string }) {
+  // the chat whose messages a topic chip may move (ADR 0369): only a live one, never a read-only view
+  const ctxChat = useContext(ChatIdCtx), readOnlyView = useContext(ReadOnlyCtx);
+  const topicChat = readOnlyView ? null : ctxChat;
   switch (item.kind) {
     case 'user': {
       const f = foreignOf(item);
@@ -379,6 +384,7 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
       const fix = item.from ? null : parseCorrection(text);
       const tagged = !fix ? topicOfText(text) : null;
       const bodyText = tagged ? tagged.body : text;
+      const chipChat = item.topic && !item.from ? topicChat : null;
       return (
       <div className={`msg-user ${item.id.startsWith('local:') ? 'optimistic' : ''}`} data-testid={`item-${item.id}`} data-mode={nc?.mode ?? undefined}>
         {item.thumbs?.length ? <ImageStrip images={item.thumbs.map(thumb => ({ thumb }))} testid={`item-${item.id}-images`} /> : item.images ? <span className="msg-images-count">{t('chat.items.userImages', { n: item.images })}</span> : null}
@@ -386,7 +392,7 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
         {/* sent from the paired phone (phone bridge): 📱, 🎙️ 📱 for a voice note */}
         {item.via === 'phone' && <div className="msg-phone" data-testid={`item-${item.id}-phone`} data-voice={item.voice ? '' : undefined}>{item.voice ? '🎙️ 📱' : '📱'} {t(item.voice ? 'chat.items.fromPhoneVoice' : 'chat.items.fromPhone')}</div>}
         {nc?.mode && <div className="msg-newchat" data-testid={`item-${item.id}-mode`} data-tip={t(`chat.items.modeTip.${nc.mode}`)}>{nc.mode === 'plan' ? <IconBranch size={11} /> : nc.mode === 'fast' ? <IconBolt size={11} /> : <IconPlus size={11} />}{t(`chat.mode.${nc.mode}`)}</div>}
-        {tagged && <span className="msg-topic" data-testid={`item-${item.id}-topic`}>{tagged.topic}</span>}
+        {(item.topic || tagged) && <TopicChip chatId={chipChat} itemId={item.id} topic={item.topic ?? tagged!.topic} testid={`item-${item.id}-topic`} />}
         {fix ? <CorrectionBubble quote={fix.quote} fix={fix.fix} /> : bodyText && <div className="bubble">{bodyText}</div>}
         {!fix && bodyText && <ReplyButton text={text} />}
         {reaction && <div className="msg-react" data-testid={`item-${item.id}-reaction`} data-reaction="">{reaction}</div>}
@@ -400,7 +406,7 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
       const tagged = topicOfText(item.text);
       return (
         <div className="msg-assistant" data-testid={`item-${item.id}`}>
-          {tagged && <span className="msg-topic" data-testid={`item-${item.id}-topic`}>{tagged.topic}</span>}
+          {(item.topic || tagged) && <TopicChip chatId={item.topic ? topicChat : null} itemId={item.id} topic={item.topic ?? tagged!.topic} testid={`item-${item.id}-topic`} />}
           <Message id={item.id} text={tagged ? tagged.body : item.text} streaming={item.streaming} />
           {!item.streaming && <ReplyButton text={item.text} />}
           {refs?.length ? <NamedChatRefs ids={refs} /> : null}
@@ -489,14 +495,9 @@ export function turnActivity(items: readonly ChatItem[] | undefined): 'scrive' |
   return 'pensa';
 }
 
+/** The search of the Orchestrator's view: text and topic (the app's, else an old [Topic] prefix; ADR 0369). */
 export function itemMatches(item: ChatItem, q: string, topic: string): boolean {
-  const txt = 'text' in item && typeof item.text === 'string' ? item.text : item.kind === 'tool' ? `${item.name} ${item.summary}` : '';
-  if (topic) {
-    const tag = 'text' in item && typeof item.text === 'string' ? topicOfText(item.text)?.topic : null;
-    if (!tag || tag.toLowerCase() !== topic.toLowerCase()) return false;
-  }
-  if (!q) return true;
-  return txt.toLowerCase().includes(q);
+  return matchesSearch(item, q, topic);
 }
 
 type ItemListProps={items:readonly ChatItem[];empty?:string;footer?:ReactNode;chatId?:string|null;readOnly?:boolean;searchQuery?:string;topicFilter?:string};
