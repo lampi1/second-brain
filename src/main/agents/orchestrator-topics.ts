@@ -159,6 +159,15 @@ function lastOwn(items: readonly ChatItem[]): Extract<ChatItem, { kind: 'user' }
   return null;
 }
 
+/** The conversation's last exchange: the latest message (his, a chat's mail, the app's news) or reply. */
+function lastExchange(items: readonly ChatItem[]): ChatItem | null {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i]!;
+    if ((it.kind === 'user' && it.text.trim()) || (it.kind === 'assistant' && !it.streaming && it.text.trim())) return it;
+  }
+  return null;
+}
+
 /** A topic's name from the message's own words: the first three that say something, at most TOPIC_MAX characters. */
 export function newTopicLabel(text: string): string {
   const body = (replyQuote(text)?.body ?? text).replace(/```[\s\S]*?```/g, ' ').replace(/https?:\/\/\S+/g, ' ');
@@ -195,11 +204,17 @@ export function assignTopic(text: string, w: TopicWorld): TopicAssignment {
   const keyed = named.length ? [] : keywordTopics(words, w);
   if (keyed.length && (keyed.length === 1 || keyed[0]!.score > keyed[1]!.score)) return { topic: known(keyed[0]!.topic), by: 'named', sure: true, candidates: [] };
   const last = lastOwn(w.items), lastTopic = last ? itemTopic(last) : null;
-  const ongoing = !!last && w.now - last.at <= FOLLOW_UP_MS;
+  const turn = lastExchange(w.items), turnTopic = turn ? itemTopic(turn) : null;
+  const ongoing = !!turn && w.now - turn.at <= FOLLOW_UP_MS;
   const short = !newRequest(words, true);
-  // a short answer in a conversation going on answers it («sì» to the Orchestrator's own proposal), never the question
-  // another chat left waiting meanwhile
-  if (short && ongoing && lastTopic) return { topic: known(lastTopic), by: 'follow', sure: true, candidates: [] };
+  // a short answer in a conversation going on answers its last exchange («sì» to the Orchestrator's proposal), never
+  // the question another chat left waiting meanwhile. Sure only when that exchange is on his own last message's topic:
+  // a chat's mail or the app's news since then («merge X?») makes it a guess, which never rolls the engine over
+  if (short && ongoing && (turnTopic || lastTopic)) {
+    const topic = turnTopic ?? lastTopic!;
+    const sure = !!lastTopic && sameTopic(topic, lastTopic);
+    return { topic: known(topic), by: 'follow', sure, candidates: sure ? [] : candidatesOf(w, [topic, ...(lastTopic ? [lastTopic] : [])]) };
+  }
   // a short answer out of the blue while chats wait for him: the newest question's chat, sure when they are all on one
   // topic (a 'question' guess never rolls the engine over: manager-topics.ts orchestratorRollover)
   const asked = w.questions.filter(q => w.now - q.at <= QUESTION_MS).sort((a, b) => b.at - a.at)

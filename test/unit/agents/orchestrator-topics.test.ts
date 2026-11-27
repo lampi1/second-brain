@@ -79,6 +79,22 @@ describe('the topic rules', () => {
     expect(assignTopic('sì', world({ items: late, questions: [{ chatId: 'c-air', at: NOW - 30_000 }] }))).toMatchObject({ topic: 'Air 401', by: 'question' });
   });
 
+  it('a short answer after a chat\'s mail answers that exchange, as a guess, never as a sure follow-up of his own', () => {
+    const items = [...world().items,
+      user('u3', 'e i colori del tema scuro?', NOW - 20 * 60_000, 'Restyle UI'),
+      reply('a3', 'Propongo #1e1e1e.', NOW - 20 * 60_000 + 5000, 'Restyle UI'),
+      { kind: 'user', id: 'm1', at: NOW - 60_000, text: 'Fix pronto sul branch.', from: 'Fix login air-mcp-test', topic: 'Air 401' } as ChatItem,
+      reply('a4', 'Il fix del login è pronto: faccio il merge?', NOW - 50_000, 'Air 401'),
+    ];
+    expect(assignTopic('sì', world({ items }))).toMatchObject({ topic: 'Air 401', by: 'follow', sure: false });
+    expect(assignTopic('sì', world({ items })).candidates.slice(0, 2)).toEqual(['Air 401', 'Restyle UI']);
+    // the mail came while he was talking on another topic: still a guess
+    const talking = [...items.slice(0, 4), user('u4', 'e i bordi?', NOW - 2 * 60_000, 'Restyle UI'), ...items.slice(6)];
+    expect(assignTopic('ok', world({ items: talking }))).toMatchObject({ topic: 'Air 401', sure: false });
+    // his own exchange last: sure
+    expect(assignTopic('ok', world({ items: talking.slice(0, 5) }))).toMatchObject({ topic: 'Restyle UI', by: 'follow', sure: true });
+  });
+
   it('a short follow-up of his last message stays on its topic, only while the conversation goes on', () => {
     const items = [...world().items, user('u3', 'e i colori del tema scuro?', NOW - 60_000, 'Restyle UI')];
     expect(assignTopic('anche i bordi', world({ items }))).toMatchObject({ topic: 'Restyle UI', by: 'follow', sure: true });
