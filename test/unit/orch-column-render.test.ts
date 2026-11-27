@@ -3,6 +3,8 @@
 // and no value before main answers; «Stai aspettando» chips are a dot and coloured text; the command card is one line
 // of head, one mono line with Copia, one sentence and Esegui / No; a yes/no card has Sì / No / «Cosa cambia?»; the
 // user's bubble keeps his words and the estimate is a closed chip under it.
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -75,6 +77,11 @@ describe('«Stai aspettando»', () => {
     expect(out).toContain('· finito');
     expect(out).toContain('· passo 1 di 2');
     expect(html(createElement(WaitingChips, { chats: [] }))).toBe('');
+  });
+  it('the header\'s state word has no box either (owner, 2026-11-27)', () => {
+    const css = readFileSync(path.resolve('src/renderer/styles/orch-chat.css'), 'utf8');
+    expect(css).toMatch(/\.pill\[data-testid="orchestrator-state"\] \{[^}]*background: none/);
+    expect(css).toMatch(/\.oc-wchip \{[^}]*background: none/);
   });
 });
 
