@@ -777,7 +777,7 @@ button.lc-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 1
   font: 600 10.5px var(--font); letter-spacing: 0.03em;
 }
 /* the chip that moves a message to another topic (ADR 0369): the app's Select (TopicChip.tsx) in the chip's own look */
-.ui-select.msg-topic-movable { min-height: 0; gap: 0; border: 0; padding: 1px 7px; border-radius: 99px; background: var(--violet-bg); color: var(--violet); font: 600 10.5px var(--font); letter-spacing: 0.03em; }
+.ui-select.msg-topic-movable { min-height: 0; gap: 0; border: 0; padding: 1px 7px; border-radius: var(--r-s); background: var(--violet-bg); color: var(--violet); font: 600 10.5px var(--font); letter-spacing: 0.03em; }
 .ui-select.msg-topic-movable:hover:not(:disabled), .ui-select.msg-topic-movable.open { background: var(--violet-bg); filter: brightness(1.15); }
 .msg-topic-movable .ui-select-chevron { display: none; }
 /* Orchestrator engine pill, subbar, inline search bar & #topic filter pills */
