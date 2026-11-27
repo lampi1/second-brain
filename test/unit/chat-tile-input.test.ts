@@ -56,14 +56,29 @@ describe('chat tile input', () => {
   });
 });
 
-describe('chat bench head', () => {
-  it('a closed chat is a bench: what it is about as its title, the role under it, and its ✕ in sight (ADR 0311)', () => {
+describe('chat strip head (ADR 0366)', () => {
+  const strip = (row?: 'lead' | 'kid' | 'done') => {
     const chat = { id: 'w', title: 'AI-DLC · U5 verifica', cwd: '', state: 'idle', harness: 'claude', lastText: '',
       agent: { id: 'artisan', name: 'Artisan' } } as unknown as ChatSummary;
     vi.mocked(useApp).mockImplementation(selector => selector({ chats: { w: chat }, pending: [], tabs: [] } as unknown as Parameters<typeof selector>[0]));
-    const html = renderToStaticMarkup(createElement(ChatTile, { chatId: 'w' }));
-    expect(html).toMatch(/data-testid="chat-expand-w">AI-DLC · U5 verifica<\/button><\/h3><span class="bench-now"><span class="bench-role"[^>]*>Artisan<\/span>/);
-    // stop and close stay in sight on every bench (the owner, 2026-11-14); no help mark
+    return renderToStaticMarkup(createElement(ChatTile, { chatId: 'w', row }));
+  };
+  it('a closed chat is one row: the title, «Role · what it does now», the state word, the ⓘ and the actions', () => {
+    const html = strip();
+    expect(html).toContain('<header class="tile-head gs-row">');
+    expect(html).toMatch(/data-testid="chat-expand-w">AI-DLC · U5 verifica<\/button><\/h3><span class="gs-now"><span class="gs-role"[^>]*>Artisan<\/span>/);
+    expect(html).toMatch(/<span class="gs-state">.*data-testid="chat-status-w"[^>]*>finito<\/span><\/span>/);
+    expect(html).toContain('data-testid="strip-info-w"');
+    // stop and close stay on every strip (the owner, 2026-11-14); no help mark, no skill chips, no bench
     expect(html).toContain('chat-x-w'); expect(html).not.toContain('chat-help-w');
+    expect(html).not.toContain('skill-chips'); expect(html).not.toContain('bench-');
+  });
+  it('draws the lead at 56 px, a helper at 44 px and a finished line at 32 px, still', () => {
+    expect(strip('lead')).toMatch(/<svg[^>]* height="56"/);
+    expect(strip('kid')).toMatch(/<svg[^>]* height="44"/);
+    const done = strip('done');
+    expect(done).toMatch(/<svg[^>]* height="32"/);
+    expect(done).toContain('class="agent-sprite is-still"');
+    expect(strip('lead')).not.toContain('is-still');
   });
 });

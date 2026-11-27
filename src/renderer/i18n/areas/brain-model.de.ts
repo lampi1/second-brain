@@ -46,7 +46,6 @@ export const brainModelDe: typeof brainModelIt = {
   'bm.map.usedBy': (p: N) => (p.n === 1 ? 'genutzt von 1 Agenten' : `genutzt von ${p.n} Agenten`),
   'bm.map.agentSkills': (p: N) => (p.n === 1 ? '1 Skill' : `${p.n} Skills`),
   
-  'skills.untracked': 'Nutzung nicht erfasst', 'skills.untrackedTip': 'Diese Engine sagt nicht, welche Skills sie nutzt: nur die, die sie über das Lesen einer SKILL.md öffnet, erscheinen hier.',
   // ADR 0326 · how far the project is: the percentage, the progress card and the plan card of the side panel
   // #443 · phases and steps in a line, the arrow to the following step, proofs and links, the panel's width
 

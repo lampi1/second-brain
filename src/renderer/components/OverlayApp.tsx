@@ -43,10 +43,9 @@ export function OverlayApp() {
 
   useEffect(() => {
     const root = document.documentElement;
-    const theme = model?.theme ?? 'system';
-    if (theme === 'system') delete root.dataset.theme; else root.dataset.theme = theme;
+    root.dataset.theme = 'dark'; // dark only, as the main window (ADR 0366)
     root.dataset.density = model?.density ?? 'comfortable';
-  }, [model?.theme, model?.density]);
+  }, [model?.density]);
   // report the size the toasts need (main sizes the view; it is transparent around them)
   useLayoutEffect(() => {
     const el = ref.current;

@@ -12,14 +12,16 @@ import { engineWhy } from '../lib/engine-why';
 import { estimateText, useRunEstimates } from '../lib/run-estimates';
 import { t } from '../i18n';
 
-export function StripMeta({ chat, workMs }: { chat: ChatSummary; workMs: number | null }) {
+/** `figures`: time · cost only, amber once past the estimate (a Grindhouse strip keeps the model and the estimate in its
+ *  ⓘ, GrindStrip.tsx, ADR 0366). */
+export function StripMeta({ chat, workMs, figures }: { chat: ChatSummary; workMs: number | null; figures?: boolean }) {
   const estimates = useRunEstimates();
   const estimate = chat.run ? estimates?.runs[chat.run.runId]?.estimate ?? null : null;
   const costNow = chat.costLedgerUsd ?? (chat.costKnown === false ? null : chat.costUsd || null);
   const name = modelWithEffort(chat), why = engineWhy(chat);
   // the tip says it whole: on a narrow strip the text is cut
-  const model = <span className="strip-model" data-testid={`strip-model-${chat.id}`} data-tip={`${name}. ${why ?? t('aw.modelTip')}`}>{name}</span>;
-  const est = estimate ? estimateText(estimate) : null;
+  const model = figures ? null : <span className="strip-model" data-testid={`strip-model-${chat.id}`} data-tip={`${name}. ${why ?? t('aw.modelTip')}`}>{name}</span>;
+  const est = estimate && !figures ? estimateText(estimate) : null;
   const hasActual = workMs !== null || costNow !== null;
   const hasEstOnly = !hasActual && !!(est?.time || est?.cost);
   if (!hasActual && !hasEstOnly) return model;

@@ -117,7 +117,7 @@
 .aw-body.view-browser > .chat-work.expanded { order:1; flex:none; }
 .aw-body.view-browser > .chat-work .chat-work-inner > :not(.composer) { display:none; }
 .aw-tabs { flex:none; display:flex; gap:2px; padding:6px 8px 0; min-width:0; overflow-x:auto; }
-.aw-tab { flex:0 1 180px; min-width:60px; height:24px; padding:0 10px; border:1px solid transparent; border-bottom:0; border-radius:7px 7px 0 0; background:none; color:var(--text-3); font:500 12px var(--font); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
+.aw-tab { flex:0 1 180px; min-width:60px; height:24px; padding:0 10px; border:1px solid transparent; border-bottom:0; border-radius:var(--r-l) var(--r-l) 0 0; background:none; color:var(--text-3); font:500 12px var(--font); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
 .aw-tab:hover { color:var(--text); background:var(--surface-2); }
 .aw-tab.on { color:var(--text); background:var(--surface-2); border-color:var(--border); }
 /* a narrow window puts the two one over the other, the chat first */
@@ -229,134 +229,96 @@
 .chat-tile.is-strip .tile-head, .agent-strips .chat-tile.is-expanded > .tile-head { padding-top:4px; padding-bottom:4px; }
 /* only beside a person: a portrait (the user's own picture) keeps the old indent */
 .th-row:has(> .strip-face[data-person]) ~ .strip-facts { padding-left:83px; }
-/* ── The workshop (ADR 0311, 0312): a grid of benches, all of one height. A bench is the strip, closed: the role's
-   person big on a stage (the workshop picture, a torch that burns while the chat works and is out
-   when it rests), a plate with the project, the title, the role and what it does now, the model, time and cost, and
-   ONE foot line for what would otherwise grow it (a queue, an error, the countdown, the plan's dots, the team's
-   counts, the engine's own sub-agents). The sub-agents and theirs stand at the bench as smaller people; a bench with
-   helpers takes two columns. Static pictures (the workshop is one SVG that covers the stage, never tiled: assets/stage/bottega.svg); the only motion besides the people is the torch's
-   glow, opacity on its own layer. Radii from the scale (tokens.css: 4 / 6 / 8). The workshop and the torch are shared with
-   the role cards (agent-catalog.css). ── */
+/* ── The Grindhouse as strips grouped by Strategist (ADR 0366, issue #491; it replaces the benches of ADR 0311, 0312):
+   three sections («Ti aspetta», «Al lavoro», «Finite oggi»), in each one card per team: the lead strip, then every
+   chat it delegated as an indented strip on a thin tree line (1px, --border-3, a rounded elbow into each row; the last
+   one ends at its elbow). Today's people (AgentSprite.tsx) on no stage; only the ones at work move. A state is coloured
+   words with their dot on the strip's own background, never a tinted box. A strip waiting for the user has a 2px amber
+   line on its left edge, a failed one a red one; a finished one is dimmed. The controls show on hover or focus. ── */
 :root {
+  /* the torch of the role cards (agent-catalog.css): lit while the role works, out otherwise */
   --torch-lit:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='54'%3E%3Cpath d='M12 7c3 4 6 8 6 13 0 5-3 9-6 9s-6-4-6-9c0-3 2-5 3-7 0 3 1 4 2 4 0-4 0-7 1-10z' fill='%23ffb347'/%3E%3Cpath d='M12 15c2 3 3 5 3 8s-1.4 5-3 5-3-2-3-5c0-2 1.5-4 3-8z' fill='%23ffe08a'/%3E%3Cpath d='M9 40h6l-1 4h-4z' fill='%23463a2e'/%3E%3Cpath d='M8 30h8l-1.6 10h-4.8z' fill='%236b4a2b'/%3E%3Cpath d='M7.5 30h9' stroke='%232b2219' stroke-width='1.6'/%3E%3Cpath d='M12 44v8M8 52h8' stroke='%23463a2e' stroke-width='2'/%3E%3C/svg%3E");
   --torch-out:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='54'%3E%3Cpath d='M9.5 30c0-2.4 5-2.4 5 0z' fill='%232e241c'/%3E%3Cpath d='M9 40h6l-1 4h-4z' fill='%23463a2e'/%3E%3Cpath d='M8 30h8l-1.6 10h-4.8z' fill='%236b4a2b'/%3E%3Cpath d='M7.5 30h9' stroke='%232b2219' stroke-width='1.6'/%3E%3Cpath d='M12 44v8M8 52h8' stroke='%23463a2e' stroke-width='2'/%3E%3C/svg%3E");
 }
-.bench-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 280px), 1fr)); grid-auto-flow:dense; align-items:stretch; gap:10px; padding:8px 0 12px; }
-.bench-grid > .agent-pane-wrap { min-width:0; display:flex; flex-direction:column; }
-.bench-grid > .agent-pane-wrap > .chat-tile.is-strip { flex:1; display:flex; flex-direction:column; }
-.bench-grid > .bench-wide { grid-column:span 2; }
-.bench-grid > .bench-row { grid-column:1 / -1; }
-@container (max-width: 620px) { .bench-grid > .bench-wide { grid-column:auto; } }
-.bench-grid .tree-origin { margin:0 0 4px; }
-.bench-grid .chat-tile.is-strip { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-m); overflow:hidden; transition:border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease); }
-.bench-grid .chat-tile.is-strip:hover, .bench-grid .chat-tile.is-strip.focused, .bench-grid .chat-tile.is-strip:focus-within { background:var(--surface-2); border-color:var(--border-3); }
-.bench-grid .chat-tile.is-strip.tone-run { border-color:color-mix(in srgb, var(--accent) 45%, var(--border)); }
-.bench-grid .chat-tile.is-strip.tone-wait { border-color:var(--amber-line); }
-.bench-grid .chat-tile.is-strip.tone-err { border-color:color-mix(in srgb, var(--red) 55%, var(--border)); }
-.bench-grid .chat-tile.is-strip .tile-head.bench-head { flex:1; padding:0; display:flex; flex-direction:column; }
-/* the stage: the workshop picture behind the people (ADR 0313); its own paint (the people repaint only themselves) */
-.bench-stage { position:relative; flex:none; height:150px; display:flex; align-items:flex-end; justify-content:center; gap:6px; padding:0 12px; overflow:hidden; contain:layout paint; isolation:isolate; border-bottom:1px solid var(--border);
-  background:url("../assets/stage/bottega.svg") center bottom / cover no-repeat, #2a1d15; }
-/* the torch on the wall: lit while the chat works, its warm glow breathing; out otherwise (waiting for someone is said
-   by the amber chip): who works is seen at a glance (ADR 0312) */
-.bench-stage::before { content:""; position:absolute; left:8px; top:40px; width:24px; height:54px; z-index:0; background:var(--torch-out) no-repeat; opacity:.8; }
-.bench-stage::after { content:""; position:absolute; left:-70px; top:-30px; width:180px; height:170px; z-index:0; pointer-events:none; opacity:0; background:radial-gradient(closest-side, rgb(255 170 70 / .30), rgb(255 150 60 / .10) 55%, transparent); }
-.tone-run > .tile-head > .bench-stage::before { background-image:var(--torch-lit); opacity:1; }
-.tone-run > .tile-head > .bench-stage::after { opacity:1; will-change:opacity; animation:torch-glow 2.6s ease-in-out infinite alternate; }
-@keyframes torch-glow { 0% { opacity:.75; } 35% { opacity:1; } 60% { opacity:.82; } 100% { opacity:.96; } }
-html[data-hidden] .bench-stage::after { animation-play-state:paused; }
-@media (prefers-reduced-motion: reduce) { .bench-stage::after { animation:none !important; } }
-.bench-stage > .strip-face { position:relative; z-index:1; margin-bottom:5px; }
-.bench-stage:has(.bench-helpers) { justify-content:flex-start; padding-left:26px; }
-.bench-state { position:absolute; left:8px; top:8px; z-index:3; display:inline-flex; }
-.bench-state > * { height:22px; }
-.bench-state .strip-state { display:inline-flex; align-items:center; gap:6px; padding:0 9px 0 7px; border:0; border-radius:var(--r-s); background:color-mix(in srgb, var(--surface) 88%, transparent); color:var(--text-3); font-size:11px; font-weight:600; }
-.bench-state .strip-state::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; }
-.bench-state .strip-state.tone-err { color:var(--red); }
-.bench-state .pill.strip-working { padding:0 9px 0 7px; border-radius:var(--r-s); background:color-mix(in srgb, var(--accent) 24%, var(--surface)); color:var(--accent); font-size:11px; font-weight:650; }
-.bench-state .strip-wait { height:22px; padding:0 9px 0 7px; background:color-mix(in srgb, var(--amber) 22%, var(--surface)); }
-.bench-stage > .chat-header-actions { position:absolute; right:6px; top:6px; z-index:3; min-width:0; flex-wrap:nowrap; gap:2px; margin:0; padding:1px; border-radius:var(--r-m); background:color-mix(in srgb, var(--surface) 70%, transparent); }
-/* on a bench every control stays in sight: stop, ✕ and the rest (the owner, 2026-11-14), each a comfortable target */
-.chat-tile.is-strip .bench-stage > .chat-header-actions > .icon-btn { opacity:1; width:28px; height:28px; }
-/* ── the helpers: smaller people at the bench, a grandchild smaller still; a name tag over the head under the pointer ── */
-.bench-helpers-wrap { position:relative; z-index:2; flex:1 1 0; min-width:0; align-self:stretch; display:flex; margin-left:10px; }
-/* the row scrolls sideways when the team does not fit; the first helper is pushed right while there is room (an auto
-   margin, never justify-content: the start stays reachable); a thin bar seen only under the pointer, its room always kept (the WebKit
-   bar: scrollbar-width would bring the platform's arrows back) */
-.bench-helpers { flex:1 1 0; min-width:0; display:flex; align-items:flex-end; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; padding:0 4px 0 2px; }
-.bench-helpers::-webkit-scrollbar { height:5px; background:transparent; }
-.bench-helpers::-webkit-scrollbar-button { display:none; }
-.bench-helpers::-webkit-scrollbar-thumb { border-radius:3px; background:transparent; }
-.bench-helpers-wrap:hover > .bench-helpers::-webkit-scrollbar-thumb { background:color-mix(in srgb, var(--text-3) 55%, transparent); }
-.bench-helpers > :first-child { margin-left:auto; }
-/* more to see on a side: the row fades there */
-.bench-helpers-wrap.more-right > .bench-helpers { -webkit-mask-image:linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image:linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
-.bench-helpers-wrap.more-left > .bench-helpers { -webkit-mask-image:linear-gradient(90deg, transparent, #000 36px); mask-image:linear-gradient(90deg, transparent, #000 36px); }
-.bench-helpers-wrap.more-left.more-right > .bench-helpers { -webkit-mask-image:linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image:linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
-.bench-helper { position:relative; flex:none; display:inline-flex; flex-direction:column; align-items:center; margin-bottom:5px; cursor:pointer; outline:none; border-radius:var(--r-m); }
-.bench-helper:focus-visible { box-shadow:0 0 0 2px var(--focus); }
-.bench-helper + .bench-helper { margin-left:-14px; }
-.bench-helper:hover, .bench-helper:focus-within { z-index:4; }
-.bench-tag { all:unset; box-sizing:border-box; position:absolute; z-index:5; display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 9px 0 8px; border-radius:var(--r-m);
-  background:var(--surface); border:1px solid var(--border-3); box-shadow:0 6px 16px rgb(0 0 0 / .28); font:600 11.5px var(--font); color:var(--text); white-space:nowrap; cursor:pointer;
-  animation:bench-tag-in 110ms var(--ease); }
-@keyframes bench-tag-in { from { opacity:0; transform:translateY(4px); } }
-.bench-tag > b { min-width:0; max-width:150px; overflow:hidden; text-overflow:ellipsis; }
-.bench-tag > span { flex:none; color:var(--text-3); font-weight:500; }
-.bench-tag > i { font-style:normal; color:var(--accent); font-size:13px; margin-left:1px; }
-.bench-tag:hover { border-color:var(--accent); }
-.bench-tag:focus-visible { outline:2px solid var(--focus); outline-offset:1px; }
-@media (prefers-reduced-motion: reduce) { .bench-tag { animation:none; } }
-.bench-dot { flex:none; width:7px; height:7px; border-radius:50%; background:var(--text-4); }
-.bench-dot.tone-run { background:var(--accent); box-shadow:0 0 0 3px var(--accent-bg); }
-.bench-dot.tone-wait { background:var(--amber); }
-.bench-dot.tone-done { background:var(--green); }
-.bench-dot.tone-err { background:var(--red); }
-/* ── the plate: symmetrical flexible height with room for base info + live estimate, zero clipping ── */
-.bench-plate { flex:1; min-height:118px; box-sizing:border-box; display:flex; flex-direction:column; gap:4px; padding:10px 12px 9px; min-width:0; overflow:hidden; }
-.bench-prow { display:flex; align-items:center; gap:5px; min-width:0; height:18px; }
-.bench-folder { flex:0 1 auto; max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:500 10.5px var(--mono); color:var(--text-3); padding:0 5px; border-radius:var(--r-s); background:var(--surface-2); border:1px solid var(--border); }
-.bench-perm { flex:none; font-size:10px; padding:0 5px; height:16px; line-height:15px; }
-.bench-skills-badge { flex:none; display:inline-flex; align-items:center; gap:2px; height:17px; padding:0 6px; border-radius:99px; background:var(--surface-3); border:1px solid var(--border-2); color:var(--text-2); font:600 10.5px var(--mono); line-height:1; cursor:default; }
-.bench-skills-badge.untracked { background:none; border-style:dashed; color:var(--text-3); }
-/* discreet Strategist live status bubble floating inside the stage without adding vertical height */
-.bench-bubble { position:absolute; left:10px; bottom:10px; max-width:calc(100% - 20px); z-index:3; padding:3px 9px; border-radius:var(--r-m); background:color-mix(in srgb, var(--surface) 92%, transparent); border:1px solid var(--border-2); color:var(--text-2); font-size:11px; line-height:1.3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
-.bench-bubble .typing { padding:0; font-size:11px; color:var(--text-2); }
-.bench-area { flex:1; min-width:0; font:600 10.5px var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--text-3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.bench-plate .th-title { flex:none; min-width:0; max-width:100%; height:22px; line-height:22px; font-size:13.5px; font-weight:600; margin:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
-.bench-plate .th-title > .strip-name { display:block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.bench-now { display:flex; min-width:0; height:18px; align-items:center; font-size:12px; color:var(--text-3); white-space:nowrap; overflow:hidden; }
-.bench-now > .bench-role { flex:none; color:var(--text-2); }
-.bench-now > .bench-role + .chat-strip-line:not(:empty)::before { content:" · "; color:var(--text-4); white-space:pre; }
-.bench-now > .chat-strip-line { flex:1 1 0; min-width:0; overflow:hidden; text-overflow:ellipsis; }
-.bench-est { display:flex; align-items:center; min-width:0; }
-.bench-est:empty { display:none; }
-.bench-est > .th-estimate { max-width:100%; height:20px; }
-/* the model gives way, the figures never do: a narrow bench cuts the model's name (its tip says it whole), not the time and cost */
-.bench-meta { display:flex; align-items:center; gap:6px; min-width:0; height:22px; margin-top:auto; padding-top:2px; }
-.bench-meta > .mark { flex:none; opacity:.85; }
-.bench-meta > .strip-model { flex:0 1 auto; min-width:0; max-width:none; }
-.bench-meta > .strip-meta { flex:none; margin-left:auto; }
-/* ── the foot: one line, the same height on every bench ── */
-.bench-foot { flex:none; height:34px; box-sizing:border-box; display:flex; align-items:center; gap:12px; padding:0 12px; min-width:0; overflow:hidden; white-space:nowrap; border-top:1px solid var(--border); font-size:12px; color:var(--text-3); }
-.bench-foot:empty { border-top-color:transparent; }
-.bench-foot > * { flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
-.bench-foot > :is(.queued-bar, .error-bar) { flex:none; max-width:100%; overflow:visible; margin:0; padding:0 0 0 2px; height:26px; background:none; gap:8px; font-size:12px; }
-.bench-foot > .error-bar > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.bench-foot > :is(.agent-waiting, .agent-autoclose) { margin:0; padding:0; border:0; background:none; flex-wrap:nowrap; font-size:12px; }
-.bench-foot > .sp-card.is-compact { margin:0; padding:0; border:0; background:none; }
-.bench-foot > .sp-card.is-compact .sp-summary { padding:0; height:26px; gap:8px; font-size:12px; }
-.bench-kids-sum { display:inline-flex; align-items:center; gap:10px; color:var(--text-3); }
-.bench-kids-sum b { color:var(--text); font-weight:600; }
-.bench-kids-sum .is-run { color:var(--accent); }
-.bench-kids-sum .is-wait { color:var(--amber); }
-.bench-kids-sum .is-err { color:var(--red); }
-.bench-foot > .child-strips.is-compact { flex:1 1 0; flex-direction:row; align-items:center; gap:8px; margin:0; padding:0; }
-.bench-foot > .child-strips.is-compact::before, .bench-foot .child-strip::before { display:none; }
-.bench-foot .child-strip { flex:1 1 0; min-width:0; min-height:0; padding:0; }
-.bench-foot .child-strip-kind, .bench-foot .child-strip-time { display:none; }
-.child-strips-more { flex:none; font-weight:600; color:var(--text-2); }
-/* the open chat in place of the workshop: the bar (back, the team as tabs), then the chat filling the page */
+.agent-strips.grind { display:flex; flex-direction:column; gap:16px; padding:2px 0 16px; }
+.grind-sec { display:flex; flex-direction:column; gap:8px; min-width:0; }
+.grind-sec-h { display:flex; align-items:baseline; gap:8px; margin:0 2px; font:600 11px var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--text-3); }
+.grind-sec-h > small { font-size:11px; font-weight:500; letter-spacing:0; font-variant-numeric:tabular-nums; }
+.grind-sec.is-wait > .grind-sec-h { color:var(--amber); }
+.grind-team { min-width:0; border:1px solid var(--border); border-radius:var(--r-l); background:var(--surface); }
+.grind-team > .tree-origin { margin:6px 10px 0; }
+.grind-team .agent-pane.strip-pane { margin:0; border-bottom:0; }
+.grind-team.has-kids > .agent-pane > .agent-pane-content > .chat-tile.is-strip { border-bottom:1px solid var(--border); border-radius:var(--r-l) var(--r-l) 0 0; }
+.grind .chat-tile.is-strip { border:0; border-radius:var(--r-l); background:transparent; overflow:visible; }
+.grind .chat-tile.is-strip:hover, .grind .chat-tile.is-strip:focus-within, .grind .chat-tile.is-strip.focused { background:var(--surface-2); }
+/* the row: person, title over «Role · what it does now», plan dots, state, time · cost, ⓘ; controls over the figures on hover */
+.chat-tile.is-strip > .tile-head.gs-row { position:relative; display:flex; flex-direction:row; align-items:center; text-align:left; gap:10px; min-width:0; min-height:60px; padding:2px 10px 2px 8px; border-bottom:0; }
+.gs-row > .strip-face { flex:none; display:inline-flex; align-items:flex-end; }
+.gs-txt { flex:1 1 0; min-width:0; display:flex; flex-direction:column; line-height:1.3; }
+.gs-txt > .th-title { flex:none; max-width:100%; margin:0; font-size:13.5px; font-weight:600; color:var(--text); overflow:hidden; }
+.gs-now { display:flex; min-width:0; font-size:12px; color:var(--text-2); white-space:nowrap; overflow:hidden; }
+.gs-now > .gs-role { flex:none; color:var(--text-2); }
+.gs-now > .gs-role + .chat-strip-line:not(:empty)::before { content:" · "; color:var(--text-3); white-space:pre; }
+.chat-tile.is-strip .gs-now > .chat-strip-line { flex:1 1 0; min-width:0; display:block; padding:0; overflow:hidden; text-overflow:ellipsis; color:var(--text-2); font-size:12px; }
+.gs-now .typing { padding:0; font-size:12px; color:var(--text-2); }
+.gs-plan { flex:none; display:inline-flex; align-items:center; gap:6px; color:var(--text-3); font-size:11px; font-variant-numeric:tabular-nums; }
+.gs-steps { display:inline-flex; gap:3px; }
+.gs-steps > i { width:7px; height:7px; border-radius:50%; background:var(--border-3); }
+.gs-steps > i.is-done { background:var(--green); }
+.gs-steps > i.is-now, .gs-steps > i.is-check { background:var(--accent); }
+.gs-steps > i.is-blocked, .gs-steps > i.is-partial { background:var(--amber); }
+.gs-steps > i.is-cancelled { background:transparent; box-shadow:inset 0 0 0 1px var(--border-3); }
+.gs-state { flex:none; display:inline-flex; min-width:88px; }
+/* a state: a dot and coloured words on the strip itself (the owner, 2026-11-27: no box, no padding, as «Finita») */
+.gs-state :is(.pill, .strip-state, .strip-wait) { height:auto; padding:0; border:0; border-radius:0; background:none; box-shadow:none; font-size:11.5px; font-weight:600; gap:6px; }
+.gs-state .strip-state::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
+.gs-state .strip-state.tone-done { color:var(--green); }
+.gs-state .strip-state.tone-off { color:var(--text-3); }
+.gs-state .strip-wait { color:var(--amber); cursor:pointer; }
+.gs-state .strip-wait:hover { text-decoration:underline; text-underline-offset:2px; }
+.gs-meta { flex:none; display:inline-flex; justify-content:flex-end; width:136px; font:11.5px var(--mono); color:var(--text-3); white-space:nowrap; }
+.gs-meta .strip-meta { display:inline-flex; gap:6px; height:auto; padding:0; border:0; background:none; font:inherit; color:var(--text-3); }
+.gs-info { position:relative; flex:none; display:inline-grid; place-items:center; width:18px; height:18px; color:var(--text-3); font-size:13px; cursor:default; outline:none; border-radius:var(--r-s); }
+.gs-info:hover, .gs-info:focus-visible { color:var(--text); }
+.gs-info:focus-visible { box-shadow:0 0 0 2px var(--focus); }
+.gs-tip { display:none; position:absolute; right:-6px; top:calc(100% + 6px); z-index:30; width:max-content; max-width:280px; padding:8px 10px; border:1px solid var(--border-3); border-radius:var(--r-m);
+  background:var(--surface-3); color:var(--text-2); font:12px/1.5 var(--font); text-align:left; white-space:normal; box-shadow:var(--shadow-pop); flex-direction:column; cursor:default; }
+.gs-tip > b { color:var(--text); font-weight:600; }
+.gs-info:hover > .gs-tip, .gs-info:focus > .gs-tip { display:flex; }
+.gs-row > .chat-header-actions { position:absolute; right:34px; top:50%; transform:translateY(-50%); z-index:2; min-width:0; margin:0; padding:1px; gap:1px; flex-wrap:nowrap;
+  border:1px solid var(--border-3); border-radius:var(--r-m); background:var(--surface-3); opacity:0; pointer-events:none; transition:opacity var(--dur-fast) var(--ease); }
+.chat-tile.is-strip:hover > .gs-row > .chat-header-actions, .chat-tile.is-strip:focus-within > .gs-row > .chat-header-actions, .gs-row > .chat-header-actions:has([aria-expanded="true"]) { opacity:1; pointer-events:auto; }
+.chat-tile.is-strip .gs-row > .chat-header-actions > .icon-btn { opacity:1; width:26px; height:26px; }
+@media (prefers-reduced-motion: reduce) { .gs-row > .chat-header-actions { transition:none; } }
+/* what needs words under a row: the machine's queue, an error and its one action, the auto close */
+.gs-foot { display:flex; align-items:center; gap:12px; min-width:0; padding:0 12px 6px 72px; font-size:12px; color:var(--text-3); }
+.gs-foot:empty { display:none; }
+.gs-foot > :is(.queued-bar, .error-bar) { flex:1 1 auto; min-width:0; margin:0; padding:0; height:24px; background:none; border:0; gap:8px; font-size:12px; }
+.gs-foot > .error-bar > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-2); }
+.gs-foot > :is(.agent-waiting, .agent-autoclose) { margin:0; padding:0; border:0; background:none; font-size:12px; }
+/* tones: waiting for the user, a 2px amber line on the left edge; failed, a red one; finished, dimmed */
+.grind .chat-tile.is-strip.tone-wait > .gs-row { box-shadow:inset 2px 0 0 var(--amber); }
+.grind .chat-tile.is-strip.tone-err > .gs-row { box-shadow:inset 2px 0 0 var(--red); }
+.grind .chat-tile.is-strip.tone-done .gs-txt > .th-title { color:var(--text-2); }
+.grind .chat-tile.is-strip.tone-done .gs-now, .grind .chat-tile.is-strip.tone-done .gs-now * { color:var(--text-3); }
+.grind .chat-tile.is-strip.tone-done .strip-face { opacity:.75; }
+/* the team under its lead: a thin tree line from the lead's person, a rounded elbow into each row */
+.grind-kids { position:relative; padding:2px 0 4px; }
+.grind-kid { position:relative; }
+.grind-kid > .grind-kids { margin-left:24px; padding:0; }
+.grind-kid::before { content:""; position:absolute; left:28px; top:0; height:24px; width:12px; border-left:1px solid var(--border-3); border-bottom:1px solid var(--border-3); border-bottom-left-radius:var(--r-m); pointer-events:none; }
+.grind-kid:not(:last-child)::after { content:""; position:absolute; left:28px; top:24px; bottom:0; border-left:1px solid var(--border-3); pointer-events:none; }
+.grind-kid > .agent-pane > .agent-pane-content > .chat-tile.is-strip > .gs-row { min-height:48px; padding-left:42px; }
+.grind-kid .gs-txt > .th-title { font-size:13px; font-weight:500; }
+.grind-kid .chat-tile.is-strip { border-radius:var(--r-m); }
+/* «Finite oggi»: one still line each */
+.grind-sec.is-done .chat-tile.is-strip > .gs-row { min-height:40px; }
+.grind-sec.is-done .grind-team { background:transparent; }
+/* a browser of its own: a row after the sections */
+.grind-row { min-width:0; }
+@container (max-width: 600px) { .gs-meta { display:none; } .gs-plan > small { display:none; } }
+@container (max-width: 480px) { .gs-plan { display:none; } .gs-state { min-width:0; } }
+/* the open chat in place of the strips: the bar (back, the team as tabs), then the chat filling the page */
 .agent-strips.bench-open { display:flex; flex-direction:column; min-height:360px; height:calc(100vh - var(--topbar-h, 52px) - 112px); padding-bottom:0; }
 .bench-bar { flex:none; display:flex; align-items:stretch; gap:8px; min-width:0; border-bottom:1px solid var(--border); margin-bottom:6px; }
 .bench-back { all:unset; flex:none; display:inline-flex; align-items:center; gap:6px; padding:8px 10px; color:var(--accent); font:600 12.5px var(--font); cursor:pointer; border-radius:var(--r-s); }
@@ -370,6 +332,11 @@ html[data-hidden] .bench-stage::after { animation-play-state:paused; }
 .bench-tab:hover { background:var(--surface-2); }
 .bench-tab.on { border-bottom-color:var(--accent); background:var(--surface); }
 .bench-tab:focus-visible { outline:2px solid var(--focus); outline-offset:-2px; }
+.bench-dot { flex:none; width:7px; height:7px; border-radius:50%; background:var(--text-4); }
+.bench-dot.tone-run { background:var(--accent); }
+.bench-dot.tone-wait { background:var(--amber); }
+.bench-dot.tone-done { background:var(--green); }
+.bench-dot.tone-err { background:var(--red); }
 .bench-open-chat { flex:1; min-height:0; display:flex; flex-direction:column; }
 .bench-open-chat > .agent-pane { flex:1; height:auto; margin:0; }
 .bench-open-chat > .delegation-card { flex:1; min-height:0; overflow:auto; }

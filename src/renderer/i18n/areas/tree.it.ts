@@ -30,7 +30,6 @@ export const treeIt = {
   'tree.state.blocked': 'bloccato',
   'tree.state.closed': 'chiusa',
   'tree.kids': (p: { n: number }) => p.n === 1 ? '1 figlio' : `${p.n} figli`,
-  'tree.openHelper': (p: { name: string; state: string }) => `Apri ${p.name} (${p.state})`,
   'tree.kidsRun': (p: { n: number }) => `${p.n} in corso`,
   'tree.kidsWait': (p: { n: number }) => `${p.n} ti aspetta`,
   'tree.kidsStuck': (p: { n: number }) => p.n === 1 ? '1 fermo' : `${p.n} fermi`,

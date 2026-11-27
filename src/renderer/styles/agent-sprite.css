@@ -21,7 +21,7 @@ html[data-hidden] .agent-sprite *, .agent-sprite[data-away] * { animation-play-s
 @media (prefers-reduced-motion: reduce) { .agent-sprite * { animation:none !important; } }
 /* What it says (ADR 0303): a small bubble at the head, its corner pointing at the mouth, that pops in and fades by
    itself (lib/quips.ts QUIP_MS sets how long). Over the row's text for that moment; it takes no click. */
-.agent-sprite > .quip { position:absolute; left:76%; top:-5px; z-index:3; padding:3px 8px 4px; border-radius:10px 10px 10px 2px; background:var(--text); color:var(--bg);
+.agent-sprite > .quip { position:absolute; left:76%; top:-5px; z-index:3; padding:3px 8px 4px; border-radius:var(--r-l) var(--r-l) var(--r-l) 2px; background:var(--text); color:var(--bg);
   font:600 11px/1.25 var(--font); letter-spacing:0; white-space:nowrap; pointer-events:none; box-shadow:0 2px 8px rgb(0 0 0 / .28); transform-origin:0 100%; animation:quip-pop 2600ms both; }
 /* a click's line stands clear of the hand and the stick, which come in over the head from the right, for as long as
    it is there (it comes once they have left: lib/quips.ts) */

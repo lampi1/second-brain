@@ -55,6 +55,7 @@ import { treeEn } from './areas/tree.en';
 import { aliveEn } from './areas/alive.en';
 import { modelPickerEn } from './areas/model-picker.en';
 import { awayEn } from './areas/away.en';
+import { grindEn } from './areas/grind.en';
 import { queueSettingsEn } from './areas/queue-settings.en';
 import { engineOrderEn } from './areas/engine-order.en';
 import { remoteEn } from './areas/remote.en';
@@ -86,6 +87,7 @@ export const en: Dict = {
   ...aliveEn,
   ...modelPickerEn,
   ...awayEn,
+  ...grindEn,
   ...queueSettingsEn, ...engineOrderEn,
   ...remoteEn,
   ...learningEn,

@@ -49,8 +49,6 @@
 .wdoc .cb-rich, .wdoc .cb-code { max-width: 72ch; padding: 16px 20px 18px; }
 .wdoc .cb-rich { font-size: var(--fs-l); line-height: 1.65; color: var(--md-text); }
 .wdoc .cb-code { font-size: var(--fs-m); }
-:root[data-theme="light"] .wdoc .codeblock { background: #fff; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06); }
-@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .wdoc .codeblock { background: #fff; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06); } }
 
 /* the options: large cards, the number on the left, the recommended one marked three ways (border, fill, label) */
 .wq-opts { display: flex; flex-direction: column; gap: 8px; }

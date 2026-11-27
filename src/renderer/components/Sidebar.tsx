@@ -1,11 +1,12 @@
 // The left rail: chat-focused sidebar (Grindhouse header + live delegation tree with role mini-icons in SidebarTree.tsx)
-// paired with a discreet Hamburger (☰) popover menu holding all secondary views grouped into Lavoro, Svago (Giornale &
-// Fonti, Scacchi) and Sistema. Used by App.tsx.
+// paired with a discreet Hamburger (☰) popover menu holding the other views grouped into Lavoro (Grindhouse, Piani),
+// Svago (Impara, Scacchi) and Sistema (Agenti, Memoria, Andamento, Impostazioni): lib/nav-menu.ts, ADR 0366. Task,
+// Registrazioni, Collegamenti and Log are out of the menu, still reachable from the palette and the Orchestrator.
+// Used by App.tsx.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { BRAIN_PAGES, type BrainPageId } from '../brain';
 import { badges, WARN_SECTIONS } from '../lib/notify';
 import { useApp } from '../store/store';
-import { useTasks } from '../store/tasks';
 import { clampSidebarWidth, DEFAULT_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, setPrefs, ui } from '../store/ui';
 import { schedule, suspendViews } from '../lib/viewports';
 import { go, showOverview } from '../actions';
@@ -13,10 +14,9 @@ import {
   IconBook, IconBrain, IconChess, IconChart, IconGrid, IconHistory, IconLayers, IconList, IconMap, IconMenu, IconMic, IconSettings, IconSparkle, IconTerminal, IconTicket,
 } from './Icons';
 import { t } from '../i18n';
-import { workProfile } from '../../shared/work-profiles';
+import { MENU_GROUPS } from '../lib/nav-menu';
 import { SidebarTree } from './SidebarTree';
 import { useProposalCount } from '../lib/proposals';
-import { HUB_PAGES } from '../lib/memory-hub';
 import { workingCount } from '../lib/working-count';
 
 const ICON: Record<BrainPageId, ReactNode> = {
@@ -26,11 +26,6 @@ const ICON: Record<BrainPageId, ReactNode> = {
   registrazioni: <IconMic />, impara: <IconBook />, scacchi: <IconChess />,
   memoria: <IconHistory />, piani: <IconTicket />, collegamenti: <IconMap />,
 };
-
-const WORK_PAGES: BrainPageId[] = ['piani', 'task', 'registrazioni'];
-const LEISURE_PAGES: BrainPageId[] = ['impara', 'scacchi'];
-const SYSTEM_PAGES: BrainPageId[] = ['agenti', 'memoria', 'collegamenti', 'andamento', 'log', 'impostazioni'];
-const IN_MEMORIA = Object.keys(HUB_PAGES);
 
 function Badge({ n, warn }: { n: number; warn?: boolean }) {
   if (!n) return null;
@@ -46,24 +41,14 @@ export function Sidebar() {
   const savedWidth = ui.use(s => s.prefs.sidebarWidth);
   const width = clampSidebarWidth(savedWidth ?? DEFAULT_SIDEBAR_WIDTH, winW);
   const maxW = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, Math.floor(winW * 0.42)));
-  const saved = ui.use(s => s.prefs.workProfile);
-  const composition = workProfile(saved, BRAIN_PAGES.map(page => page.id));
-  const show = (id: BrainPageId) => !composition || composition.pageIds.includes(id);
-  const extraPages = composition
-    ? composition.pageIds.filter((id): id is BrainPageId =>
-        BRAIN_PAGES.some(page => page.id === id) &&
-        !['home', ...WORK_PAGES, ...LEISURE_PAGES, ...SYSTEM_PAGES, ...IN_MEMORIA].includes(id))
-    : [];
   const page = ui.use(s => s.page);
   const read = ui.use(s => s.read);
   const feed = useApp(s => s.feed);
   const waiting = useApp(s => s.pending.length);
   const working = useApp(s => workingCount(s.chats));
-  const tasksUnread = useTasks(s => s?.unread ?? 0);
-  const tasksOn = useTasks(s => s !== null && s.error?.kind !== 'script');
   const b = badges(feed, read);
   const proposals = useProposalCount();
-  const menuAlerts = proposals + (tasksOn ? tasksUnread : 0);
+  const menuAlerts = proposals;
 
   useEffect(() => {
     const onResize = () => setWinW(window.innerWidth);
@@ -104,16 +89,15 @@ export function Sidebar() {
   const menuItem = (id: BrainPageId) => {
     const p = BRAIN_PAGES.find(x => x.id === id);
     if (!p) return null;
-    if (id === 'task' && (!tasksOn || !show('task'))) return null;
     const on = page === p.id;
     const label = labelOf(p.id, p.label);
     const badge = p.id === 'memoria' && proposals
       ? <span className="nav-badge amber nav-badge-pulse" data-testid="nav-badge-proposals" aria-label={t('mh.badge', { n: proposals })}>{proposals > 99 ? '99+' : proposals}</span>
-      : <span data-testid={`nav-badge-${p.id}`}><Badge n={p.id === 'task' ? tasksUnread : b[p.id] ?? 0} warn={WARN_SECTIONS.has(p.id)} /></span>;
+      : p.id === 'home' ? null : <span data-testid={`nav-badge-${p.id}`}><Badge n={b[p.id] ?? 0} warn={WARN_SECTIONS.has(p.id)} /></span>;
     return (
       <button key={p.id} type="button" className={`nav-item ${on ? 'on' : ''}`} role="menuitem"
         onClick={() => { setMenuOpen(false); if (p.id === 'home') showOverview(); else go({ page: p.id }); }}
-        aria-current={on ? 'page' : undefined} data-testid={`nav-${p.id}`}
+        aria-current={on ? 'page' : undefined} data-testid={p.id === 'home' ? 'nav-menu-home' : `nav-${p.id}`}
         data-tip={p.key ? `${label}|${p.key}` : undefined} aria-label={label}>
         <span className="nav-icon">{ICON[p.id] ?? <IconBrain />}</span>
         <span className="nav-label">{label}</span>
@@ -145,15 +129,11 @@ export function Sidebar() {
         </button>
         {menuOpen && (
           <div className="nav-menu-pop" role="menu" aria-label={t('dialogs.sidebar.menuLabel')} data-testid="nav-menu">
-            <div className="nav-title" data-testid="nav-group-work">{t('dialogs.sidebar.work')}</div>
-            {WORK_PAGES.map(menuItem)}
-            <div className="nav-sep" />
-            <div className="nav-title" data-testid="nav-group-leisure">{t('dialogs.sidebar.leisure')}</div>
-            {LEISURE_PAGES.map(menuItem)}
-            <div className="nav-sep" />
-            <div className="nav-title" data-testid="nav-group-system">{t('dialogs.sidebar.system')}</div>
-            {SYSTEM_PAGES.map(menuItem)}
-            {extraPages.map(menuItem)}
+            {MENU_GROUPS.map((g, i) => <div key={g.id} role="none">
+              {i > 0 && <div className="nav-sep" />}
+              <div className="nav-title" data-testid={`nav-group-${g.id}`}>{t(`dialogs.sidebar.${g.id}`)}</div>
+              {g.pages.map(menuItem)}
+            </div>)}
           </div>
         )}
       </div>

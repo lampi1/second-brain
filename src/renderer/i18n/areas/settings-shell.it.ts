@@ -8,6 +8,6 @@ export const settingsShellIt = {
   'stx.rows': (p: { n: number }) => (p.n === 1 ? '1 riga' : `${p.n} righe`),
   'stx.undo': 'Annulla', 'stx.undone': 'Annullato', 'stx.savedByAgent': 'Modificato dall’Orchestrator',
   'stx.protected': 'Protetta', 'stx.protectedTip': 'Un agente può solo proporla: la cambia un tuo clic o una tua richiesta all’Orchestrator.',
-  'stx.themeHint': 'Chiaro, scuro o come Windows.', 'stx.languageHint': 'La lingua dell’app; gli agenti ti rispondono nella tua.',
+  'stx.languageHint': 'La lingua dell’app; gli agenti ti rispondono nella tua.',
   'stx.densityHint': 'Quanto spazio tra righe e pannelli.',
 };

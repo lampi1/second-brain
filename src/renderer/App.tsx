@@ -220,7 +220,6 @@ export function App() {
   useHighlight();
   useBrainToastRelay();
   const density = ui.use(s => s.prefs.density);
-  const theme = ui.use(s => s.prefs.theme);
   const appearance=ui.use(s=>s.prefs.appearance);
   const maximized = ui.use(s => s.maximized);
   const focusMode = ui.use(s => s.focusMode);
@@ -235,10 +234,10 @@ export function App() {
 
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === 'system') delete root.dataset.theme; else root.dataset.theme = theme;
+    root.dataset.theme = 'dark'; // dark only (ADR 0366): a saved light or system preference is ignored
     root.dataset.density = density;
     root.dataset.appearance=appearance.preset;
-  }, [theme, density,appearance]);
+  }, [density, appearance]);
   const qShown = ui.use(s => s.qwin.shown);
   const viewerOpen = ui.use(s => s.viewer.open);
   useEffect(() => { setBlocked(modal !== null || qShown); }, [modal, qShown]);

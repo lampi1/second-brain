@@ -33,7 +33,7 @@
 .gu-link { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 1px 7px; border-radius: var(--r-m); border: 1px solid var(--accent-line); background: var(--accent-bg); color: var(--accent-strong); font: inherit; font-size: 11.5px; text-decoration: none; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gu-link:hover { text-decoration: underline; }
 .gu-link.off { border-color: var(--border-2); background: none; color: var(--text-3); cursor: default; }
-.gu-count { flex: none; font-size: 11px; color: var(--text-3); padding: 0 6px; border-radius: 99px; background: var(--surface-3); }
+.gu-count { flex: none; font-size: 11px; color: var(--text-3); padding: 0 6px; border-radius: var(--r-s); background: var(--surface-3); }
 
 /* table */
 .gu-table-wrap { overflow-x: auto; scrollbar-width: thin; }
