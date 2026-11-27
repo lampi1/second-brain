@@ -20,12 +20,13 @@ import { heldQuestions, openQuestions } from '../../shared/question-ladder';
 import type { ChatSummary, Effort, Harness, NewChat } from '../../shared/contract';
 import type { AgentCatalog, AgentRun, UserTaskEvents } from '../../shared/agents';
 import { canLaunch, isDelegatorRole, isWorkRole, launchGap, ROLE_DEFAULTS, WORK_ROLE_IDS, type DelegationSettings } from '../../shared/roles';
-import { CRITERION_MAX, EVIDENCE_MAX, MAX_CORRECTIONS, RESULT_OUTPUT_MAX, SUMMARY_MAX, USER_ACTION_COMMAND_MAX, USER_ACTION_KINDS, USER_ACTION_TEXT_MAX, USER_ONLY_BLOCKER, capText, checkContract, checkResult, contractFields, contractWarnings, delegationPrompt, depthOf, type DelegationResult, type DelegationIntegration, type TaskAssignmentOptions } from '../../shared/delegation';
+import { CRITERION_MAX, CONTRACT_TEXT_MAX, EVIDENCE_MAX, MAX_CORRECTIONS, REPORT_OUTPUT_MAX, SUMMARY_MAX, tooLong, USER_ACTION_COMMAND_MAX, USER_ACTION_KINDS, USER_ACTION_TEXT_MAX, USER_ONLY_BLOCKER, capText, checkContract, checkResult, contractFields, contractWarnings, delegationPrompt, depthOf, type DelegationResult, type DelegationIntegration, type TaskAssignmentOptions } from '../../shared/delegation';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import { delegationGate, stepGate, stepIndex, type StrategyPlan } from '../../shared/strategy';
 import type { McpTool } from '../mcp/server';
 import { callerOf } from '../mcp/caller';
 import { ToolRefusal } from '../mcp/refusal';
+import { repairJson } from '../mcp/json-args';
 import { allowsClass, within, type AgentPolicy } from './tool-policy';
 import { folderProblem, sameFolder } from './worktrees';
 import { childReviewers, DELTA_REVIEW, type ReviewWorld } from './one-review';
@@ -108,6 +109,8 @@ export interface DelegationDeps {
 
 export const TASKS_MAX = 10;
 const TITLE_MAX = 80;
+/** agent_report while this chat's plan waits for the user's approval (ADR 0371 point 3). */
+export const PLAN_WAITS_REFUSAL = 'agent_report refused: your plan waits for the user\'s approval on its page. A report now would close the job before he chose. End your turn now without reporting; his answer arrives as his message. Report once the approved work is done or blocked.';
 const QUESTION_MAX = 1000, OPTIONS_MAX = 6, REMEMBER_MAX = 1, REMEMBER_LINE = 300;
 
 /** An app-owned independent review run (the Judge's sample, ADR 0100): the only report that carries verdict / verified. */
@@ -148,7 +151,10 @@ export const PLACE_SCHEMA = { type: 'string', enum: ['here', 'copy'], descriptio
 function parseJsonArg(v: unknown, expected: 'object' | 'array', what: string): unknown {
   if (typeof v !== 'string' || !v.trim()) throw new Error(`${what}: JSON ${expected} string required.`);
   let parsed: unknown;
-  try { parsed = JSON.parse(v); } catch (e) { throw new Error(`${what}: invalid JSON (${e instanceof Error ? e.message : String(e)}).`); }
+  // a raw line break inside a string or a trailing comma is read as meant (mcp/json-args.ts repairJson, ADR 0371)
+  try { parsed = JSON.parse(v); } catch (e) {
+    try { parsed = JSON.parse(repairJson(v)); } catch { throw new Error(`${what}: invalid JSON (${e instanceof Error ? e.message : String(e)}). Double quotes around every key and string, quotes inside a string escaped as \\", line breaks as \\n, no comma before } or ].`); }
+  }
   const ok = expected === 'array' ? Array.isArray(parsed) : !!parsed && typeof parsed === 'object' && !Array.isArray(parsed);
   if (!ok) throw new Error(`${what}: JSON ${expected} required.`);
   return parsed;
@@ -472,22 +478,22 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     // Small cosmetic overflows must not require another model turn. Full evidence stays in output/doneWhen;
     // neither outcome nor the host's completion criteria are repaired or relaxed.
     // A longer summary is cut with the marker «…», never refused; its full text stays in output (P8, cloudroom comms).
-    // A longer output is cut the same way: a refusal made the agent write the whole result again (33 times in a month
-    // of the owner's chats). The marker shows the parent that text is missing; the agent can amend with a shorter one.
-    if (typeof a.output === 'string' && a.output.length > RESULT_OUTPUT_MAX) {
-      const full = a.output.length, cut = capText(a.output, RESULT_OUTPUT_MAX);
-      a.output = cut;
-      warnings.push(`output cut to ${RESULT_OUTPUT_MAX} characters (marker …): its last ${full - (cut.length - 1)} were left out. Only if they matter, report once more with amends: true and a shorter output.`);
-    }
+    // A plan of this chat that waits for the user's approval: a report now would close the job before he chose
+    // (ADR 0371 point 3: agent_report right after plan_propose closed the plan). Night mode approves it by itself.
+    const plan = self?.plan;
+    if (plan && !plan.stopped && (plan.phase === 'proposed' || plan.phase === 'revising')) throw new ToolRefusal(PLAN_WAITS_REFUSAL);
+    // A long output is refused, saying where its detail goes (ADR 0371 point 7, the owner: «output corto, il dettaglio
+    // in un file»): the limit is in the tool's description, so the first call keeps to it.
+    if (typeof a.output === 'string' && a.output.trim().length > REPORT_OUTPUT_MAX) throw new ToolRefusal(`agent_report refused: ${tooLong('output', a.output.trim().length, REPORT_OUTPUT_MAX)}`);
     if (typeof a.summary === 'string' && a.summary.trim().length > SUMMARY_MAX) {
       const full = a.summary.trim();
       a.summary = capText(full, SUMMARY_MAX);
       const tail = `\n\nSintesi completa: ${full}`;
       if (typeof a.output !== 'string' || a.output.includes(full)) warnings.push(`summary cut to ${SUMMARY_MAX} characters (marker …); its full text is in output.`);
-      else if (a.output.length + tail.length <= RESULT_OUTPUT_MAX) { a.output += tail; warnings.push(`summary cut to ${SUMMARY_MAX} characters (marker …); its full text is in output.`); }
-      else if (a.output.length <= RESULT_OUTPUT_MAX && tail.length <= RESULT_OUTPUT_MAX / 2) {
+      else if (a.output.length + tail.length <= REPORT_OUTPUT_MAX) { a.output += tail; warnings.push(`summary cut to ${SUMMARY_MAX} characters (marker …); its full text is in output.`); }
+      else if (a.output.length <= REPORT_OUTPUT_MAX && tail.length <= REPORT_OUTPUT_MAX / 2) {
         // no room left: the output's tail makes room (marker …), so the full summary is never lost
-        const head = capText(a.output, RESULT_OUTPUT_MAX - tail.length);
+        const head = capText(a.output, REPORT_OUTPUT_MAX - tail.length);
         warnings.push(`summary cut to ${SUMMARY_MAX} characters (marker …); its full text is at the end of output, whose last ${a.output.length - (head.length - 1)} characters were cut to make room (marker …).`);
         a.output = head + tail;
       } else warnings.push(`summary cut to ${SUMMARY_MAX} characters (marker …); its full text was too long to keep in output: put what matters in output.`);
@@ -597,12 +603,12 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
 
   const str = { type: 'string' };
   const reportSchema: Record<string, unknown> = { type: 'object', required: ['outcome', 'summary', 'output', 'doneWhen'], additionalProperties: false, properties: {
-      outcome: { type: 'string', enum: ['done', 'partial', 'blocked'], description: 'done only when every doneWhen entry has met: true; else partial or blocked' }, summary: { ...str, description: `one or two sentences, up to ${SUMMARY_MAX} characters (a longer one is cut with …)` }, output: { ...str, description: `the result, up to ${RESULT_OUTPUT_MAX} characters (a longer one is cut with …): long material goes in a file, its path here` },
+      outcome: { type: 'string', enum: ['done', 'partial', 'blocked'], description: 'done only when every doneWhen entry has met: true; else partial or blocked' }, summary: { ...str, description: `one or two sentences, up to ${SUMMARY_MAX} characters (a longer one is cut with …)` }, output: { ...str, description: `the result, short: at most ${REPORT_OUTPUT_MAX} characters (a longer one is refused). Long material (logs, diffs, tables, full reports) goes in a file in your folder or the brain's tmp/: write its path here` },
       amends: { type: 'boolean', description: `true only to correct the result you already reported for this assignment: the new version replaces it and reaches the same reader, marked as a correction; at most ${MAX_CORRECTIONS} corrections` },
       verdict: { type: 'string', enum: ['success', 'partial', 'fail'], description: 'Only app-owned independent reviews: assessment of the reviewed work, separate from completion of your review.' },
       verified: { type: 'string', enum: ['yes', 'partial', 'no'], description: 'Only with verdict: yes only when you independently checked the evidence; never inferred from completing the review.' },
       taskVersion: { type: 'integer', minimum: 1, description: 'Current task version supplied with the assignment; required after a follow-up. Stale reports are refused.' },
-      doneWhen: { type: 'array', description: 'one entry per criterion of your contract, written exactly as in the contract (the field is doneWhen, never criteria)', items: { type: 'object', required: ['criterion', 'met'], additionalProperties: false, properties: { criterion: { ...str, maxLength: CRITERION_MAX }, met: { type: 'boolean' }, evidence: { ...str, maxLength: EVIDENCE_MAX } } } },
+      doneWhen: { type: 'array', description: 'required: one entry per criterion of your contract, written exactly as in the contract (the field is doneWhen, never criteria); [] when the contract has none', items: { type: 'object', required: ['criterion', 'met'], additionalProperties: false, properties: { criterion: { ...str, maxLength: CRITERION_MAX, description: 'the contract\'s criterion, copied exactly' }, met: { type: 'boolean' }, evidence: { ...str, maxLength: EVIDENCE_MAX, description: `what shows it, up to ${EVIDENCE_MAX} characters (a longer one is cut with …)` } } } },
       questions: { type: 'array', items: { ...str, maxLength: 500 }, maxItems: 8 },
       userAction: { type: 'object', required: ['kind', 'text'], additionalProperties: false, description: 'only with outcome partial or blocked, when the next step is one only the user can do (turn on the VPN, a login with MFA, an Esegui command, a permission, a decision): the app asks the user at once in the Orchestrator and, on Sì, tells your parent to resume. Never leave such a block only in the report text. Never for what the Orchestrator, your parent or another chat must do (that goes in summary and questions): a userAction shows your chat as waiting for the user until he acts.',
         properties: { kind: { type: 'string', enum: [...USER_ACTION_KINDS] }, text: { ...str, maxLength: USER_ACTION_TEXT_MAX, description: 'what the user must do, in the user\'s language' }, command: { ...str, maxLength: USER_ACTION_COMMAND_MAX, description: 'the exact command to run, if any' } } },
@@ -612,7 +618,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     } };
   return [{
     name: 'agent_delegate',
-    description: 'Delegate the parts of your task to other roles: each part starts a visible chat under yours, running the role you name (only roles your role may launch: agent_catalog). The child sees only its contract, never this conversation: write it self-contained. Several parts start at once (parallel): a parallel group of your approved plan goes in one call. It never gets more permissions than you, works in the folder you name (cwd: any existing one: the brain, any repository, worktree or slot; place: here by default, copy only to get an isolated worktree), and returns one result with agent_report that reaches you as a message. The depth limit is the user\'s. A Sentinel reviewing a child\'s work: reviewOf = that child\'s runId. One review chat per piece of work: once a Sentinel of yours reported on this task, a new Sentinel is refused; re-review the fix in that chat with agent_assign_task (only the fix delta). Each part runs on its role\'s card: preset picks one of its three (omitted = its plan step\'s preset, else base); the model is the one the card has now. Pass tasksJson (JSON array string of tasks) instead of tasks, or contractJson instead of contract, on clients that drop nested objects/arrays (e.g. Cursor with Gemini).',
+    description: 'Delegate the parts of your task to other roles (required per task: role, title, contract { goal, doneWhen: 1-12 criteria }; a contract\'s fields together at most ' + CONTRACT_TEXT_MAX + ' characters: put long context in a file and its path in context; at most ' + TASKS_MAX + ' tasks): each part starts a visible chat under yours, running the role you name (only roles your role may launch: agent_catalog). The child sees only its contract, never this conversation: write it self-contained. Several parts start at once (parallel): a parallel group of your approved plan goes in one call. It never gets more permissions than you, works in the folder you name (cwd: any existing one: the brain, any repository, worktree or slot; place: here by default, copy only to get an isolated worktree), and returns one result with agent_report that reaches you as a message. The depth limit is the user\'s. A Sentinel reviewing a child\'s work: reviewOf = that child\'s runId. One review chat per piece of work: once a Sentinel of yours reported on this task, a new Sentinel is refused; re-review the fix in that chat with agent_assign_task (only the fix delta). Each part runs on its role\'s card: preset picks one of its three (omitted = its plan step\'s preset, else base); the model is the one the card has now. Pass tasksJson (JSON array string of tasks) instead of tasks, or contractJson instead of contract, on clients that drop nested objects/arrays (e.g. Cursor with Gemini).',
     inputSchema: { type: 'object', additionalProperties: false, properties: {
       tasksJson: { type: 'string', description: 'JSON array string of tasks (same items as tasks). Prefer this on Cursor/Gemini or any client that drops nested objects/arrays.' },
       tasks: { type: 'array', minItems: 1, maxItems: TASKS_MAX, items: { type: 'object', required: ['role', 'title'], additionalProperties: false, properties: {
@@ -682,7 +688,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: (a, ctx) => JSON.stringify(taskEvents(a, callerOf(ctx.params))),
   }, {
     name: 'agent_report',
-    description: 'Your one result for the chat that started you (your parent, or the Orchestrator for a chat it opened): outcome (done | partial | blocked), summary (one or two sentences), output (the deliverable), doneWhen (every criterion of your contract, exactly as written, with met and evidence), optional questions, optional userAction (outcome partial or blocked because only the user can act: VPN, login/MFA, an Esegui command, a permission, a decision; never only in the text), optional remember (lines noted for your role skill). It reaches your parent at once; call it once, at the end; to correct a result already given, call it again with amends: true (at most 2 corrections). The app shows output in your chat as your answer: do not write it in the chat too.',
+    description: `Your one result for the chat that started you (your parent, or the Orchestrator for a chat it opened). Required: outcome (done | partial | blocked; done only when every criterion is met), summary (one or two sentences, at most ${SUMMARY_MAX} characters), output (the deliverable, short: at most ${REPORT_OUTPUT_MAX} characters, the detail in a file whose path you write here), doneWhen (every criterion of your contract, exactly as written, with met and evidence; [] when it has none). No other top-level field than those listed in the schema. Refused while your plan waits for the user's approval (plan_propose): end your turn instead. Optional questions (up to 8), optional userAction (outcome partial or blocked because only the user can act: VPN, login/MFA, an Esegui command, a permission, a decision; never only in the text), optional remember (lines noted for your role skill). It reaches your parent at once; call it once, at the end; to correct a result already given, call it again with amends: true (at most 2 corrections). The app shows output in your chat as your answer: do not write it in the chat too.`,
     inputSchema: reportSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     // verdict / verified only where the report check accepts them: an app-owned independent review (#183); an engine

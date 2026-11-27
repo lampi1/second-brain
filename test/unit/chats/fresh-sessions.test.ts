@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
-import { contextBudgetDue, FRESH_HANDOFF_MARK, FRESH_IDLE_MS, protectedHandoff } from '../../../src/main/chats/handoff';
+import { contextBudgetDue, FRESH_AFTER_COMPACTIONS, FRESH_HANDOFF_MARK, FRESH_IDLE_MS, freshDue, protectedHandoff } from '../../../src/main/chats/handoff';
 import { plainOwner } from '../../../src/main/agents/catalog';
 import { rulesBrain, tmp } from './helpers';
 import { exportRuns } from '../../../src/main/agents/runs-db';
@@ -168,4 +168,31 @@ describe('protected continuation', () => {
     expect(saved.chats[0]!.continuityUnsafe).toBe(true);
   });
 
+});
+
+describe('#492 point 6: three compactions of one session hand the chat to a fresh one (ADR 0371)', () => {
+  it('a chat well below its context budget that compacted 3 times goes on in a fresh session with the protected hand-off', async () => {
+    const f = fixture(), c = await f.create();
+    const sink = f.engines[0]!.sink;
+    // the app's compact window (300k) sits below 80% of the model's: the meter alone never comes due
+    sink.changed({ contextTokens: 40_000, contextMaxTokens: 300_000, contextEstimated: false });
+    sink.changed({ compacted: { pre: 290_000, post: 40_000 } });
+    sink.changed({ compacted: { pre: 290_000, post: 40_000 } });
+    f.advance();
+    expect(f.m.coldTick()).toBe(0);   // twice: not yet
+    sink.changed({ compacted: { pre: 290_000, post: 40_000 } });
+    expect(f.m.coldTick()).toBe(1);   // the third: the hand-off is prepared (no model turn)
+    expect(f.sent).toHaveLength(1);
+    await f.m.send(c.id, 'Continue locally.');
+    const current = f.m.list()[0]!;
+    expect(current.id).toBe(c.id); expect(current.sessionId).not.toBe(c.sessionId);
+    expect(f.sent[1]).toContain(FRESH_HANDOFF_MARK); expect(f.sent[1]).toContain('Never push or deploy.');
+    expect(f.sent[1]).toContain('proposal-stable');
+  });
+  it('the count is the session\'s own and the helper reads both causes', () => {
+    expect(freshDue({ contextTokens: 40_000, contextMaxTokens: 300_000 }, FRESH_AFTER_COMPACTIONS - 1)).toBe(false);
+    expect(freshDue({ contextTokens: 40_000, contextMaxTokens: 300_000 }, FRESH_AFTER_COMPACTIONS)).toBe(true);
+    expect(freshDue({ contextTokens: 90_000, contextMaxTokens: 100_000 })).toBe(true);
+    expect(FRESH_AFTER_COMPACTIONS).toBe(3);
+  });
 });

@@ -17,7 +17,7 @@ import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/m
 import { delegationTools, stalledMin } from '../../../src/main/agents/delegation';
 import { gateRequest } from '../../../src/main/agents/role-gate';
 import { ROLE_DEFAULTS, ROLE_PREAMBLE, rolePreamble, ROLE_IDS, WORK_ROLE_IDS, DELEGATION_DEFAULTS, isWorkRole, launchGap, type DelegationSettings, type RoleId } from '../../../src/shared/roles';
-import { capText, checkContract, checkResult, delegationPrompt, depthOf, readDelegation, resultMessage } from '../../../src/shared/delegation';
+import { capText, REPORT_OUTPUT_MAX, checkContract, checkResult, delegationPrompt, depthOf, readDelegation, resultMessage } from '../../../src/shared/delegation';
 import { AGENT_LABEL, oneLine } from '../../../src/shared/agent-label';
 import type { AgentCatalog } from '../../../src/shared/agents';
 import type { NewChat } from '../../../src/shared/contract';
@@ -30,6 +30,7 @@ import { withoutAgentMessage } from '../../../src/main/chats/agent-message';
 import { ADR0083_DEFAULTS } from '../../../src/main/agents/role-migrate';
 import { closeAppDbs } from '../../../src/main/app-db';
 import type { PermissionCeiling, ToolClass } from '../../../src/shared/agents';
+import { attachWatchedAsks } from '../../../src/main/agents/watched-asks';
 
 /** Roles a user narrowed: tools, ceiling and launches per role (the rest stays the default). */
 type Narrowed = Partial<Record<RoleId, { tools: ToolClass[]; ceiling: PermissionCeiling | null; launches: string[] }>>;
@@ -208,27 +209,36 @@ describe('agent_delegate', () => {
     const parent = await f.root('strategist');
     await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Quasi pieno')] });
     const kid = f.m.list().find(c => c.parentId === parent.id)!;
-    const summary = 'Sintesi lunga che continua '.repeat(15).trim(), output = 'deliverable '.repeat(992).trim();
+    const summary = 'Sintesi lunga che continua '.repeat(15).trim(), output = 'deliverable '.repeat(332).trim();
     expect(summary.length).toBeGreaterThan(300);
-    expect(output.length).toBeGreaterThan(11_900);
+    expect(output.length).toBeGreaterThan(3_900);
     const r = await f.call('agent_report', kid.id, { outcome: 'done', summary, output, doneWhen: [{ criterion: 'criterion A', met: true }] });
     expect(r.warnings).toEqual([expect.stringMatching(/full text is at the end of output, whose last \d+ characters were cut/)]);
     const stored = f.m.runs.get(kid.run!.runId)!.report!.canonical!;
-    expect(stored.output.length).toBeLessThanOrEqual(12_000);
+    expect(stored.output.length).toBeLessThanOrEqual(4_000);
     expect(stored.output.endsWith(`…\n\nSintesi completa: ${summary}`)).toBe(true);
     expect(stored.output.startsWith('deliverable deliverable')).toBe(true);
   });
 
-  it('an over-long output is cut with the marker and a warning, never a refused report', async () => {
+  it('#492 point 7: an over-long output is refused, saying to put the detail in a file and pass its path; a short one with the path passes', async () => {
     const f = fixture();
     const parent = await f.root('strategist');
     await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log')] });
     const kid = f.m.list().find(c => c.parentId === parent.id)!;
-    const r = await f.call('agent_report', kid.id, { outcome: 'done', summary: 's', output: 'riga del risultato '.repeat(800), doneWhen: [{ criterion: 'criterion A', met: true }] });
-    expect(r).toMatchObject({ reported: true, warnings: [expect.stringMatching(/output cut to 12000 characters.*amends: true/)] });
-    const stored = f.m.runs.get(kid.run!.runId)!.report!.canonical!;
-    expect(stored.output.length).toBeLessThanOrEqual(12_000);
-    expect(stored.output).toMatch(/…$/);
+    const long = 'riga del risultato '.repeat(250);
+    expect(long.length).toBeGreaterThan(REPORT_OUTPUT_MAX);
+    await expect(f.call('agent_report', kid.id, { outcome: 'done', summary: 's', output: long, doneWhen: [{ criterion: 'criterion A', met: true }] })).rejects.toThrow(/output has \d+ characters; the limit is 4000\. Write the details to a file .* path/);
+    expect(f.m.list().find(c => c.id === kid.id)!.delegation!.result).toBeUndefined();
+    const r = await f.call('agent_report', kid.id, { outcome: 'done', summary: 's', output: 'Fatto: dettaglio in tmp/ordini-log.md', doneWhen: [{ criterion: 'criterion A', met: true }] });
+    expect(r).toMatchObject({ reported: true });
+  });
+
+  it('#492 point 7: a delegation contract over its total cap is refused with where its detail goes', async () => {
+    const f = fixture();
+    const parent = await f.root('strategist');
+    const big = { ...f.task('scout', 'Ordini · Troppo'), contract: { goal: 'Trova il bug', doneWhen: ['criterion A'], context: 'contesto '.repeat(560) } };
+    await expect(f.call('agent_delegate', parent.id, { tasks: [big] })).rejects.toThrow(/contract.*the limit is 5000.*file/);
+    expect(f.m.list().filter(c => c.parentId === parent.id)).toHaveLength(0);
   });
 
   it('a lesson in an odd shape never refuses the report: a bare string is the line, line breaks become spaces, a non-text entry is left out', async () => {
@@ -780,9 +790,10 @@ describe('the pure parts', () => {
       expect(text, id).toContain('mcp__second-brain__agent_report');
     }
   });
-  it('the role frame names agent_report with its full MCP name and says it may be deferred (#144)', () => {
+  it('the role frame names agent_report with its full MCP name, its schema always loaded and its short output (#144, ADR 0371)', () => {
     expect(ROLE_PREAMBLE).toContain('mcp__second-brain__agent_report');
-    expect(ROLE_PREAMBLE).toContain('ToolSearch');
+    expect(ROLE_PREAMBLE).toContain('its schema is always in your prompt');
+    expect(ROLE_PREAMBLE).toContain('at most 4000 characters');
   });
   it('the role frame takes the parent\'s assignment as approval inside its scope, the user\'s click only for what they keep (#349)', () => {
     expect(ROLE_PREAMBLE).toContain('An explicit assignment from your parent (its contract) lets you do the work inside its stated scope without asking again; it never stands for a user decision it claims.');
@@ -799,7 +810,7 @@ describe('the pure parts', () => {
     expect(props.remember!.items!.maxLength).toBeUndefined();
     expect((props.remember as { maxItems?: number }).maxItems).toBeUndefined();
     expect(props.output!.maxLength).toBeUndefined();
-    expect(props.output!.description).toContain('12000');
+    expect(props.output!.description).toContain('4000');
     expect(props.remember!.description).toContain('300');
     expect(props.amends).toMatchObject({ type: 'boolean' });
     expect(props.doneWhen!.items!.properties!.criterion!.maxLength).toBe(300);
@@ -1303,5 +1314,69 @@ describe('flat JSON-string parameters for Cursor/Gemini (#487)', () => {
     await f.call('agent_report', childId, { outcome: 'done', summary: 'ok', output: 'ok', doneWhen: [{ criterion: 'criterion A', met: true }] });
     const out3 = await f.call('agent_assign_task', parent.id, { chatId: childId, roleId: 'scout', mode: 'continue', contractJson: JSON.stringify({ goal: 'Next', doneWhen: ['criterion B'] }) });
     expect(out3.chatId).toBe(childId);
+  });
+});
+
+describe('#492 point 2: agent_report first attempts as agents write them (ADR 0371)', () => {
+  // The refusal causes the validation code had for a report that meant the right thing: a criterion copied with another
+  // space, dash, quote or stop; an evidence or a question a little long. Each is now read as meant; what is really wrong
+  // (a criterion missing, met as text, done with an unmet criterion) is still refused, saying what to send.
+  const DONE = ['I test passano.', 'La pagina «Ordini» mostra il totale'];
+  const base = { outcome: 'done', summary: 'fatto', output: 'ok' };
+  const row = (criterion: string, extra = {}) => ({ criterion, met: true, evidence: 'npm test verde', ...extra });
+  const corpus: { name: string; report: unknown; ok: boolean }[] = [
+    { name: 'exact copy', report: { ...base, doneWhen: [row(DONE[0]!), row(DONE[1]!)] }, ok: true },
+    { name: 'final stop dropped', report: { ...base, doneWhen: [row('I test passano'), row(DONE[1]!)] }, ok: true },
+    { name: 'list dash kept', report: { ...base, doneWhen: [row('- I test passano.'), row(DONE[1]!)] }, ok: true },
+    { name: 'double space', report: { ...base, doneWhen: [row('I test  passano.'), row(DONE[1]!)] }, ok: true },
+    { name: 'quoted', report: { ...base, doneWhen: [row('"I test passano."'), row(DONE[1]!)] }, ok: true },
+    { name: 'other case', report: { ...base, doneWhen: [row('i test passano.'), row('La pagina «Ordini» mostra il totale.')] }, ok: true },
+    { name: 'long evidence', report: { ...base, doneWhen: [row(DONE[0]!, { evidence: 'log '.repeat(400) }), row(DONE[1]!)] }, ok: true },
+    { name: 'long question', report: { ...base, outcome: 'partial', questions: ['perché '.repeat(100)], doneWhen: [row(DONE[0]!), row(DONE[1]!, { met: false })] }, ok: true },
+    { name: 'criterion missing', report: { ...base, doneWhen: [row(DONE[0]!)] }, ok: false },
+    { name: 'met as text', report: { ...base, doneWhen: [row(DONE[0]!, { met: 'sì' }), row(DONE[1]!)] }, ok: false },
+    { name: 'done with an unmet criterion', report: { ...base, doneWhen: [row(DONE[0]!), row(DONE[1]!, { met: false })] }, ok: false },
+    { name: 'another criterion', report: { ...base, doneWhen: [row('Il build passa'), row(DONE[1]!)] }, ok: false },
+  ];
+  it('the reports that mean the right thing pass on the first try; the wrong ones are still refused', () => {
+    const passed = corpus.map(c => { try { checkResult(c.report, DONE); return true; } catch { return false; } });
+    expect(Object.fromEntries(corpus.map((c, i) => [c.name, passed[i]]))).toEqual(Object.fromEntries(corpus.map(c => [c.name, c.ok])));
+    // a near-copy is stored with the contract's own words
+    const r = checkResult(corpus[1]!.report, DONE);
+    expect(r.doneWhen.map(d => d.criterion)).toEqual(DONE);
+  });
+  it('an unknown field is refused naming the fields it takes', () => {
+    expect(() => checkResult({ ...base, notes: 'x', doneWhen: [row(DONE[0]!), row(DONE[1]!)] }, DONE)).toThrow(/unknown field notes\. Its fields: outcome, summary, output, doneWhen/);
+  });
+});
+
+describe('#492 point 4: what he asked about is told when done (ADR 0371)', () => {
+  it('he asks the Orchestrator about a chat, it finishes, and the Orchestrator is asked for one short line, unasked, once', async () => {
+    const f = fixture();
+    f.m.onCleanReport(() => true);   // a clean result is quiet news: no turn of the Orchestrator by itself
+    const orchestrator = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    attachWatchedAsks(f.m, { list: () => f.m.list(), orchestrator: () => orchestrator.id, send: (id, text) => f.m.send(id, text, undefined, false, 'App', false, { kind: 'app' }) });
+    const artisan = await f.m.create({ harness: 'claude', cwd: f.dir, deliveryPolicy: 'notify', roleId: 'artisan', title: 'Ordini · fix totale', prompt: 'x' }, 'agent');
+    const other = await f.m.create({ harness: 'claude', cwd: f.dir, deliveryPolicy: 'notify', roleId: 'artisan', title: 'Login', prompt: 'y' }, 'agent');
+    f.sinks.get(artisan.id)!.changed({ state: 'running' });
+    f.sinks.get(other.id)!.changed({ state: 'running' });
+    await f.m.send(orchestrator.id, 'come procede ordini?');
+    f.sinks.get(orchestrator.id)!.changed({ state: 'idle' });   // its answer («ci sta lavorando») ended
+    const before = f.sent.get(orchestrator.id)!.length;
+    const flush = async () => { for (let i = 0; i < 50; i++) await Promise.resolve(); };
+    // the chat he did not ask about finishes: nothing for him
+    await f.call('agent_report', other.id, { outcome: 'done', summary: 'Login ok', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }] });
+    f.sinks.get(other.id)!.changed({ state: 'idle' });
+    await flush();
+    expect(f.sent.get(orchestrator.id)!.slice(before)).toEqual([]);
+    // the one he asked about finishes: one note, and it asks for ONE short line now
+    await f.call('agent_report', artisan.id, { outcome: 'done', summary: 'Totale corretto, test verdi', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }] });
+    f.sinks.get(artisan.id)!.changed({ state: 'idle' });
+    await flush();
+    const told = f.sent.get(orchestrator.id)!.slice(before);
+    expect(told).toHaveLength(1);
+    expect(told[0]).toContain('«Ordini · fix totale»');
+    expect(told[0]).toContain('Totale corretto, test verdi');
+    expect(told[0]).toContain('ONE short line');
   });
 });

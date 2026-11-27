@@ -2,7 +2,7 @@
 // native question, with nothing written to the chat since, recent or still in the turn it started (the owner,
 // 2026-11-01: «ti devo sempre scrivere in chat le parole esatte»); a no, free text, app news and agents' mail never.
 import { describe, expect, it } from 'vitest';
-import { saysYes, userAsked, type AskProof } from '../../src/main/appctl/user-words';
+import { ownItem, saysYes, userAsked, type AskProof } from '../../src/main/appctl/user-words';
 import type { PendingRequest } from '../../src/shared/contract';
 
 const MIN = 60_000, now = 1_000 * MIN;
@@ -57,5 +57,23 @@ describe('userAsked: the user\'s own words or «Sì», the latest thing said to 
     expect(ask({ answered: now - 2 * MIN, lastUserItem: now - MIN })).toBe(false);
     // only app items, no typed message nor «Sì»
     expect(ask({ lastUserItem: now - MIN })).toBe(false);
+    expect(ask({ lastUserItem: now - MIN, lastOwnItem: 0 })).toBe(false);
+    // past the first 10 minutes, mail after his ask still voids the turn-long extension
+    expect(ask({ typed: now - 30 * MIN, lastOwnItem: now - 30 * MIN, lastUserItem: now - MIN })).toBe(false);
+  });
+});
+
+describe('#492 point 1: his own direct message is the ask for a role card (ADR 0371)', () => {
+  it('a typed message that landed 9 s after Enter (the engine was starting), then agents\' mail, still counts', () => {
+    // red before ADR 0371: the item had to land within 5 s of Enter and be the very latest 'user' item
+    expect(ask({ typed: now - 3 * MIN, lastOwnItem: now - 3 * MIN + 9_000, lastUserItem: now - MIN })).toBe(true);
+    expect(ask({ answered: now - 2 * MIN, lastOwnItem: now - 5 * MIN, lastUserItem: now - MIN })).toBe(true);
+  });
+  it('his later message is a new ask: an older typed time never matches it, nor a phone message', () => {
+    expect(ask({ typed: now - 8 * MIN, lastOwnItem: now - 2 * MIN })).toBe(false);
+    expect(ownItem({ kind: 'user', text: 'resettami le card', via: 'phone' })).toBe(false);
+    expect(ownItem({ kind: 'user', text: '[Messaggio di un agente] Davide ha detto: cambia il tema', from: 'Scout' })).toBe(false);
+    expect(ownItem({ kind: 'user', text: '[evento app] qualcosa' })).toBe(false);
+    expect(ownItem({ kind: 'user', text: 'resettami le card di conseguenza' })).toBe(true);
   });
 });

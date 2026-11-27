@@ -671,6 +671,8 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     if (r.s.run?.delivery) { r.s.run.delivery.displayedAt ??= Date.now(); r.s.run.delivery.deliveredAt ??= r.s.run.delivery.displayedAt; this.runSave(); }
     // Display is unconditional and token-free. Event preferences only control the optional quiet digest.
     if (!held.local && held.quiet) this.cleanReportListeners.some(fn => { try { return fn(held.note); } catch { return false; } });
+    // what the user asked about is told in one line (agents/watched-asks.ts, ADR 0371 point 4)
+    if (!held.local) for (const fn of this.resultReleasedListeners) this.hook('onResultReleased', () => fn({ ...held.note, quiet: held.quiet }));
     delete r.heldResult; delete r.userWaits;
     this.persist(true); this.updated(orchestrator);
     if (!r.s.parentId && r.s.run?.delivery?.policy === 'synthesize') this.resumeRootSyntheses();

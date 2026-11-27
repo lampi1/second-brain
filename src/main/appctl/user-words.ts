@@ -3,7 +3,8 @@
 // app_config takes that a configuration change is the user's ask (ADR 0149). A chat item of kind 'user' is not enough:
 // the app's news, mail and other main-side sends land as 'user' items too; an answer given by the app («Modalità
 // notte»), by the Orchestrator for a work chat or by a parent for its child never passes here. In memory only (a
-// restart forgets it: the user asks again). Used by main/ipc-handlers/chats.ts (note) and appctl/tools.ts (configAsk).
+// restart forgets it: the user asks again). ADR 0371: a delivery that waited for the engine still counts, and in the
+// first minutes app news or an agent's mail landing after his ask does not void it. Used by main/ipc-handlers/chats.ts (note) and appctl/tools.ts (configAsk).
 import { isNativeQuestion } from '../../shared/yes-no';
 import type { Answer, PendingRequest } from '../../shared/contract';
 
@@ -56,20 +57,39 @@ export interface AskProof {
   typed?: number; answered?: number;
   /** the time of the chat's latest 'user' item (theirs, or app news, an agent's mail, a woken turn) */
   lastUserItem?: number;
+  /** the time of the chat's latest 'user' item the user wrote (no agent's sender, not app news: ownItem); absent = the
+   *  caller cannot tell them apart and lastUserItem is read, as before ADR 0371 */
+  lastOwnItem?: number;
   /** the end of the chat's last turn (ChatSummary.lastResult.at) */
   lastResult?: number;
   now: number; freshMs: number; turnMs: number;
 }
-/** Is this the user's ask? Their own typed message (the latest 'user' item) or their yes after the latest 'user' item,
- *  so nothing else has spoken to the chat since; and recent (freshMs), or still the same turn it started or answered
- *  (no turn ended since, at most turnMs: a long piece of work they asked for keeps its ask). */
+/** How long the user's typed message may take to land as its item: a delivery waits for the engine to start (a cold
+ *  or released engine: ~10 s on Antigravity), a recall check or the mail ahead of it (ADR 0371 point 1: his message
+ *  landed 9 s after Enter and app_config refused it 8 times). */
+export const TYPED_DELIVERY_MS = 2 * 60_000;
+/** A 'user' item the user wrote: not an agent's mail (from), not the app's news or resume ("[…", unless a mode prefix). */
+export function ownItem(i: { kind: string; text?: string; from?: string; via?: string }, isMode: (t: string) => boolean = () => false): boolean {
+  return i.kind === 'user' && !i.from && i.via !== 'phone' && (!(i.text ?? '').startsWith('[') || isMode(i.text ?? ''));
+}
+/** Is this the user's ask? Their own typed message or their yes. In the first freshMs (10 minutes) it holds whatever
+ *  app news or an agent's mail landed after it: the Orchestrator works on his behalf (the owner, 2026-11-27, ADR 0371).
+ *  Past that, only while nothing else spoke to the chat since and it is still the same turn it started or answered (no
+ *  turn ended since, at most turnMs: a long piece of work they asked for keeps its ask). */
 export function userAsked(p: AskProof): boolean {
-  const proofs: number[] = [];
-  // the item the send added carries (about) the time it was typed; any later 'user' item came from elsewhere
-  if (p.typed !== undefined && p.lastUserItem !== undefined && Math.abs(p.lastUserItem - p.typed) <= 5_000) proofs.push(p.typed);
-  if (p.answered !== undefined && (p.lastUserItem === undefined || p.lastUserItem <= p.answered)) proofs.push(p.answered);
-  if (!proofs.length) return false;
-  const at = Math.max(...proofs), age = p.now - at;
-  if (age < 0) return false;
-  return age <= p.freshMs || (age <= p.turnMs && (p.lastResult === undefined || p.lastResult < at));
+  const known = p.lastOwnItem !== undefined;
+  const own = known ? p.lastOwnItem : p.lastUserItem;
+  const proofs: { at: number; quiet: boolean }[] = [];
+  // the item the send added carries (about) the time it was typed, or a little later when its delivery waited
+  if (p.typed !== undefined && own !== undefined && own >= p.typed - 5_000 && own - p.typed <= (known ? TYPED_DELIVERY_MS : 5_000)) {
+    proofs.push({ at: p.typed, quiet: p.lastUserItem === undefined || p.lastUserItem <= own });
+  }
+  if (p.answered !== undefined && (own === undefined || own <= p.answered)) proofs.push({ at: p.answered, quiet: p.lastUserItem === undefined || p.lastUserItem <= p.answered });
+  return proofs.some(({ at, quiet }) => {
+    const age = p.now - at;
+    if (age < 0) return false;
+    // without telling his items from the rest, anything after the proof voids it (the rule before ADR 0371)
+    if (age <= p.freshMs && (known || quiet)) return true;
+    return quiet && age <= p.turnMs && (p.lastResult === undefined || p.lastResult < at);
+  });
 }

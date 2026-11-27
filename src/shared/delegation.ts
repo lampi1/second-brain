@@ -137,6 +137,13 @@ export interface DelegationLimitHit { kind: 'depth' | 'parallel'; limit: number;
 export const shownLimit = (h: DelegationLimitHit | undefined): DelegationLimitHit | undefined => h?.kind === 'depth' ? h : undefined;
 
 export const GOAL_MAX = 2000, OUTPUT_MAX = 2000, CONTEXT_MAX = 6000, CRITERION_MAX = 300, CRITERIA_MAX = 12, SUMMARY_MAX = 300, RESULT_OUTPUT_MAX = 12000, EVIDENCE_MAX = 1000;
+/** ADR 0371 point 7: what one agent writes to another stays short; the detail goes in a file, its path in the text.
+ *  agent_report's output (RESULT_OUTPUT_MAX stays the stored ceiling of older results) and the whole text of one
+ *  delegation contract (agent_delegate, agent_assign_task: every field summed). Over it the call is refused, saying so. */
+export const REPORT_OUTPUT_MAX = 4000, CONTRACT_TEXT_MAX = 5000;
+/** The refusal of a text over its cap: where the detail goes instead. */
+export const tooLong = (what: string, has: number, max: number): string =>
+  `${what} has ${has} characters; the limit is ${max}. Write the details to a file (in your folder, or the brain's tmp/) and put a short text here with that file's path: the reader opens it only when needed. Send the same call again with the shorter text; nothing else changes.`;
 /** corrections (agent_report amends: true) one assignment may send after its first report; the next one is refused */
 export const MAX_CORRECTIONS = 2;
 /** Text cut to max characters, at a word boundary when one is near, ending with the visible marker «…». */
@@ -159,8 +166,12 @@ const object = (v: unknown, what: string): Record<string, unknown> => {
 };
 const only = (o: Record<string, unknown>, keys: readonly string[], what: string): void => {
   const extra = Object.keys(o).find(k => !keys.includes(k));
-  if (extra) throw new Error(`${what}: unknown field ${extra}.`);
+  // the fields it takes, so the next call is right the first time (ADR 0371 point 2)
+  if (extra) throw new Error(`${what}: unknown field ${extra}. Its fields: ${keys.join(', ')}.`);
 };
+/** A criterion as an agent copies it: spaces, a list dash, quotes and the final stop aside (ADR 0371 point 2: a
+ *  copy that differs only in these was a refused report). */
+const sameCriterion = (v: string): string => v.trim().replace(/^[-*\u2022]\s+/, '').replace(/^[\u00ab"\u201c']|[\u00bb"\u201d']$/g, '').replace(/\s+/g, ' ').replace(/[.;:]$/, '').trim().toLowerCase();
 
 /** A contract as the tool received it, checked strictly; `role` gives the default output. */
 export function checkContract(v: unknown, role: WorkRoleId): DelegationContract {
@@ -174,7 +185,7 @@ export function checkContract(v: unknown, role: WorkRoleId): DelegationContract 
   if (tools === null) throw new Error(`contract.tools: classes among ${TOOL_CLASSES.join(', ')}.`);
   const skills = o.skills === undefined ? undefined : Array.isArray(o.skills) && o.skills.length <= 16 && o.skills.every(s => typeof s === 'string' && SKILL.test(s)) ? [...new Set(o.skills as string[])] : null;
   if (skills === null) throw new Error('contract.skills: up to 16 skill names (SKILL.md names).');
-  return {
+  const c: DelegationContract = {
     goal: text(o.goal, GOAL_MAX, 'contract.goal'),
     output: o.output === undefined ? ROLE_DEFAULTS[role].output : text(o.output, OUTPUT_MAX, 'contract.output'),
     doneWhen: doneWhen.map((c, i) => text(c, CRITERION_MAX, `contract.doneWhen[${i}]`)),
@@ -182,6 +193,16 @@ export function checkContract(v: unknown, role: WorkRoleId): DelegationContract 
     ...(o.context !== undefined ? { context: text(o.context, CONTEXT_MAX, 'contract.context') } : {}),
     ...contractNotes(o, 'contract'),
   };
+  // the role's own default output is not the parent's text
+  const size = contractSize({ ...c, ...(o.output === undefined ? { output: '' } : {}) });
+  if (size > CONTRACT_TEXT_MAX) throw new Error(`contract: ${tooLong('the contract (all its fields together)', size, CONTRACT_TEXT_MAX)}`);
+  return c;
+}
+
+/** The characters of a contract's own text: every field the child reads. */
+export function contractSize(c: Partial<DelegationContract>): number {
+  const parts: unknown[] = [c.goal, c.output, c.context, c.why, c.alreadyDecided, c.inScope, c.outOfScope, c.constraints, c.askIf, ...(c.doneWhen ?? []), ...(c.steps ?? [])];
+  return parts.reduce<number>((n, v) => n + (typeof v === 'string' ? v.length : 0), 0);
 }
 
 /** The optional hybrid fields of a contract (#355), checked; shared by agent_delegate, agent_assign_task and the
@@ -264,15 +285,21 @@ export function checkResult(v: unknown, doneWhen: readonly string[]): Delegation
     const c = object(x, `doneWhen[${i}]`);
     only(c, ['criterion', 'met', 'evidence'], `doneWhen[${i}]`);
     if (typeof c.met !== 'boolean') throw new Error(`doneWhen[${i}].met: true or false.`);
-    return { criterion: text(c.criterion, CRITERION_MAX, `doneWhen[${i}].criterion`), met: c.met, ...(c.evidence !== undefined ? { evidence: text(c.evidence, EVIDENCE_MAX, `doneWhen[${i}].evidence`) } : {}) };
+    // the contract's own words for a criterion copied with another space, dash, quote or stop (ADR 0371 point 2)
+    const said = text(c.criterion, Number.MAX_SAFE_INTEGER, `doneWhen[${i}].criterion`);
+    const criterion = doneWhen.find(d => d === said) ?? doneWhen.find(d => sameCriterion(d) === sameCriterion(said)) ?? said;
+    if (criterion.length > CRITERION_MAX) throw new Error(`doneWhen[${i}].criterion: at most ${CRITERION_MAX} characters (this one has ${criterion.length}): copy the contract's criterion exactly.`);
+    // a long evidence is cut with the marker, never refused: output carries the rest
+    const evidence = c.evidence === undefined ? undefined : capText(text(c.evidence, Number.MAX_SAFE_INTEGER, `doneWhen[${i}].evidence`), EVIDENCE_MAX);
+    return { criterion, met: c.met, ...(evidence !== undefined ? { evidence } : {}) };
   });
   // a goal the user changed may leave criteria of the old contract without an answer
   const missing = changed ? [] : doneWhen.filter(c => !answers.some(a => a.criterion === c));
   // the whole array to copy, not only what is missing: a second guess is one call, never two (#170)
   if (missing.length) throw new Error(`doneWhen: answer every criterion of your contract, exactly as written (missing: ${missing.map(m => `«${m}»`).join(', ')}). doneWhen must be: [${doneWhen.map(c => `{"criterion":${JSON.stringify(c)},"met":<true|false>,"evidence":"…"}`).join(', ')}]`);
   if (o.outcome === 'done' && answers.some(a => !a.met)) throw new Error('outcome "done" needs every criterion met: say "partial" or "blocked" instead.');
-  const questions = o.questions === undefined ? undefined : Array.isArray(o.questions) && o.questions.length <= 8 ? o.questions.map((q, i) => text(q, 500, `questions[${i}]`)) : null;
-  if (questions === null) throw new Error('questions: up to 8.');
+  const questions = o.questions === undefined ? undefined : Array.isArray(o.questions) && o.questions.length <= 8 ? o.questions.map((q, i) => capText(text(q, Number.MAX_SAFE_INTEGER, `questions[${i}]`), 500)) : null;
+  if (questions === null) throw new Error('questions: a list of up to 8 short texts.');
   const userAction = o.userAction === undefined ? undefined : userActionOf(o.userAction);
   if (userAction && o.outcome === 'done') throw new Error('userAction goes only with outcome "partial" or "blocked": a done run needs nothing from the user.');
   // a summary over SUMMARY_MAX is cut with the marker, never refused (agents/delegation.ts keeps the full text in output)

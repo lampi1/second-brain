@@ -465,6 +465,8 @@ export class ChatManager extends ManagerRemote implements ChatService {
       if (r.s.isOrchestrator) { delete r.intakePanelId; delete r.intakeKey; }
       // his last message typed on the PC (ADR 0274); a phone message or the app's own note leaves none to quote
       if (r.s.isOrchestrator) r.userSaid = !appText && typeof text === 'string' ? { text, at: Date.now() } : undefined;
+      // what he asks about is told when done (agents/watched-asks.ts, ADR 0371 point 4)
+      if (r.s.isOrchestrator && !appText && typeof text === 'string') for (const fn of this.ownerAskListeners) this.hook('onOwnerAsked', () => fn(text));
       this.userWrote(chatId, text);
     }
     // «basta domande» typed in the chat counts like the answer (ADR 0209): plan_propose stops asking for more; never

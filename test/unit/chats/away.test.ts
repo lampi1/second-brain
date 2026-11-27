@@ -22,8 +22,8 @@ afterEach(async () => {
 const tmp = (): string => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-away-')); roots.push(d); return d; };
 
 interface World { sent: string[]; answers: { id: string; answer: Answer }[]; away: { on: boolean }; log: Omit<AwayEntry, 'at'>[]; sink?: SessionSink }
-function manager(w: World, brainRoot: string = rulesBrain().root): ChatManager {
-  const m = new ChatManager({ userData: tmp(), emitter: { emit() {} }, coldEveryMs: 0, away: () => w.away.on, onAway: e => w.log.push(e), ...(brainRoot ? { brainRoot: () => brainRoot } : {}),
+function manager(w: World, brainRoot: string = rulesBrain().root, extra: { permitClock?: () => number } = {}): ChatManager {
+  const m = new ChatManager({ userData: tmp(), emitter: { emit() {} }, coldEveryMs: 0, away: () => w.away.on, onAway: e => w.log.push(e), ...(brainRoot ? { brainRoot: () => brainRoot } : {}), ...extra,
     sessionFactory: (_h, o: { sessionId?: string | null }, s: SessionSink) => {
       w.sink = s;
       return {
@@ -115,5 +115,35 @@ describe('a typing permission parked at night (ADR 0237)', () => {
     expect(JSON.stringify(w.log)).not.toContain(SECRET);
     expect(w.log.length).toBeGreaterThan(0);
     expect(JSON.stringify(m.items(chat.id))).not.toContain(SECRET);
+  });
+});
+
+describe('#492 point 9: night mode never parks what the user\'s rules let through (ADR 0294, ADR 0371)', () => {
+  it('a command his rules read slowly in the evening passes at night as by day; what a rule holds is still parked', async () => {
+    // his rules on commands, four patterns; none holds «npm test»
+    const brain = tmp();
+    fs.writeFileSync(path.join(brain, 'permissions.json'), JSON.stringify({ version: 1, rules: [
+      { id: 'db', action: 'ask-user', why: 'database', tools: ['command'], match: ['DROP TABLE', 'psql', 'sqlcmd', 'mongosh'] },
+    ] }));
+    // a loaded machine: 100 ms between two looks of the clock, so the day's 250 ms budget ends before the last pattern
+    let t = 0;
+    const clock = (): number => (t += 100);
+    const bash = (id: string, command: string): Omit<PendingRequest, 'chatId'> => ({ id, type: 'permission', tool: 'Bash', title: 'Bash', detail: command, input: { command }, at: Date.now() });
+
+    const day = world(false), dm = manager(day, brain, { permitClock: clock });
+    const dc = await dm.create({ harness: 'anthropic', cwd: tmp() });
+    day.sink!.pending(bash('d1', 'npm test'));
+    expect(dm.pending().filter(p => p.chatId === dc.id).map(p => p.id)).toEqual(['d1']);   // by day: asked (the card)
+
+    const night = world(true), nm = manager(night, brain, { permitClock: clock });
+    await nm.create({ harness: 'anthropic', cwd: tmp() });
+    night.sink!.pending(bash('n1', 'npm test'));
+    night.sink!.pending(bash('n2', 'psql -c "select 1"'));
+    expect(night.answers).toEqual([
+      { id: 'n1', answer: { kind: 'permission', allow: true } },
+      { id: 'n2', answer: { kind: 'permission', allow: false, message: AWAY_PARKED } },
+    ]);
+    expect(night.log.map(e => e.kind)).toEqual(['parked']);
+    expect(AWAY_PARKED).not.toContain('never grants');
   });
 });

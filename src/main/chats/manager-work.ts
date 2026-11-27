@@ -393,6 +393,10 @@ export abstract class ManagerWork extends ManagerLifecycle {
   /** A root chat's clean result (done, every criterion met, no question): a listener that returns true took it as quiet
    *  news for the Orchestrator (orchestrator-wake.ts cleanReport); else it goes as a message, as any other result. */
   onCleanReport(fn: (n: CleanReportNote) => boolean): void { this.cleanReportListeners.push(fn); }
+  /** agents/watched-asks.ts (ADR 0371 point 4): told of every message the user himself writes to the Orchestrator */
+  onOwnerAsked(fn: (text: string) => void): void { this.ownerAskListeners.push(fn); }
+  /** agents/watched-asks.ts: told of every root result released to the Orchestrator (quiet = clean news, no turn) */
+  onResultReleased(fn: (n: CleanReportNote & { quiet: boolean }) => void): void { this.resultReleasedListeners.push(fn); }
   /** chats/phone-port.ts: told of every turn's end (fromPhone = a phone message started or joined it); returns the unsubscribe */
   onTurnEnded(fn: (info: TurnEndInfo) => void): () => void {
     this.turnEndListeners.push(fn);

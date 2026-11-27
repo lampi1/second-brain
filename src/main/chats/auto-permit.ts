@@ -36,6 +36,8 @@ export interface PermitContext {
   rulesFile?: string;
   /** the clock of the rules' time budget (permit-policy.ts policyRead); the tests' own, else the real one */
   now?: () => number;
+  /** that budget (permit-policy.ts NIGHT_BUDGET_MS while the user is away); absent = the day's */
+  budgetMs?: number;
 }
 export type PermitVerdict =
   | { kind: 'allow' }
@@ -245,7 +247,7 @@ export function autoPermit(req: PermitRequest, ctx: PermitContext): PermitVerdic
   const covered = policyCovers(policy, req.tool, COMMAND_TOOLS, req.title);
   if (covered && command && (typeof raw !== 'string' || !raw.trim())) return ask('a command with no line, under a brain rule');
   if (covered && !req.whole && cut(req.input)) return ask('a request cut short, under a brain rule');
-  const { rule, unread } = policyRead(policy, req.tool, req.input, COMMAND_TOOLS, req.title, ctx.now);
+  const { rule, unread } = policyRead(policy, req.tool, req.input, COMMAND_TOOLS, req.title, ctx.now, ctx.budgetMs);
   if (rule) {
     if (rule.action === 'ask-user') return { kind: 'ask', reason: `brain rule: ${rule.id}`, rule };
     return refusal(rule, typeof raw === 'string' ? raw.trim() : req.title?.trim() || req.tool, command);

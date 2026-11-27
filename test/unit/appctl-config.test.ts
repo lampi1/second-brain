@@ -144,9 +144,32 @@ describe('app_config on the app endpoints', () => {
     items = [{ kind: 'user', at: Date.now(), text: 'metti il tema chiaro' }];
     await set();
     expect(store.get().theme).toBe('light');
-    // app news after the user's message: that turn is not the user's
+    // app news after the user's message, in the first minutes: the Orchestrator still works on his ask (ADR 0371)
     items = [...items, { kind: 'user', at: Date.now() + 60_000, text: '[evento app] qualcosa' }];
-    await expect(cfg.run({ action: 'set', area: 'setting', key: 'theme', value: 'dark' })).rejects.toThrow(/solo quando l'utente/);
+    await cfg.run({ action: 'set', area: 'setting', key: 'theme', value: 'dark' });
+    expect(store.get().theme).toBe('dark');
+  });
+
+  it('#492 point 1: his role-card ask that landed late (engine starting) and was followed by mail is applied, not held', async () => {
+    const { appControlTools } = await import('../../src/main/appctl/tools');
+    const { noteUserTyped } = await import('../../src/main/appctl/user-words');
+    const store = new ConfigStore(tmpDir(), {});
+    const typed = Date.now() - 3 * 60_000;
+    noteUserTyped('o492', typed);
+    // Enter at `typed`; the item landed 9 s later (engine start); then a child's report and app news arrived
+    const items = [{ kind: 'user', at: typed + 9_000, text: 'resettami le card di conseguenza' },
+      { kind: 'user', at: Date.now() - 60_000, text: 'Fatto: motori aggiornati', from: 'Artisan' },
+      { kind: 'user', at: Date.now() - 30_000, text: '[evento app] una chat ha finito' }];
+    const profile = role();
+    const save = vi.fn((draft: object, id: string) => ({ ...profile, ...draft, id, version: 4, activeVersion: 4 }) as AgentProfile);
+    const held = { hold: vi.fn(() => ({ id: 'h1' }) as never), applied: vi.fn() };
+    const chats = { list: () => [{ id: 'o492', isOrchestrator: true, harness: 'claude', lastResult: { at: Date.now() - 20_000 } }], items: () => items } as never;
+    const brain = { ...brainOf(store), settingsSchema: () => store.schema() } as never;
+    const agents = { list: () => ({ profiles: [profile], models: [] }) as never, save, history: () => [], restore: vi.fn() };
+    const cfg = appControlTools({ chats, browser: { list: () => [] } as never, brain, window: () => null, emitUi: () => {}, version: '0', config: { agents, held } }, 'o492').find(t => t.name === 'app_config')!;
+    await cfg.run({ action: 'set', area: 'agent', agentId: 'scout', key: 'instructions', value: 'Leggi e verifica.' });
+    expect(held.hold).not.toHaveBeenCalled();
+    expect(save).toHaveBeenCalled();
   });
 
   it('the user\'s «Sì» to the Orchestrator\'s own question unlocks a change; a child\'s «Sì» or a later agent message never', async () => {
@@ -169,9 +192,10 @@ describe('app_config on the app endpoints', () => {
     noteUserAnswered('o2');
     await set('light');
     expect(store.get().theme).toBe('light');
-    // an agent's message after the «Sì»: that turn is no longer the user's
+    // app news after the «Sì», in its first minutes: still his (ADR 0371)
     items = [...items, { kind: 'user', at: Date.now() + 1_000, text: '[evento app] qualcosa' }];
-    await expect(set('dark')).rejects.toThrow(/solo quando l'utente/);
+    await set('dark');
+    expect(store.get().theme).toBe('dark');
   });
 
   it('the typed ask holds for the whole turn it started, past the 10 minutes', async () => {

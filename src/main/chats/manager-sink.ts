@@ -462,6 +462,9 @@ export abstract class ManagerSink extends ManagerLadder {
     }
     if (p.compacted) {
       this.counters.compaction(r.s.id, p.compacted.pre, p.compacted.post);
+      // the session's own count: at FRESH_AFTER_COMPACTIONS the chat goes on in a fresh one (manager-continuity.ts)
+      const sid = r.s.sessionId ?? '';
+      r.compactions = { session: sid, n: r.compactions?.session === sid ? r.compactions.n + 1 : 1 };
       r.after = { kind: 'compaction', left: AFTER_CALLS };
       // the context starts again from its summary: an Orchestrator's next day compaction counts from now
       r.ctxSince = Date.now(); save = true;

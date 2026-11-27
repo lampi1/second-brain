@@ -51,3 +51,9 @@ export function askUpdateNow(stable: boolean): void {
     },
   });
 }
+
+/** «Aggiorna ora» while «Aggiorna» waits for the chats at work (ADR 0371 point 8): at once, interrupting them (the
+ *  message beside the button says how many). */
+export function updateNowAnyway(): void {
+  void window.sb.invoke('source:updateNow', { now: true }).then(st => source.set(st), e => { toast(`${t('update.failed')}: ${errText(e)}`, 'err'); checkSource(); });
+}

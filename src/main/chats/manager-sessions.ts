@@ -376,9 +376,11 @@ export abstract class ManagerSessions extends ManagerPersistence {
   private mcpConfig(chatId: string): string | null {
     const url = this.opts.mcpUrlFor?.(chatId) ?? null;
     const app = this.appMcpFor(this.chats.get(chatId));
-    const servers: Record<string, { type: 'http'; url: string }> = {};
-    if (url) servers['second-brain'] = { type: 'http', url };
-    if (app) servers['second-brain-app'] = { type: 'http', url: app };
+    const servers: Record<string, { type: 'http'; url: string; alwaysLoad?: true }> = {};
+    // the app's own servers are never deferred behind ToolSearch (ADR 0371 point 2): every role sees their schemas from
+    // its first turn, also after a compaction; the tools carry _meta anthropic/alwaysLoad as well (older Claude Code)
+    if (url) servers['second-brain'] = { type: 'http', url, alwaysLoad: true };
+    if (app) servers['second-brain-app'] = { type: 'http', url: app, alwaysLoad: true };
     for (const ext of this.opts.extMcp?.(chatId).servers ?? []) servers[ext.name] ??= { type: 'http', url: ext.url };
     return Object.keys(servers).length ? JSON.stringify({ mcpServers: servers }) : null;
   }

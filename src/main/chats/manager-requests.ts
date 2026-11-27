@@ -17,7 +17,7 @@ import { allowsClass, COMMAND_TOOLS, commandsReadOnly, readOnlyCommand, toolClas
 import { readOnlyTools } from '../agents/read-tools';
 import { gateRequest, runtimePluginName } from '../agents/role-gate';
 import { autoPermit } from './auto-permit';
-import { loadPolicy, policyCovers, policyRead, POLICY_FILE } from './permit-policy';
+import { loadPolicy, NIGHT_BUDGET_MS, policyCovers, policyRead, POLICY_FILE } from './permit-policy';
 import { AWAY_PARKED, AWAY_PLAN_NOTE, recommendedAnswers } from '../../shared/away';
 import { askingPlan, PLAN_APPROVED, type IntakeSource, type PlanIntake } from '../../shared/strategy';
 import type { SubmissionReceipt, Rec } from './manager-types';
@@ -619,7 +619,11 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     const readScripts = this.permissionReadScripts(r, req);
     if (COMMAND_TOOLS.includes(req.tool) && commandsReadOnly(r.policy) && !readOnlyCommand(command, readScripts, shellOfTool(req.tool))) return toUser('the chat may only run commands that read');
     const brainRoot = this.opts.brainRoot?.() ?? null;
-    const v = autoPermit(whole ? { ...req, whole } : req, { cwd: r.s.cwd, ceiling: r.policy?.ceiling ?? null, readScripts, policy, ...(brainRoot ? { rulesFile: path.join(brainRoot, POLICY_FILE) } : {}) });
+    // at night a request the rules did not read in time would be parked, not asked: they get the night's longer budget
+    // (ADR 0371 point 9), so what his rules let through passes as by day
+    const night = !!this.opts.away?.();
+    const v = autoPermit(whole ? { ...req, whole } : req, { cwd: r.s.cwd, ceiling: r.policy?.ceiling ?? null, readScripts, policy, ...(brainRoot ? { rulesFile: path.join(brainRoot, POLICY_FILE) } : {}),
+      ...(this.opts.permitClock ? { now: this.opts.permitClock } : {}), ...(night ? { budgetMs: NIGHT_BUDGET_MS } : {}) });
     if (v.kind === 'ask') {
       // held by the user's rule: no «always» (a saved rule would let the next ones through unasked); the phone may answer
       if (v.rule) { req.noAlways = true; delete req.alwaysRules; req.heldBy = { rule: v.rule.id, why: v.rule.why }; }

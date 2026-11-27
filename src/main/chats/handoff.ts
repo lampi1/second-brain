@@ -126,6 +126,14 @@ export function continuePrompt(from: { title: string; harness: string; cwd: stri
 /** An app-built continuation preserves protected inputs verbatim; exceeding its budget cancels the switch. */
 export const FRESH_HANDOFF_MARK = '[second-brain · contesto protetto v1]';
 export const FRESH_IDLE_MS = 3 * 60_000;
+/** After this many compactions of one session its chat goes on in a fresh one with the protected hand-off, plan
+ *  included, whatever the meter says (ADR 0371 point 6: 32 compactions in 20 hours, one chat 6 times; the app's
+ *  compact window sits below 80% of the model's, so the context budget alone never came due). */
+export const FRESH_AFTER_COMPACTIONS = 3;
+/** A fresh session is due: the context budget, or a session compacted FRESH_AFTER_COMPACTIONS times. */
+export function freshDue(chat: Pick<ChatSummary, 'contextTokens' | 'contextMaxTokens' | 'contextEstimated'>, compactions = 0): boolean {
+  return contextBudgetDue(chat) || compactions >= FRESH_AFTER_COMPACTIONS;
+}
 export function contextBudgetDue(chat: Pick<ChatSummary, 'contextTokens' | 'contextMaxTokens' | 'contextEstimated'>): boolean {
   const used = chat.contextTokens, max = chat.contextMaxTokens;
   return !chat.contextEstimated && typeof used === 'number' && Number.isFinite(used) && used >= 50_000

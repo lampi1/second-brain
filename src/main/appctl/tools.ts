@@ -79,7 +79,7 @@ import { CONFIG_ASK_MIN, CONFIG_TURN_MIN, configTool, type ConfigDeps } from './
 import { PLACE_SCHEMA, placeOf } from '../agents/delegation';
 import { folderProblem, sameFolder } from '../agents/worktrees';
 import type { TaskAssignmentOptions } from '../../shared/delegation';
-import { answeredText, lastAnswered, lastTyped, userAsked } from './user-words';
+import { answeredText, lastAnswered, lastTyped, ownItem, userAsked } from './user-words';
 import { recordingTools, type RecordingsRead } from './recordings';
 import { newsTools, type NewsControl } from './news';
 import { childOutputTool } from './child-output';
@@ -556,7 +556,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     },
     {
       name: 'app_create_chat',
-      description: 'Delegate: create a work chat that runs one role (roleId, from agent_catalog) and start it with a self-contained prompt. Fast path first (task_estimate): a short question needs no chat; a change that is not small and already clear is ONE strategist chat; a small clear change, read-only work or a message is ONE chat that works alone. The answer carries the estimate from similar past tasks; it shows under you in the sidebar tree and reports back to you. Never an Orchestrator: only the user picks it. Title "Area · cosa". The role\'s card decides engine, model and effort: `preset` picks one of its three (omitted = base); `userModel` only when the user named one of those presets\' models for THIS task (how to choose: app_guide topic «model choice»). `skills` = the brain skills the chat may use (their SKILL.md names; without a skill the role cannot use it; `warnings` in the answer names a skill that needs tools the role lacks). Its permissions are its role\'s (tools, ceiling) within the user\'s defaults, not yours: you plan, the chat does the work. reviewOf / reworkOf = the run it reviews or redoes; goal = the run\'s goal. One review chat per piece of work (#387): when a review chat already reported on that work the call is refused and names it; re-review the fix there with app_assign_task (only the fix delta). freshReview true only when the user asked for a fresh reviewer or the review covers a part no review chat covers. The chat starts in the brain folder unless cwd is given (pick the repo or worktree from the task). The prompt is labelled as written by an agent.',
+      description: 'Required: title (at most ' + CHAT_TITLE_MAX + ' characters), roleId, and contract { goal, doneWhen: 1-12 criteria of at most 300 characters } as an object (JSON text also works: double quotes, line breaks written \\n), or prompt (at most ' + CHAT_PROMPT_MAX + ' characters) with optional doneWhen, never both. Delegate: create a work chat that runs one role (roleId, from agent_catalog) and start it with a self-contained prompt. Fast path first (task_estimate): a short question needs no chat; a change that is not small and already clear is ONE strategist chat; a small clear change, read-only work or a message is ONE chat that works alone. The answer carries the estimate from similar past tasks; it shows under you in the sidebar tree and reports back to you. Never an Orchestrator: only the user picks it. Title "Area · cosa". The role\'s card decides engine, model and effort: `preset` picks one of its three (omitted = base); `userModel` only when the user named one of those presets\' models for THIS task (how to choose: app_guide topic «model choice»). `skills` = the brain skills the chat may use (their SKILL.md names; without a skill the role cannot use it; `warnings` in the answer names a skill that needs tools the role lacks). Its permissions are its role\'s (tools, ceiling) within the user\'s defaults, not yours: you plan, the chat does the work. reviewOf / reworkOf = the run it reviews or redoes; goal = the run\'s goal. One review chat per piece of work (#387): when a review chat already reported on that work the call is refused and names it; re-review the fix there with app_assign_task (only the fix delta). freshReview true only when the user asked for a fresh reviewer or the review covers a part no review chat covers. The chat starts in the brain folder unless cwd is given (pick the repo or worktree from the task). The prompt is labelled as written by an agent.',
       inputSchema: obj({
         title: { ...str('"Area · cosa", e.g. "Ordini · Fix totale"'), maxLength: CHAT_TITLE_MAX }, contract: contractField, prompt: { ...str(`fallback when there is no contract: what the chat must do, self-contained; at most ${CHAT_PROMPT_MAX} characters`), maxLength: CHAT_PROMPT_MAX },
         roleId: { type: 'string', enum: ROLE_IDS.filter(r => r !== 'orchestrator'), description: 'the role the chat runs (agent_catalog)' },
@@ -897,9 +897,11 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   function configAsked(orchestratorId: string): boolean {
     const typed = lastTyped(orchestratorId), answered = lastAnswered(orchestratorId);
     if (typed === undefined && answered === undefined) return false;
-    const last = d.chats.items(orchestratorId).filter(i => i.kind === 'user').at(-1);
+    const said = d.chats.items(orchestratorId).filter(i => i.kind === 'user');
+    const last = said.at(-1), own = said.filter(i => ownItem(i, t => splitMode(t).mode !== null)).at(-1);
     const chat = d.chats.list().find(c => c.id === orchestratorId);
-    return userAsked({ typed, answered, lastUserItem: last?.at, lastResult: chat?.lastResult?.at, now: Date.now(), freshMs: CONFIG_ASK_MIN * 60_000, turnMs: CONFIG_TURN_MIN * 60_000 });
+    // his own latest item, told apart from the app's news and agents' mail (ADR 0371): 0 = none of his yet
+    return userAsked({ typed, answered, lastUserItem: last?.at, lastOwnItem: own?.at ?? 0, lastResult: chat?.lastResult?.at, now: Date.now(), freshMs: CONFIG_ASK_MIN * 60_000, turnMs: CONFIG_TURN_MIN * 60_000 });
   }
 
   /** Fast mode (ADR 0296): the Orchestrator's latest message is a «[fast]» one, so this turn answers alone: no chat is

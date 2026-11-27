@@ -70,13 +70,14 @@ export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appC
   const code = { repo: () => source.repo(), inRepo: (dir: string) => source.inRepo(dir) };
   // /mcp/app: test agents (acts for the Orchestrator); /mcp/app/o/<id>/<token>: the Orchestrator's own, so the tools know
   // the caller. Only an open Orchestrator with its own token answers (the token lives only here and in its config).
-  mcp.mount('/mcp/app', { name: 'app', instructions, tools: appControlTools({ ...deps, code }).map(as) });
+  // alwaysLoad (ADR 0371): the app's own tools are never deferred behind ToolSearch, for every role and the Orchestrator
+  mcp.mount('/mcp/app', { name: 'app', instructions, alwaysLoad: true, tools: appControlTools({ ...deps, code }).map(as) });
   if (orchestratorTokens) {
     const full = (chatId?: string) => appControlTools({ ...deps, code: { ...code, pull: () => source.pull() } }, chatId).map(as);
     const required = new Set(ORCHESTRATOR_APP_REQUIRED);
     const compactLogged = new Set<string>();
     mcp.mount('/mcp/app/o/:chatId/:token', {
-      name: 'app', instructions, authorize: orchestratorEndpointAuth(orchestratorTokens, () => deps.chats.list()), who: p => p.chatId,
+      name: 'app', instructions, alwaysLoad: true, authorize: orchestratorEndpointAuth(orchestratorTokens, () => deps.chats.list()), who: p => p.chatId,
       tools: c => {
         const id = c.params.chatId ?? '';
         const list = full(id);
@@ -225,7 +226,8 @@ export function attachArtifacts(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: P
 /** "Aggiorna" from GitHub (ADR 0075). Stable = started by the launcher (SB_RELEASE); SB_UPDATE_STABLE=<release id> makes
  *  a test or demo run behave as that stable release (with SB_RELEASES_ROOT and SB_UPDATE_REPO pointing at temp
  *  folders), and then a restart is only recorded (__sbUpdate.restarts), never real. */
-export function createAppSource(ctx: Pick<Ctx, 'emitter' | 'userData'>, appRepo: () => string | null): AppSourceService {
+/** busyChats: how many chats run a turn, for «Aggiorna» to wait on them (ADR 0371 point 8). */
+export function createAppSource(ctx: Pick<Ctx, 'emitter' | 'userData'>, appRepo: () => string | null, busyChats?: () => number): AppSourceService {
   const fake = process.env.SB_UPDATE_STABLE;
   const running = fake ?? releaseId() ?? 'dev';
   const releasesBase = process.env.SB_RELEASES_ROOT ?? sharedDir();
@@ -238,6 +240,7 @@ export function createAppSource(ctx: Pick<Ctx, 'emitter' | 'userData'>, appRepo:
     userData: ctx.userData, releasesBase, running, stable: !!fake || !!releaseId(),
     appRepo: () => appRepo() ?? (fake ? devRepo : null), devRepo, node: findNode(),
     emit: st => ctx.emitter.emit('source:state', st),
+    ...(busyChats ? { busyChats } : {}),
     offline: !!(process.env.SB_TEST || process.env.SB_DEMO) && !process.env.SB_UPDATE_REPO,
     relaunch: () => {
       if (process.env.SB_TEST || fake) { recorder.restarts++; log.info('update', 'relaunch asked (test run: not relaunching)'); return; }
