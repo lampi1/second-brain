@@ -32,7 +32,7 @@ import { admitNow, reqKey, toggleMaximize } from '../actions';
 import { useHandoffTabs } from '../store/handoffs';
 import { StripMeta } from './StripMeta';
 import { StripFace } from './StripFace';
-import { GrindInfo, PlanDots } from './GrindStrip';
+import { GrindInfo, PlanDots, SubCount } from './GrindStrip';
 import { BrowserTile } from './BrowserTile';
 import { FullTools } from './FullTools';
 import { selectedHere } from '../lib/strip-click';
@@ -94,9 +94,10 @@ const VIEWS: readonly AgentView[] = ['chat', 'split', 'browser'];
 /** The focus request each chat already handled (ChatTile's focus effect). */
 const handledFocus = new Map<string, number>();
 /** How a closed chat sits in the Grindhouse (ADR 0366): a Strategist's or a plain chat's lead strip, a delegated chat's
- *  indented strip under it, or one still line in «Finite oggi». */
+ *  indented strip under it, or one still line in «Finite oggi». `still`: its little person stands in its rest pose (only
+ *  the chats at work move, AgentStrips.tsx). */
 export type StripRow = 'lead' | 'kid' | 'done';
-export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded, row = 'lead' }: { chatId: string; index?: number; focus?: boolean; embedded?: boolean; row?: StripRow }) {
+export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded, row = 'lead', still }: { chatId: string; index?: number; focus?: boolean; embedded?: boolean; row?: StripRow; still?: boolean }) {
   const chat = useApp(s => s.chats[chatId]);
   const reqs = useApp(s => pendingOf(s.pending, chatId), sameList);
   // its one status (#359): what main says it waits for, from real state, in place of the state
@@ -177,7 +178,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded,
   // a click on the strip itself (not on one of its controls, nor inside a portalled menu) opens or closes it
   const onStripClick = (e: React.MouseEvent<HTMLElement>) => {
     const el = e.target as Element;
-    if (!strip || !e.currentTarget.contains(el) || el.closest('button, a, input, textarea, select, summary, label, [role="menu"], [role="separator"], [contenteditable="true"], .chat-topic, .sp-card, .aw-browser')) return;
+    if (!strip || !e.currentTarget.contains(el) || el.closest('button, a, input, textarea, select, summary, label, [role="menu"], [role="separator"], [contenteditable="true"], .chat-topic, .sp-card, .aw-browser, .gs-info')) return;
     if (selectedHere(window.getSelection(), e.currentTarget, downSelection.current)) return; // selecting text is not a click
     if (!expanded) setChatExpanded(chatId, true);
     else if (el.closest('.tile-head')) setChatExpanded(chatId, false);
@@ -248,7 +249,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded,
       aria-label={auditText('auditExpression.ChatTile.text20', { v0: chat.title, v1: st.label })} data-testid={`tile-chat-${chatId}`} data-chat-id={chatId} data-sb-id={`chat-${chatId}`} data-chat-index={index} data-state={chat.state}
       onClick={onStripClick} onFocus={() => setFocused(key)} onPointerDown={() => { downSelection.current = window.getSelection()?.toString() ?? ''; setFocused(key); }}>
       {bench ? <header className="tile-head gs-row">
-        <StripFace chatId={chatId} avatar={chat.agent?.avatar} name={name} size={face} height={face} tone={first ? 'wait' : st.tone} still={row === 'done'}
+        <StripFace chatId={chatId} avatar={chat.agent?.avatar} name={name} size={face} height={face} tone={first ? 'wait' : st.tone} still={!!still || row === 'done'}
           waitsUser={!!first || userWait || st.tone === 'wait'} error={st.tone === 'err'} busy={busyShown} done={st.tone === 'done'} pending={st.tone === 'run'} />
         <div className="gs-txt">
           <h3 className="th-title" title={(chat.agent?.purpose&&rolePurpose(chat.agent.id,chat.agent.purpose))||chat.title}>
@@ -258,6 +259,9 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded,
           <span className="gs-now">{topic && <span className="gs-role" data-testid={`chat-topic-${chatId}`}>{name}</span>}<span className="chat-strip-line">{busyShown?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.plan?.phase==='proposed'?t('tree.plan.ready'):chat.lastText.slice(0,140)}</span></span>
         </div>
         {row !== 'done' && <PlanDots id={chatId} plan={chat.plan} />}
+        {/* the engine's own sub-agents as a count (their details in the ⓘ), a permission mode other than the default */}
+        <SubCount id={chatId} agents={chat.agentChildren} />
+        {perm && <span className="th-badge gs-perm" data-testid={`strip-perm-${chatId}`}>{perm}</span>}
         {longContext && row !== 'done' && <ContextMeter chat={chat} warn={warn} />}
         <span className="gs-state">{stateEl}</span>
         <span className="gs-meta"><StripMeta chat={chat} workMs={work} figures /></span>

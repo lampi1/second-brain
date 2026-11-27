@@ -57,11 +57,11 @@ describe('chat tile input', () => {
 });
 
 describe('chat strip head (ADR 0366)', () => {
-  const strip = (row?: 'lead' | 'kid' | 'done') => {
+  const strip = (row?: 'lead' | 'kid' | 'done', over: Partial<ChatSummary> = {}, still?: boolean) => {
     const chat = { id: 'w', title: 'AI-DLC · U5 verifica', cwd: '', state: 'idle', harness: 'claude', lastText: '',
-      agent: { id: 'artisan', name: 'Artisan' } } as unknown as ChatSummary;
+      agent: { id: 'artisan', name: 'Artisan' }, ...over } as unknown as ChatSummary;
     vi.mocked(useApp).mockImplementation(selector => selector({ chats: { w: chat }, pending: [], tabs: [] } as unknown as Parameters<typeof selector>[0]));
-    return renderToStaticMarkup(createElement(ChatTile, { chatId: 'w', row }));
+    return renderToStaticMarkup(createElement(ChatTile, { chatId: 'w', row, still }));
   };
   it('a closed chat is one row: the title, «Role · what it does now», the state word, the ⓘ and the actions', () => {
     const html = strip();
@@ -80,5 +80,18 @@ describe('chat strip head (ADR 0366)', () => {
     expect(done).toMatch(/<svg[^>]* height="32"/);
     expect(done).toContain('class="agent-sprite is-still"');
     expect(strip('lead')).not.toContain('is-still');
+  });
+  it('stands still when told (waiting, stalled, idle): only a working strip moves', () => {
+    expect(strip('lead', {}, true)).toContain('class="agent-sprite is-still"');
+    expect(strip('kid', {}, true)).toContain('class="agent-sprite is-still"');
+    expect(strip('kid', {}, false)).not.toContain('is-still');
+  });
+  it('wears the permission badge only off the default mode, and the sub-agents as «↳ n»', () => {
+    expect(strip('lead', { permissionMode: 'default' })).not.toContain('strip-perm-w');
+    expect(strip('lead')).not.toContain('strip-perm-w');
+    expect(strip('lead', { permissionMode: 'bypassPermissions' })).toMatch(/data-testid="strip-perm-w">[^<]+</);
+    const kids = { active: 1, observedActive: 1, children: [{ key: 'a', kind: 'agent', state: 'running', task: 'x', startedAt: 1, observedAt: 1 }] };
+    expect(strip('lead', { agentChildren: kids } as unknown as Partial<ChatSummary>)).toContain('data-testid="strip-subs-w"');
+    expect(strip('lead')).not.toContain('strip-subs-w');
   });
 });

@@ -1,5 +1,6 @@
 // The parts of a Grindhouse strip (src/renderer/components/GrindStrip.tsx, ADR 0366): the ⓘ's lines (model and effort,
-// the estimate, the skills, the project) and its card, the plan's dots with «n/m»; and the strip's figures
+// the estimate, the skills, the project, the sub-agents) and its card with its open/shut states, the sub-agents' count,
+// the plan's dots with «n/m»; and the strip's figures
 // (StripMeta.tsx `figures`: time · cost only, the model and the estimate left to the ⓘ, amber once past the estimate).
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -10,7 +11,7 @@ const estimate = vi.hoisted(() => ({ value: null as null | { timeMs: number | nu
 vi.mock('../../src/renderer/lib/run-estimates', async orig => ({ ...(await orig<object>()), useRunEstimates: () => (estimate.value ? { runs: { r1: { estimate: estimate.value } } } : null) }));
 import type { ChatSummary } from '../../src/shared/contract';
 import type { StrategyPlan } from '../../src/shared/strategy';
-import { GrindInfoView, infoLines, PlanDots } from '../../src/renderer/components/GrindStrip';
+import { GrindInfoView, infoLines, infoNext, PlanDots, SubCount, subLines } from '../../src/renderer/components/GrindStrip';
 import { StripMeta } from '../../src/renderer/components/StripMeta';
 import { setLang } from '../../src/renderer/i18n';
 
@@ -35,10 +36,50 @@ describe('infoLines', () => {
   });
 });
 
+const kids = (...states: string[]) => ({ active: states.length, observedActive: states.length,
+  children: states.map((state, i) => ({ key: `k${i}`, kind: 'agent', agentType: i === 0 ? 'Explore' : 'reviewer', state, task: `compito ${i}`, startedAt: i + 1, observedAt: i + 1 })) }) as unknown as ChatSummary['agentChildren'];
+
+describe('the engine\'s sub-agents', () => {
+  it('one ⓘ line each still on the job, with its type and task; the ended ones left out', () => {
+    expect(subLines(kids('running', 'completed'))).toEqual(['↳ sottoagente · Explore · sola lettura: compito 0']);
+    expect(subLines(undefined)).toEqual([]);
+    expect(infoLines(chat({ cwd: '', agentChildren: kids('running', 'running') }), null).lines).toEqual(['↳ sottoagente · Explore · sola lettura: compito 0', '↳ sottoagente · reviewer: compito 1']);
+  });
+  it('the row shows only a small «↳ n», nothing without one', () => {
+    const html = renderToStaticMarkup(createElement(SubCount, { id: 'c1', agents: kids('running', 'running') }));
+    expect(html).toContain('data-testid="strip-subs-c1"');
+    expect(html).toContain('>↳ 2</span>');
+    expect(html).toContain('aria-label="2 sottoagenti al lavoro"');
+    expect(renderToStaticMarkup(createElement(SubCount, { id: 'c1', agents: kids('stopped') }))).toBe('');
+  });
+});
+
+describe('the ⓘ states (infoNext)', () => {
+  const closed = { open: false, shut: false };
+  it('a click, Enter or Space pins it open and closes it again', () => {
+    for (const ev of ['click', 'Enter', ' '] as const) {
+      expect(infoNext(closed, ev)).toEqual({ open: true, shut: false });
+      expect(infoNext({ open: true, shut: false }, ev)).toEqual({ open: false, shut: false });
+    }
+  });
+  it('Esc closes it even under the pointer; a second Esc goes on to the page', () => {
+    expect(infoNext({ open: true, shut: false }, 'Escape')).toEqual({ open: false, shut: true });
+    expect(infoNext(closed, 'Escape')).toEqual({ open: false, shut: true });
+    expect(infoNext({ open: false, shut: true }, 'Escape')).toBeNull();
+  });
+  it('leaving the focus resets it, leaving the pointer lifts only the Esc', () => {
+    expect(infoNext({ open: true, shut: true }, 'blur')).toEqual(closed);
+    expect(infoNext({ open: true, shut: true }, 'leave')).toEqual({ open: true, shut: false });
+    expect(infoNext(closed, 'a')).toBeNull(); // other keys are the strip's
+  });
+});
+
 describe('GrindInfoView', () => {
   it('is a tab stop whose card holds the model in bold and the lines; its label says them all', () => {
     const html = renderToStaticMarkup(createElement(GrindInfoView, { id: 'c1', model: 'Opus 5.5 · high', lines: ['stima ~1 h', 'skill: x'] }));
     expect(html).toContain('tabindex="0"');
+    expect(html).toContain('role="button"');
+    expect(html).toContain('aria-expanded="false"');
     expect(html).toContain('data-testid="strip-info-c1"');
     expect(html).toContain('<b data-testid="strip-model-c1">Opus 5.5 · high</b><span>stima ~1 h</span><span>skill: x</span>');
     expect(html).toContain('aria-label="Dettagli: modello, stima, skill. Opus 5.5 · high. stima ~1 h. skill: x"');

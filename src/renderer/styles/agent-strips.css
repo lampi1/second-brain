@@ -240,11 +240,12 @@
   --torch-lit:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='54'%3E%3Cpath d='M12 7c3 4 6 8 6 13 0 5-3 9-6 9s-6-4-6-9c0-3 2-5 3-7 0 3 1 4 2 4 0-4 0-7 1-10z' fill='%23ffb347'/%3E%3Cpath d='M12 15c2 3 3 5 3 8s-1.4 5-3 5-3-2-3-5c0-2 1.5-4 3-8z' fill='%23ffe08a'/%3E%3Cpath d='M9 40h6l-1 4h-4z' fill='%23463a2e'/%3E%3Cpath d='M8 30h8l-1.6 10h-4.8z' fill='%236b4a2b'/%3E%3Cpath d='M7.5 30h9' stroke='%232b2219' stroke-width='1.6'/%3E%3Cpath d='M12 44v8M8 52h8' stroke='%23463a2e' stroke-width='2'/%3E%3C/svg%3E");
   --torch-out:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='54'%3E%3Cpath d='M9.5 30c0-2.4 5-2.4 5 0z' fill='%232e241c'/%3E%3Cpath d='M9 40h6l-1 4h-4z' fill='%23463a2e'/%3E%3Cpath d='M8 30h8l-1.6 10h-4.8z' fill='%236b4a2b'/%3E%3Cpath d='M7.5 30h9' stroke='%232b2219' stroke-width='1.6'/%3E%3Cpath d='M12 44v8M8 52h8' stroke='%23463a2e' stroke-width='2'/%3E%3C/svg%3E");
 }
-.agent-strips.grind { display:flex; flex-direction:column; gap:16px; padding:2px 0 16px; }
-.grind-sec { display:flex; flex-direction:column; gap:8px; min-width:0; }
+.agent-strips.grind { display:flex; flex-direction:column; gap:8px; padding:2px 0 16px; }
+/* one flat list (a team that changes section moves, it is not mounted again): a head opens each section */
 .grind-sec-h { display:flex; align-items:baseline; gap:8px; margin:0 2px; font:600 11px var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--text-3); }
+.grind-sec-h:not(:first-child) { margin-top:8px; }
 .grind-sec-h > small { font-size:11px; font-weight:500; letter-spacing:0; font-variant-numeric:tabular-nums; }
-.grind-sec.is-wait > .grind-sec-h { color:var(--amber); }
+.grind-sec-h.is-wait { color:var(--amber); }
 .grind-team { min-width:0; border:1px solid var(--border); border-radius:var(--r-l); background:var(--surface); }
 .grind-team > .tree-origin { margin:6px 10px 0; }
 .grind-team .agent-pane.strip-pane { margin:0; border-bottom:0; }
@@ -284,7 +285,10 @@
 .gs-tip { display:none; position:absolute; right:-6px; top:calc(100% + 6px); z-index:30; width:max-content; max-width:280px; padding:8px 10px; border:1px solid var(--border-3); border-radius:var(--r-m);
   background:var(--surface-3); color:var(--text-2); font:12px/1.5 var(--font); text-align:left; white-space:normal; box-shadow:var(--shadow-pop); flex-direction:column; cursor:default; }
 .gs-tip > b { color:var(--text); font-weight:600; }
-.gs-info:hover > .gs-tip, .gs-info:focus > .gs-tip { display:flex; }
+.gs-info:is(:hover, :focus-visible, .is-open):not(.is-shut) > .gs-tip { display:flex; }
+.gs-info.is-open { color:var(--text); }
+.gs-subs { flex:none; font:11.5px var(--mono); color:var(--text-3); white-space:nowrap; }
+.gs-perm { flex:none; }
 .gs-row > .chat-header-actions { position:absolute; right:34px; top:50%; transform:translateY(-50%); z-index:2; min-width:0; margin:0; padding:1px; gap:1px; flex-wrap:nowrap;
   border:1px solid var(--border-3); border-radius:var(--r-m); background:var(--surface-3); opacity:0; pointer-events:none; transition:opacity var(--dur-fast) var(--ease); }
 .chat-tile.is-strip:hover > .gs-row > .chat-header-actions, .chat-tile.is-strip:focus-within > .gs-row > .chat-header-actions, .gs-row > .chat-header-actions:has([aria-expanded="true"]) { opacity:1; pointer-events:auto; }
@@ -312,8 +316,17 @@
 .grind-kid .gs-txt > .th-title { font-size:13px; font-weight:500; }
 .grind-kid .chat-tile.is-strip { border-radius:var(--r-m); }
 /* «Finite oggi»: one still line each */
-.grind-sec.is-done .chat-tile.is-strip > .gs-row { min-height:40px; }
-.grind-sec.is-done .grind-team { background:transparent; }
+.grind-team.in-done .chat-tile.is-strip > .gs-row { min-height:40px; }
+.grind-team.in-done { background:transparent; }
+/* a finished team's helpers, folded under «N aiutanti» */
+.grind-fold { all:unset; display:inline-flex; margin:0 0 6px 52px; padding:2px 6px; border-radius:var(--r-s); font-size:11.5px; color:var(--text-3); cursor:pointer; }
+.grind-fold::before { content:"▸"; margin-right:6px; }
+.grind-fold[aria-expanded="true"]::before { content:"▾"; }
+.grind-fold:hover { color:var(--text); background:var(--surface-2); }
+.grind-fold:focus-visible { box-shadow:0 0 0 2px var(--focus); }
+.grind-kids-wrap[hidden] { display:none; }
+/* a hand-off tab waiting for the user, under the strip that owns it */
+.grind-team .agent-pane-wrap.grind-tab { margin:4px 12px 8px 30px; }
 /* a browser of its own: a row after the sections */
 .grind-row { min-width:0; }
 @container (max-width: 600px) { .gs-meta { display:none; } .gs-plan > small { display:none; } }

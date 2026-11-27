@@ -4,7 +4,7 @@
 // hold that keeps a unit at work through a short stop.
 import { describe, expect, it } from 'vitest';
 import { chatTree } from '../../src/renderer/lib/chat-tree';
-import { grindSections, holdStatuses, kidCount, kidStatus, rootStatus, type GrindKid, type GrindStatus } from '../../src/renderer/lib/grind-groups';
+import { grindSections, holdStatuses, ids, kidCount, kidStatus, rootStatus, visualOrder, type GrindKid, type GrindStatus } from '../../src/renderer/lib/grind-groups';
 
 type Row = { cwd: string; parentId: string | null; closedAt: number | null; delegation?: undefined };
 const row = (parentId: string | null = null): Row => ({ cwd: 'C:/p', parentId, closedAt: null });
@@ -49,17 +49,52 @@ describe('grindSections', () => {
 });
 
 describe('statuses', () => {
-  it('a root chat: waiting or failed → wait, ended → done, anything else → work', () => {
-    expect(rootStatus('wait')).toBe('wait');
-    expect(rootStatus('err')).toBe('wait');
-    expect(rootStatus('done')).toBe('done');
-    for (const t of ['run', 'off', 'idle', 'orchestrator'] as const) expect(rootStatus(t)).toBe('work');
+  const chat = (p: Record<string, unknown> = {}) => ({ state: 'idle', pending: 0, queued: null, closedAt: null, ...p }) as never;
+  it('a root chat: waiting or failed → wait; a turn that really runs → work', () => {
+    expect(rootStatus(chat({ state: 'waiting' }))).toBe('wait');
+    expect(rootStatus(chat({ pending: 1 }))).toBe('wait');
+    expect(rootStatus(chat({ state: 'error' }))).toBe('wait');
+    expect(rootStatus(chat({ state: 'running' }))).toBe('work');
+    expect(rootStatus(chat({ state: 'starting' }))).toBe('work');
+    expect(rootStatus(chat({ state: 'idle', queued: { kind: 'turn', position: 1 } }))).toBe('work');
+    expect(rootStatus(chat({ state: 'idle', agentChildren: { active: 1, observedActive: 1, children: [{ key: 'a', kind: 'agent', state: 'running', task: 'x', startedAt: 1, observedAt: 1 }] } }))).toBe('work');
   });
-  it('a delegated chat: a question or an error → wait, a result or an archive → done, the rest → work', () => {
+  it('a root chat idle, ended, or restored «closed» after a restart with no closedAt → done, never «Al lavoro»', () => {
+    expect(rootStatus(chat({ state: 'idle' }))).toBe('done');
+    expect(rootStatus(chat({ state: 'closed' }))).toBe('done');
+    expect(rootStatus(chat({ state: 'closed', closedAt: 5 }))).toBe('done');
+    expect(rootStatus(chat({ state: 'running', turnClosing: true }))).toBe('done');
+  });
+  it('a delegated chat: a question or an error → wait; starting, running, queued, held by an agent → work', () => {
     expect(kidStatus('wait')).toBe('wait');
     expect(kidStatus('err')).toBe('wait');
-    for (const s of ['done', 'partial', 'blocked', 'noreport', 'closed'] as const) expect(kidStatus(s)).toBe('done');
-    for (const s of ['run', 'start', 'queued', 'heldParent', 'heldOrchestrator', 'stall', 'refused'] as const) expect(kidStatus(s)).toBe('work');
+    for (const s of ['run', 'start', 'queued', 'heldParent', 'heldOrchestrator'] as const) expect(kidStatus(s)).toBe('work');
+  });
+  it('a delegated chat with a result, archived, «fermo» or refused → done', () => {
+    for (const s of ['done', 'partial', 'blocked', 'noreport', 'closed', 'stall', 'refused'] as const) expect(kidStatus(s)).toBe('done');
+  });
+});
+
+describe('«Finite oggi» keeps today only', () => {
+  const nodes = () => tree({ old: row(), s: row(), k: row('s'), w: row() });
+  it('drops a finished unit whose chats all stopped before the day began; keeps one with any chat stopped today', () => {
+    const ended: Record<string, number> = { old: 50, s: 50, k: 150, w: 10 };
+    const secs = grindSections(nodes(), of({ old: 'done', s: 'done', k: 'done', w: 'work' }), id => ended[id] ?? 0, 100);
+    expect(secs.map(x => [x.id, x.units.map(u => u.lead)])).toEqual([['work', ['w']], ['done', ['s']]]);
+  });
+  it('never drops a unit that waits or works, however old', () => {
+    const secs = grindSections(nodes(), of({ old: 'wait', s: 'done', k: 'work', w: 'done' }), () => 0, 100);
+    expect(secs.map(x => [x.id, x.units.map(u => u.lead)])).toEqual([['wait', ['old']], ['work', ['s']]]);
+  });
+});
+
+describe('visualOrder', () => {
+  it('lists each lead then its kids depth first, the kids of a folded finished unit left out', () => {
+    const nodes = tree({ a: row(), ak: row('a'), d: row(), dk: row('d'), dkk: row('dk') });
+    const secs = grindSections(nodes, of({ a: 'work', ak: 'work', d: 'done', dk: 'done', dkk: 'done' }));
+    expect(visualOrder(secs, new Set())).toEqual(['a', 'ak', 'd']);
+    expect(visualOrder(secs, new Set(['d']))).toEqual(['a', 'ak', 'd', 'dk', 'dkk']);
+    expect(ids(secs[1]!.units[0]!.kids)).toEqual(['dk', 'dkk']);
   });
 });
 
