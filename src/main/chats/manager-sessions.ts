@@ -377,6 +377,8 @@ export abstract class ManagerSessions extends ManagerPersistence {
     const url = this.opts.mcpUrlFor?.(chatId) ?? null;
     const app = this.appMcpFor(this.chats.get(chatId));
     const servers: Record<string, { type: 'http'; url: string }> = {};
+    // no server-wide alwaysLoad: only each chat's required tools carry _meta anthropic/alwaysLoad (ADR 0371 point 2,
+    // browser/service.ts and wiring-shared.ts); the rest stay behind ToolSearch, as the minimal harness wants
     if (url) servers['second-brain'] = { type: 'http', url };
     if (app) servers['second-brain-app'] = { type: 'http', url: app };
     for (const ext of this.opts.extMcp?.(chatId).servers ?? []) servers[ext.name] ??= { type: 'http', url: ext.url };

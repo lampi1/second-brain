@@ -74,7 +74,7 @@ import { AgentChildrenReporter } from './agent-children';
 import type { ChildObservation } from '../../shared/agents';
 import { recordWire } from './wire-record';
 import { isLadderAnswer } from '../../shared/question-ladder';
-import { asYesNo, bareLabel, BRIEF_GRACE_MS, BRIEF_REFUSAL, mappedYesNo, NOT_RAN_NOTE, twoOptionQuestion, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoOf, yesNoShape } from '../../shared/yes-no';
+import { asYesNo, bareLabel, BRIEF_GRACE_MS, BRIEF_REFUSAL, mappedYesNo, NOT_RAN_NOTE, twoOptionQuestion, YESNO_RETRIES, yesNoGateOn, yesNoOf, yesNoRefusal, yesNoShape } from '../../shared/yes-no';
 
 export interface AcpOptions extends SessionOptions {
   /** send a question that is not yes/no back to the agent (shared/yes-no.ts, ADR 0135); default: yesNoGateOn(env) */
@@ -1563,7 +1563,7 @@ export class AcpSession implements HarnessSession {
       if (gate && (!yesNo || noBrief) && (questions.length > 1 || this.yesNoRefused < YESNO_RETRIES)) {
         this.yesNoRefused++;
         log.info('chats', briefMissing ? 'question sent back: no brief' : 'question sent back: not yes/no', { chat: this.opts.chatId, data: { engine: this.engine, attempt: this.yesNoRefused } });
-        this.respond(id, { outcome: { outcome: 'skipped', reason: briefMissing ? BRIEF_REFUSAL : YESNO_REFUSAL } });
+        this.respond(id, { outcome: { outcome: 'skipped', reason: briefMissing ? BRIEF_REFUSAL : yesNoRefusal(questions) } });
         return;
       }
       this.yesNoRefused = 0;

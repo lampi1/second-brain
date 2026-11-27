@@ -12,6 +12,7 @@ import path from 'node:path';
 import type { AppSourceState, LaunchNotice, PromoteRun, SourceUpdate } from '../../shared/contract';
 import { errText, log } from '../log';
 import { launchOutcome, nextSeen, promoteStep, shaOfRelease, type LaunchResult, type ReleaseState, type Seen } from './launch';
+import { timedOutText, UpdateWhenIdle, waitingText, type WhenIdleDeps } from './when-idle';
 
 /** scripts/pull.mjs --json */
 export interface PullResult { ok: boolean; message: string; upToDate?: boolean; from?: string; to?: string; commits?: string[]; depsReinstalled?: boolean; built?: boolean; behind?: number; ahead?: number; canUpdate?: boolean; depsChanged?: boolean }
@@ -36,6 +37,11 @@ export interface AppSourceDeps {
   offline?: boolean;
   /** the Node that runs pull.mjs and release.mjs (null = none found: "Aggiorna" stays off) */
   node: string | null;
+  /** how many chats are running a turn: «Aggiorna» waits for them (update/when-idle.ts, ADR 0371 point 8); absent = none */
+  busyChats?: () => number;
+  /** the wait's timer and clock (the tests' own) */
+  schedule?: WhenIdleDeps['schedule'];
+  now?: () => number;
 }
 
 const LOG_MAX = 6000;
@@ -59,8 +65,15 @@ export class AppSourceService {
   private refreshing: Promise<AppSourceState> | null = null;
   private promoting = false;
   private pulling = false;
+  /** the Orchestrator's code update (pull, app_update_code) is running: «Aggiorna» waits for it (ADR 0371 point 8) */
+  private codePulling = false;
+  /** a dev build whose code folder the Orchestrator's pull moved on since this process started: «Aggiorna» relaunches
+   *  on it even when its own pull finds nothing new */
+  private pulledUnapplied = false;
+  private readonly idle: UpdateWhenIdle;
 
   constructor(private readonly d: AppSourceDeps) {
+    this.idle = new UpdateWhenIdle({ busy: () => d.busyChats?.() ?? 0, hold: () => this.codePulling, ...(d.schedule ? { schedule: d.schedule } : {}), ...(d.now ? { now: d.now } : {}) });
     this.st = { repo: null, repoProblem: null, running: d.running, stable: d.stable, candidate: null, promote: null, launch: this.detectLaunch(), source: { ...IDLE_SOURCE }, at: 0 };
   }
 
@@ -163,13 +176,15 @@ export class AppSourceService {
     const repo = this.repo();
     if (!repo || !fs.existsSync(path.join(repo, 'scripts', 'pull.mjs'))) throw new Error(repo ? `In ${repo} manca scripts/pull.mjs: aggiorna a mano una volta (git pull, npm run setup).` : "Imposta prima la cartella del codice dell'app (Impostazioni).");
     if (!this.d.node) throw new Error('Serve Node.js installato per aggiornare il codice.');
-    this.pulling = true;
+    this.pulling = true; this.codePulling = true;
     try {
       const r = await this.runPull(repo, []);
       log.info('update', 'code folder update', { data: { ok: r.ok, from: r.from, to: r.to, upToDate: r.upToDate } });
+      if (r.ok && !r.upToDate && !this.d.stable) this.pulledUnapplied = true;
       return r;
     } finally {
-      this.pulling = false;
+      this.pulling = false; this.codePulling = false;
+      // a wait of «Aggiorna» keeps its line: the refresh reads the folder, never the wait's state
       void this.refresh();
     }
   }
@@ -196,7 +211,7 @@ export class AppSourceService {
 
   /** Where the code folder stands against GitHub's main (git fetch only): the "Aggiorna" button's count. */
   async sourceCheck(): Promise<AppSourceState> {
-    if (this.pulling || this.st.source.state === 'updating' || this.st.source.state === 'restarting') return this.st;
+    if (this.pulling || this.idle.waiting || this.st.source.state === 'updating' || this.st.source.state === 'restarting') return this.st;
     if (this.d.offline) return this.setSource({ state: 'idle', behind: 0, commits: [], canUpdate: false, message: 'Hai già l’ultima versione.' });
     const repo = this.updateRepo();
     if (!repo || !this.d.node || !fs.existsSync(path.join(repo, 'scripts', 'pull.mjs'))) {
@@ -227,12 +242,27 @@ export class AppSourceService {
 
   /** The user's click on "Aggiorna" (ADR 0075): the latest main from GitHub, built, and the app on it at once, no tests.
    *  A dev build restarts itself; a stable copy is switched with release.mjs promote-now and restarts through the
-   *  launcher, which falls back to the previous release if the new one does not start. */
-  async updateNow(): Promise<AppSourceState> {
-    if (this.pulling || this.promoting) throw new Error('Un aggiornamento è già in corso.');
+   *  launcher, which falls back to the previous release if the new one does not start.
+   *  With chats running a turn it waits for them first (update/when-idle.ts, ADR 0371 point 8): state 'waiting', how many
+   *  in its message, then on by itself when they end; after the maximum wait it asks. now: «Aggiorna ora», at once. */
+  async updateNow(opts?: { now?: boolean } | null): Promise<AppSourceState> {
+    // the Orchestrator's code update running is no error: «Aggiorna» waits for it (idle.hold), then goes on
+    if (this.promoting || this.pulling && !this.codePulling) throw new Error('Un aggiornamento è già in corso.');
     if (this.d.offline) throw new Error('Nella demo l’app non si aggiorna.');
     const repo = this.updateRepo();
-    if (!repo || !this.d.node || !fs.existsSync(path.join(repo, 'scripts', 'pull.mjs'))) { await this.sourceCheck(); throw new Error(this.st.source.message || 'Aggiornamento non possibile adesso.'); }
+    if (!repo || !this.d.node || !fs.existsSync(path.join(repo, 'scripts', 'pull.mjs'))) { this.idle.stop(); await this.sourceCheck(); throw new Error(this.st.source.message || 'Aggiornamento non possibile adesso.'); }
+    const now = opts?.now === true;
+    if (!now && this.idle.waiting) return this.st;
+    const busy = this.d.busyChats?.() ?? 0;
+    const step = this.idle.begin(now && !this.codePulling, {
+      go: () => { void this.updateNow({ now: true }).catch(e => this.setSource({ state: 'error', canUpdate: false, message: errText(e).slice(0, 300) })); },
+      waiting: (n, timedOut) => {
+        if (timedOut) log.info('update', 'update now: still waiting after the maximum wait, asking the user', { data: { chats: n } });
+        this.setSource({ state: 'waiting', canUpdate: true, message: timedOut ? timedOutText(n) : waitingText(n) });
+      },
+    });
+    if (step === 'wait') { log.info('update', 'update now: waiting for the chats at work', { data: { chats: busy, codeUpdate: this.codePulling } }); return this.st; }
+    if (now && busy > 0) log.info('update', 'update now: the user interrupts the chats at work', { data: { chats: busy } });
     this.pulling = true;
     this.setSource({ state: 'updating', message: 'Scarico la versione nuova da GitHub…' });
     let r: PullResult;
@@ -246,7 +276,9 @@ export class AppSourceService {
     log.info('update', 'update now: code folder', { data: { ok: r.ok, from: r.from, to: r.to, upToDate: r.upToDate } });
     if (!r.ok) return this.setSource({ state: 'error', canUpdate: false, message: r.message.slice(0, 400) });
     if (!this.d.stable) {
-      if (r.upToDate) return this.setSource({ state: 'done', behind: 0, commits: [], canUpdate: false, message: 'Hai già l’ultima versione.' });
+      // the code is already pulled (the Orchestrator's pull during the wait): go on to the relaunch, never «done»
+      if (r.upToDate && !this.pulledUnapplied) return this.setSource({ state: 'done', behind: 0, commits: [], canUpdate: false, message: 'Hai già l’ultima versione.' });
+      this.pulledUnapplied = false;
       this.setSource({ state: 'restarting', behind: 0, commits: [], canUpdate: false, message: `Versione nuova pronta (${r.to}): riavvio…` });
       setTimeout(() => this.d.relaunch?.(), 800);
       return this.st;

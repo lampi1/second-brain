@@ -36,6 +36,9 @@ export abstract class ManagerCore {
   protected notesFor = new Map<string, string[]>();
   protected userWroteListeners: ((n: UserWroteNote) => void)[] = [];
   protected cleanReportListeners: ((n: CleanReportNote) => boolean)[] = [];
+  /** agents/watched-asks.ts (ADR 0371 point 4): the user's own messages to the Orchestrator, and each released root result */
+  protected ownerAskListeners: ((text: string) => void)[] = [];
+  protected resultReleasedListeners: ((n: CleanReportNote & { quiet: boolean }) => void)[] = [];
   /** told of every turn's end, after opts.onTurnEnd (the phone bridge: chats/phone-port.ts) */
   protected turnEndListeners: ((info: TurnEndInfo) => void)[] = [];
   /** children's results waiting for their siblings', per parent (queueChildResult); first = when the batch's first came */

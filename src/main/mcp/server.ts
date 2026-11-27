@@ -18,7 +18,7 @@ import { log, errText } from '../log';
 import { ToolRefusal, UpstreamError } from './refusal';
 import { timedStep } from '../perf';
 import { updateActivity } from '../update/activity';
-import { nullsHint, schemaArgs } from './json-args';
+import { badJsonHint, nullsHint, schemaArgs } from './json-args';
 
 export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'] as const;
 export const DEFAULT_MCP_PORT = 4319;
@@ -86,6 +86,11 @@ export interface Mount {
   who?: (params: Record<string, string>, sessionId: string) => string | undefined;
   /** HTTP DELETE with Mcp-Session-Id: the client ended its session (answered 204). Without it DELETE is 405. */
   onSessionEnd?: (params: Record<string, string>, sessionId: string) => void;
+  /** the tools of this mount that carry _meta anthropic/alwaysLoad: Claude Code puts their schemas in the prompt and
+   *  never defers them behind ToolSearch (ADR 0371 point 2: 29 «input schema was not in your prompt» in 20 hours).
+   *  The names a chat cannot work without (its role's required tools), never the whole list: every other schema stays
+   *  deferred and costs nothing until used. true = every tool (tests, a mount of one tool). */
+  alwaysLoad?: boolean | ((params: Record<string, string>) => Iterable<string>);
 }
 
 export interface McpServerOptions {
@@ -263,7 +268,9 @@ export class McpServer {
         }
         case 'ping': return ok(id, {});
         case 'tools/list':
-          return ok(id, { tools: (await this.toolsOf(mount, ctx)).map(t => toolListEntry(t, ctx.params)) });
+          const loads = typeof mount.alwaysLoad === 'function' ? new Set(mount.alwaysLoad(ctx.params)) : null;
+          const marked = (name: string): boolean => mount.alwaysLoad === true || !!loads?.has(name);
+          return ok(id, { tools: (await this.toolsOf(mount, ctx)).map(t => toolListEntry(marked(t.name) ? { ...t, meta: { ...t.meta, [ALWAYS_LOAD]: true } } : t, ctx.params)) });
         case 'tools/call': {
           const name = typeof p.name === 'string' ? p.name : '';
           const tool = (mount.callTools ? await mount.callTools({ params: ctx.params, sessionId: ctx.sessionId }) : await this.toolsOf(mount, ctx)).find(t => t.name === name);
@@ -289,7 +296,7 @@ export class McpServer {
           } catch (e) {
             if (e instanceof ToolRefusal) log.info('mcp', `tool ${name} refused`, { chat: who, cause: errText(e), data: { mount: mount.name } });
             else log.warn('mcp', `tool ${name} failed`, { chat: who, cause: errText(e), data: { mount: mount.name, ms: Date.now() - t0 } });
-            return ok(id, { content: [{ type: 'text', text: `Error: ${errText(e)}${read.nulls.length ? nullsHint(read.nulls) : ''}` }], isError: true });
+            return ok(id, { content: [{ type: 'text', text: `Error: ${errText(e)}${read.nulls.length ? nullsHint(read.nulls) : ''}${read.badJson.length ? badJsonHint(read.badJson) : ''}` }], isError: true });
           } finally {
               leaveActivity?.();
             ctx.signal.removeEventListener('abort', onClose);
@@ -339,6 +346,9 @@ function readBody(req: http.IncomingMessage, max: number): Promise<Buffer | null
 function callKey(mount: Mount, ctx: CallCtx, id: string | number | null): string {
   return `${mount.name}|${JSON.stringify(ctx.params)}|${ctx.sessionId}|${typeof id}:${String(id)}`;
 }
+
+/** The tool _meta key that makes Claude Code load a tool's schema upfront (never deferred behind ToolSearch). */
+export const ALWAYS_LOAD = 'anthropic/alwaysLoad';
 
 /** One tool as tools/list shows it to a caller (route params): its schema for that caller, annotations and _meta if any. */
 export function toolListEntry({ name, description, inputSchema, inputSchemaFor, annotations, meta }: McpTool, params: Record<string, string>): Record<string, unknown> {

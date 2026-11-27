@@ -29,7 +29,8 @@ export interface PromoteRun {
 }
 /** "Aggiorna" from GitHub (ADR 0075): the code folder against GitHub's main, and the one-click update in progress */
 export interface SourceUpdate {
-  state: 'idle' | 'checking' | 'updating' | 'restarting' | 'done' | 'error';
+  /** waiting: «Aggiorna» waits for the chats running a turn (ADR 0371 point 8); the message says how many */
+  state: 'idle' | 'checking' | 'waiting' | 'updating' | 'restarting' | 'done' | 'error';
   /** commits on GitHub's main not in the code folder (null = not checked yet) */
   behind: number | null;
   commits: string[];          // "<sha> <subject>", newest first, at most 20
@@ -265,7 +266,8 @@ export interface AppInvokeMap {
   /** reads GitHub's main against the code folder (git fetch, nothing changes) */
   'source:check': [void, AppSourceState];
   /** the user's click on "Aggiorna" (never an agent): pull, build, switch to the new version and restart, no tests */
-  'source:updateNow': [void, AppSourceState];
+  /** now: «Aggiorna ora», without waiting for the chats at work */
+  'source:updateNow': [{ now?: boolean } | void, AppSourceState];
   /** the usage counter (ADR 0202): the renderer's batched counts since its last flush ("page:costi" → 2), local only */
   'usecount:add': [{ counts: Record<string, number> }, void];
   /** Andamento → Uso: the last `days` days (default 14, at most 90) */

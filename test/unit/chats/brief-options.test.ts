@@ -60,6 +60,21 @@ describe('the gates', () => {
     expect(JSON.stringify(reply.mock.calls.at(-1))).toContain('yesOption');
   });
 
+  it('#492 point 2: the refusal says first which rule this question broke (its options, its length), on both engines', async () => {
+    const sink = recSink();
+    const wire = new ClaudeSession({ chatId: 'w', cwd: '.', yesNo: true, briefReady: () => true, briefOptions: () => null }, sink) as unknown as ClaudeWire;
+    const reply = vi.spyOn(wire, 'write').mockImplementation(() => {});
+    await wire.onControlRequest({ request_id: 'r1', request: { subtype: 'can_use_tool', tool_name: 'AskUserQuestion', tool_use_id: 't1',
+      input: { questions: [{ question: Q, options: [{ label: 'Opzione A' }, { label: 'Opzione B' }, { label: 'Opzione C' }] }] } } });
+    const said = JSON.stringify(reply.mock.calls.at(-1));
+    expect(said).toMatch(/"message":"Its options are \\"Opzione A\\", \\"Opzione B\\", \\"Opzione C\\": use exactly two/);
+    const acpSink = recSink();
+    const acp = new AcpSession({ chatId: 'w', cwd: '.', engineId: 'cursor', label: 'Cursor', args: ['acp'], yesNo: true, briefReady: () => true, briefOptions: () => null }, acpSink) as unknown as AcpWire;
+    const acpReply = vi.spyOn(acp, 'write').mockImplementation(() => {});
+    await acp.onAgentRequest('7', 'cursor/ask_question', { questions: [{ id: 'q', prompt: 'Pubblico la pagina? '.repeat(12), options: [{ id: 'y', label: 'Sì' }, { id: 'n', label: 'No' }] }] });
+    expect(JSON.stringify(acpReply.mock.calls.at(-1))).toMatch(/"reason":"It has \d+ characters; the limit is 160/);
+  });
+
   it('Cursor (ACP): the card shows Sì / No, the answer selects the engine option id', async () => {
     const sink = recSink();
     const wire = new AcpSession({ chatId: 'w', cwd: '.', engineId: 'cursor', label: 'Cursor', args: ['acp'], yesNo: true, briefReady: () => true, briefOptions: () => MAP }, sink) as unknown as AcpWire;

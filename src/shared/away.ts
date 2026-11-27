@@ -13,8 +13,10 @@ export const AWAY_RULE = '[Modalità notte · the user is away (AFK) until they 
 /** Sent once to a chat that was told the user was away, with its next turn after the mode went off. */
 export const AWAY_BACK = '[Modalità notte off · the user is back: genuine decisions go to them again as yes/no questions.]';
 
+// Everything the user's rules let through passes at night as by day (ADR 0294, ADR 0371 point 9): only what they keep
+// for him is parked, and the text says so (it said «the app never grants a permission», older than ADR 0294).
 /** What a permission request gets while the user is away: refused, kept for the recap; the chat goes on. */
-export const AWAY_PARKED = 'Not granted: the user is away (Modalità notte) and the app never grants a permission by itself. It is noted for the user\'s return. Do not ask again: go on with every part that does not need it, and list it in your report as waiting for the user.';
+export const AWAY_PARKED = 'Not granted now: the user\'s own rules or limits keep this request for him (a rule of his brain, a limit on the role\'s card, or a request his rules could not read whole) and he is away (Modalità notte). It is noted for the user\'s return. Do not ask again: go on with every part that does not need it, and list it in your report as waiting for the user.';
 
 /** What the Strategist's plan_propose returns when the app approved the plan for the absent user. */
 export const AWAY_PLAN_NOTE = 'The user is away (Modalità notte): the app approved this plan as proposed, as its recommended choice. Start it now (agent_delegate the steps, plan_update as they move) and keep going until it is done; do not wait for an answer.';

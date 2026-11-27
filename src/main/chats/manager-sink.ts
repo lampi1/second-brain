@@ -225,13 +225,19 @@ export abstract class ManagerSink extends ManagerLadder {
         // the gates read the input as the engine sent it (ADR 0290): the one in the request is shortened for the screen
         const shown = req.input;
         if (whole !== undefined) req = { ...req, input: whole };
-        if (this.answeredByGates(r, req, whole !== undefined)) return;
-        // what the gates marked on the request (no «always», the rule that holds it) stays; its input is the short one again
-        if (whole !== undefined) req = { ...req, input: shown };
-        // decided on the real input above; parked for night mode, shown and kept masked from here (ADR 0237)
-        req = maskTypedRequest(req);
-        if (this.heldAsRepeat(r, req) || this.heldAsTwin(r, req)) return;
-        this.exposeRequest(r, req);
+        const gated = req;
+        const toUser = (): void => {
+          if (!live()) return;
+          // what the gates marked on the request (no «always», the rule that holds it) stays; its input is the short one again
+          let q = whole !== undefined ? { ...gated, input: shown } : gated;
+          // decided on the real input above; parked for night mode, shown and kept masked from here (ADR 0237)
+          q = maskTypedRequest(q);
+          if (this.heldAsRepeat(r, q) || this.heldAsTwin(r, q)) return;
+          this.exposeRequest(r, q);
+        };
+        // a night read of the rules off the main thread answers later, or calls toUser (ADR 0371 point 9)
+        if (this.answeredByGates(r, gated, whole !== undefined, toUser)) return;
+        toUser();
       },
       rateLimit: msg => { const on = this.opts.onRateLimit; if (live() && on) this.hook('onRateLimit', () => on(msg)); },
       commands: list => { if (live()) r.commands = list; },
@@ -474,6 +480,9 @@ export abstract class ManagerSink extends ManagerLadder {
     }
     if (p.compacted) {
       this.counters.compaction(r.s.id, p.compacted.pre, p.compacted.post);
+      // the session's own count: at FRESH_AFTER_COMPACTIONS the chat goes on in a fresh one (manager-continuity.ts)
+      const sid = r.s.sessionId ?? '';
+      r.compactions = { session: sid, n: r.compactions?.session === sid ? r.compactions.n + 1 : 1 };
       r.after = { kind: 'compaction', left: AFTER_CALLS };
       // the context starts again from its summary: an Orchestrator's next day compaction counts from now
       r.ctxSince = Date.now(); save = true;

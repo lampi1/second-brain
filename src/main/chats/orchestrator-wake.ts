@@ -93,7 +93,7 @@ export function stuckStrategist(c: ChatSummary, all: readonly ChatSummary[], ope
   return true;
 }
 /** requestId: the open request it tells about (question, permission, command): answered before it goes, it is dropped */
-export interface WakeEvent { eventId?: string; seq?: number; chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a root chat's clean agent_report (cleanReport): its role and summary, quiet */ report?: { role: string }; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; /** kind error: no failure, its model ran out of credits and it waits for its role's card (ADR 0346) */ credits?: { role: string; model: string | null }; requestId?: string; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean; /** a delegated chat's "finished" with nothing of the user's beside it: no text (ADR 0083) and its result goes to its parent, so it rides along and never wakes */ silent?: boolean; /** set only on the message sent: a root Strategist stopped without a result (stuckStrategist) */ stuck?: true }
+export interface WakeEvent { eventId?: string; seq?: number; chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a root chat's clean agent_report (cleanReport): its role and summary, quiet */ report?: { role: string }; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; /** kind error: no failure, its model ran out of credits and it waits for its role's card (ADR 0346) */ credits?: { role: string; model: string | null }; requestId?: string; /** the user asked about this chat (agents/watched-asks.ts, ADR 0371 point 4): its result wakes, with the line to tell him */ asked?: true; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean; /** a delegated chat's "finished" with nothing of the user's beside it: no text (ADR 0083) and its result goes to its parent, so it rides along and never wakes */ silent?: boolean; /** set only on the message sent: a root Strategist stopped without a result (stuckStrategist) */ stuck?: true }
 
 export interface WakeSubmissionReceipt { submitted(): void; failed(error: unknown): void }
 export interface OrchestratorWakeDeps {
@@ -145,7 +145,10 @@ export function wakeLine(e: WakeEvent): string {
 /** The label and the news only: what to do with it is in the Orchestrator's rules (orchestrator-role.ts WAKE_RULE),
  *  sent once per session instead of with every wake (the owner, 2026-10-20: no text twice). */
 export function wakeMessage(events: WakeEvent[]): string {
-  return [APP_EVENT_LABEL, 'Novità dalle chat di lavoro:', ...events.map(wakeLine)].join('\n');
+  const asked = events.filter(e => e.asked).map(e => `«${e.title}»`);
+  // what the user asked about (ADR 0371 point 4): one short line to him in this same turn, never a turn of its own
+  const tell = asked.length ? [`L'utente ti aveva chiesto di ${asked.join(', ')}: diglielo ora in UNA riga breve (cosa è fatto; la chat da aprire solo se deve guardare), senza aspettare che lo richieda.`] : [];
+  return [APP_EVENT_LABEL, 'Novità dalle chat di lavoro:', ...events.map(wakeLine), ...tell].join('\n');
 }
 
 /** How the user answers a worker's request away from the PC (#370): a single Sì/No question of an engine's own tool goes
@@ -357,13 +360,13 @@ export class OrchestratorWake {
   /** A root chat's clean result (ChatManager.onCleanReport): quiet news with its summary, never a turn of its own; it rides
    *  along with the next delivery (the user's next message injects it into that turn). False = not taken (off, no
    *  Orchestrator): the caller sends the result as a message. */
-  cleanReport(n: { chatId: string; title: string; role: string; summary: string; at?: number; workflow?: boolean }): boolean {
+  cleanReport(n: { chatId: string; title: string; role: string; summary: string; at?: number; workflow?: boolean; asked?: boolean }): boolean {
     if (!this.d.enabled() || !this.orchestratorId()) return false;
     const known = this.chats.get(n.chatId), listed = known ? undefined : this.d.list?.().find(x => x.id === n.chatId);
     if (listed) this.remember(listed);
     const c = known ?? listed;
     if (!c || c.isOrchestrator) return false;
-    const e: WakeEvent = { chatId: n.chatId, title: n.title, harness: c.harness, kind: 'done', detail: cut(n.summary, 300), at: n.at ?? this.now(), report: { role: n.role }, silent: !n.workflow };
+    const e: WakeEvent = { chatId: n.chatId, title: n.title, harness: c.harness, kind: 'done', detail: cut(n.summary, 300), at: n.at ?? this.now(), report: { role: n.role }, silent: !n.workflow && !n.asked, ...(n.asked ? { asked: true as const } : {}) };
     this.buffer.set(slotOf(e), e);
     // the chat's plain "finished" of the same turn says less than the report
     if (this.buffer.get(n.chatId)?.kind === 'done') this.buffer.delete(n.chatId);

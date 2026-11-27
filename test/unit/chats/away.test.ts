@@ -11,6 +11,7 @@ import type { Answer, PendingRequest } from '../../../src/shared/contract';
 import { ChatManager } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import { AWAY_BACK, AWAY_PARKED, AWAY_RULE } from '../../../src/shared/away';
+import { BUDGET_MS, type PolicyRead } from '../../../src/main/chats/permit-policy';
 import type { AwayEntry } from '../../../src/main/chats/away-log';
 
 const SESSION = crypto.randomUUID();
@@ -22,8 +23,8 @@ afterEach(async () => {
 const tmp = (): string => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-away-')); roots.push(d); return d; };
 
 interface World { sent: string[]; answers: { id: string; answer: Answer }[]; away: { on: boolean }; log: Omit<AwayEntry, 'at'>[]; sink?: SessionSink }
-function manager(w: World, brainRoot: string = rulesBrain().root): ChatManager {
-  const m = new ChatManager({ userData: tmp(), emitter: { emit() {} }, coldEveryMs: 0, away: () => w.away.on, onAway: e => w.log.push(e), ...(brainRoot ? { brainRoot: () => brainRoot } : {}),
+function manager(w: World, brainRoot: string = rulesBrain().root, extra: { permitClock?: () => number; offThreadRead?: never } = {}): ChatManager {
+  const m = new ChatManager({ userData: tmp(), emitter: { emit() {} }, coldEveryMs: 0, away: () => w.away.on, onAway: e => w.log.push(e), ...(brainRoot ? { brainRoot: () => brainRoot } : {}), ...extra,
     sessionFactory: (_h, o: { sessionId?: string | null }, s: SessionSink) => {
       w.sink = s;
       return {
@@ -115,5 +116,51 @@ describe('a typing permission parked at night (ADR 0237)', () => {
     expect(JSON.stringify(w.log)).not.toContain(SECRET);
     expect(w.log.length).toBeGreaterThan(0);
     expect(JSON.stringify(m.items(chat.id))).not.toContain(SECRET);
+  });
+});
+
+describe('#492 point 9: night mode never parks what the user\'s rules let through (ADR 0294, ADR 0371)', () => {
+  it('a command his rules read slowly in the evening passes at night, read off the main thread; main stays in its 250 ms', async () => {
+    // his rules on commands, four patterns; none holds «npm test»
+    const brain = tmp();
+    fs.writeFileSync(path.join(brain, 'permissions.json'), JSON.stringify({ version: 1, rules: [
+      { id: 'db', action: 'ask-user', why: 'database', tools: ['command'], match: ['DROP TABLE', 'psql', 'sqlcmd', 'mongosh'] },
+    ] }));
+    // a loaded machine: 100 ms between two looks of the clock, so the 250 ms budget ends before the last pattern
+    let t = 0;
+    const clock = (): number => (t += 100);
+    const bash = (id: string, command: string): Omit<PendingRequest, 'chatId'> => ({ id, type: 'permission', tool: 'Bash', title: 'Bash', detail: command, input: { command }, at: Date.now() });
+    // the off-thread read: the real one runs in a worker thread (permit-policy.test.ts); here the test's own, settled by hand
+    const reads: { command: unknown; settle: (v: PolicyRead) => void }[] = [];
+    const offThreadRead = ((_p: unknown, _tool: string, input: unknown) => new Promise<PolicyRead>(settle => { reads.push({ command: (input as { command?: unknown }).command, settle }); })) as never;
+
+    const day = world(false), dm = manager(day, brain, { permitClock: clock, offThreadRead });
+    const dc = await dm.create({ harness: 'anthropic', cwd: tmp() });
+    day.sink!.pending(bash('d1', 'npm test'));
+    expect(dm.pending().filter(p => p.chatId === dc.id).map(p => p.id)).toEqual(['d1']);   // by day: asked (the card)
+    expect(reads).toEqual([]);   // by day nothing is read off the main thread: he decides
+
+    const night = world(true), nm = manager(night, brain, { permitClock: clock, offThreadRead });
+    const nc = await nm.create({ harness: 'anthropic', cwd: tmp() });
+    const before = t;
+    night.sink!.pending(bash('n1', 'npm test'));
+    // the main thread stopped at its budget (a few looks of the clock), never the old night's 2 s
+    expect(t - before).toBeLessThanOrEqual(BUDGET_MS + 300);
+    expect(reads.map(x => x.command)).toEqual(['npm test']);
+    expect(night.answers).toEqual([]);   // unanswered while it is read, never parked
+    expect(nm.pending().filter(p => p.chatId === nc.id)).toEqual([]);
+    reads[0]!.settle({ rule: null, unread: false });
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(night.answers).toEqual([{ id: 'n1', answer: { kind: 'permission', allow: true } }]);
+    // what a rule holds is still parked, at once (read inside the budget)
+    night.sink!.pending(bash('n2', 'psql -c "select 1"'));
+    expect(night.answers.at(-1)).toEqual({ id: 'n2', answer: { kind: 'permission', allow: false, message: AWAY_PARKED } });
+    // an off-thread read that still cannot finish leaves it his: parked
+    night.sink!.pending(bash('n3', 'npm run build'));
+    reads.at(-1)!.settle({ rule: null, unread: true, slow: true });
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(night.answers.at(-1)).toEqual({ id: 'n3', answer: { kind: 'permission', allow: false, message: AWAY_PARKED } });
+    expect(night.log.map(e => e.kind)).toEqual(['parked', 'parked']);
+    expect(AWAY_PARKED).not.toContain('never grants');
   });
 });
