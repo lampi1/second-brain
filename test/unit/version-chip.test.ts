@@ -19,7 +19,7 @@ afterEach(() => { launch.value = null; });
 const state = (p: { behind?: number; srcState?: string; outcome?: string; subject?: string; commits?: string[]; canUpdate?: boolean } = {}) => ({
   running: '0.1.0-6dd4bea', stable: true, candidate: p.subject ? { subject: p.subject } : null,
   launch: p.outcome ? { outcome: p.outcome, running: '0.1.0-6dd4beaf00', wanted: '0.1.0-6dd4bea', reason: '', at: 1 } : null,
-  source: { state: p.srcState ?? 'idle', behind: p.behind ?? 0, commits: p.commits ?? [], message: '', canUpdate: p.canUpdate ?? true, at: 1 },
+  source: { state: p.srcState ?? 'idle', behind: p.behind ?? 0, commits: p.commits ?? [], message: '', canUpdate: p.canUpdate ?? false, at: 1 },
 }) as unknown as AppSourceState;
 const noop = () => {};
 
@@ -33,8 +33,12 @@ describe('shortVersion', () => {
 
 describe('versionChipOf', () => {
   it('offers the update when GitHub is ahead, with the subject of the newest commit', () => {
-    expect(versionChipOf(state({ behind: 2, subject: 'feat: x' }))).toEqual({ kind: 'available', behind: 2, subject: 'feat: x', canUpdate: true });
+    expect(versionChipOf(state({ behind: 2, subject: 'feat: x', canUpdate: true }))).toEqual({ kind: 'available', behind: 2, subject: 'feat: x', canUpdate: true });
     expect(versionChipOf(state({ behind: 1, commits: ['abc1234 fix: y'], canUpdate: false }))).toEqual({ kind: 'available', behind: 1, subject: 'fix: y', canUpdate: false });
+  });
+  it('offers it with nothing behind when «Aggiorna» can switch: a stable copy whose code folder has the new version', () => {
+    expect(versionChipOf(state({ behind: 0, subject: 'feat: merged here', canUpdate: true }))).toEqual({ kind: 'available', behind: 0, subject: 'feat: merged here', canUpdate: true });
+    expect(versionChipOf(state({ behind: 0, canUpdate: true, srcState: 'updating', outcome: 'new' }))).toEqual({ kind: 'updated', sha: '6dd4bea' });
   });
   it('says the version it started on after an update, while nothing newer waits', () => {
     expect(versionChipOf(state({ outcome: 'new' }))).toEqual({ kind: 'updated', sha: '6dd4bea' });
