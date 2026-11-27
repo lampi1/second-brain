@@ -29,14 +29,28 @@ Measured on the ~20 hours after the 26 Nov update (#492):
 
 ## Decision
 
-1. **His own message is the ask** (`appctl/user-words.ts`). The Orchestrator's items are told apart: his own (typed or
-   phone text with no `from`, not the app's or an agent's `[…]` text) and the rest. His typed proof matches his own last
-   item up to `TYPED_DELIVERY_MS` (2 min) after Enter, and within the fresh window (10 min) mail or app news after it do
-   not void it. Beyond 10 min the old strict rule applies. A later message of his is a new ask.
+1. **His own message is the ask** (`appctl/user-words.ts`). The Orchestrator's items are told apart: his own (`ownItem`:
+   text he typed on the PC, with no `from`, not the app's or an agent's `[…]` text; a phone message is never one, as
+   its text is a clarification, never an ok) and the rest.
+   - His typed proof matches his own last item up to `TYPED_DELIVERY_MS` (2 min) after Enter.
+   - For an ordinary change (the theme, a role's engine, model or effort…), within the fresh window (10 min) mail or app
+     news after it do not void it. Beyond 10 min the old rule applies. A later message of his is a new ask.
+   - A **strict** change (review of #492: agent mail carrying an injected request must never count as his consent)
+     keeps the old rule whatever the time: nothing but his own words since. Strict is what widens what agents may do:
+     a protected setting (`codexAutonomyRoots`, budgets, the brain's folder, the rules sent to the chats…), a role's
+     `tools`, `permissionCeiling`, `instructions`, `skills`, `launches`, `codeMode` (`STRICT_AGENT_KEYS`), connectors,
+     an undo, the profile. Short of that it is held «da applicare» for his Sì, never applied. The refusal says which
+     rule applies (`config.ts asked`).
 2. **Tools right the first time.**
-   - The app's MCP mounts are `alwaysLoad` (`mcp/server.ts`): every tool in `tools/list` carries
-     `_meta["anthropic/alwaysLoad"]`, for every engine that reads it. Claude's `--mcp-config` also marks the app's
-     servers `alwaysLoad: true` (`manager-sessions.ts`). ToolSearch never defers them.
+   - A chat's required tools carry `_meta["anthropic/alwaysLoad"]` in `tools/list` (`mcp/server.ts` mount
+     `alwaysLoad(params)`): on the chat endpoint the role's required tools (`shared/role-tools.ts requiredTools`:
+     `agent_report`, `plan_propose`, `agent_delegate`… the ones that failed), on the Orchestrator's endpoint
+     `ORCHESTRATOR_APP_REQUIRED`. ToolSearch never defers them; every other tool stays deferred. No whole server is
+     marked in `--mcp-config` (the first version did, and loaded every schema: the owner's minimal harness).
+   - Upfront schemas, measured on the tools the test builds (`mcp/always-load.test.ts`; characters / 4, no browser
+     tools or connectors, so the real full lists are larger: the review measured ~25-34k on the Orchestrator and
+     10-18k per work chat): a worker 5.9k (every schema) → 2.5k (required only), a Strategist with a plan 10.5k → 5.2k,
+     the Orchestrator 10.7k → 6.7k. Before ADR 0371 none was upfront, and these were the ones failing.
    - Descriptions start with the required fields and their limits: `agent_report`, `agent_delegate`, `plan_propose`,
      `app_create_chat`. The role preamble says the schema is in the prompt.
    - `checkResult` maps a criterion that differs from the contract's only in spaces, a list dash, quotes, case or a
@@ -51,15 +65,20 @@ Measured on the ~20 hours after the 26 Nov update (#492):
      refused; after, 0. The 4 really wrong ones are still refused (a criterion missing, `met` as text, done with an
      unmet criterion, another criterion).
 3. **No report while the plan waits.** `agent_report` is refused (`PLAN_WAITS_REFUSAL`) while the chat's plan is
-   `proposed` or `revising`. The refusal says to end the turn and wait for his decision.
-4. **Told when done** (`agents/watched-asks.ts`). His own message to the Orchestrator that names an open root chat (its
-   title or a part of it, as a word), or asks in general («come procede», «a che punto», «mi fai il punto», «novità»)
-   about the root chats at work, watches them for 6 h.
-   - When one delivers a quiet result, the Orchestrator gets one app message: tell him in ONE short line, now,
-     unasked. Once per ask.
+   `proposed`. The refusal says to end the turn and wait for his decision. In `revising` he already answered (a change,
+   a doubt) and may have said «lascia perdere, dimmi cosa hai trovato»: the report goes.
+4. **Told when done** (`agents/watched-asks.ts`). His own message to the Orchestrator watches open root chats for 6 h
+   (a watch with no result ends then too):
+   - the ones it names: a distinctive part of the title as a whole word, at least 5 characters and not only common
+     words («Test», «Piano», «review» never match «lancia i test»);
+   - or every root chat at work, when he asks about the work in so many words («come procede», «a che punto siamo»,
+     «mi fai il punto», «novità sui lavori», «novità?» alone; never «aggiornamenti», «situazione», «come va»).
+   - When one delivers a quiet result, the clean report's own wake carries the line «diglielo ora in UNA riga breve»
+     (`orchestrator-wake.ts cleanReport asked`): one Orchestrator turn, never two. Only when that wake is off does
+     watched-asks send its own app message. Once per ask.
    - A result the Orchestrator already synthesizes only ends the watch.
-   - The hooks are `ChatManager.onOwnerAsked` (manager.ts, his message) and `onResultReleased` (manager-delegation.ts
-     `releaseResult`). They are wired in wiring.ts.
+   - The hooks are `ChatManager.onOwnerAsked` (manager.ts, his message), `onCleanReport` and `onResultReleased`
+     (manager-delegation.ts `releaseResult`). They are wired in wiring.ts.
 5. Not here: ADR 0367.
 6. **A fresh session after 3 compactions.** Each engine session counts its compactions (`Rec.compactions`, in
    memory). At `FRESH_AFTER_COMPACTIONS` (3) the chat is due for the fresh session with the protected hand-off of ADR
@@ -68,37 +87,45 @@ Measured on the ~20 hours after the 26 Nov update (#492):
    - `agent_report` output is at most `REPORT_OUTPUT_MAX` (4000). Over it, it is refused, not cut, with where the detail
      goes: a file (in its folder, or the brain's `tmp/`), its path in the text. The same call is then sent again.
    - One delegation contract is at most `CONTRACT_TEXT_MAX` (5000) characters in all its fields together, with the
-     same refusal (`checkContract`, every `agent_delegate` / `agent_assign_task`).
+     same refusal (`checkContract`, every `agent_delegate` / `agent_assign_task`). No field alone may pass it:
+     `CONTEXT_MAX` goes from 6000 to 3000; the others were already at most 2000.
    - `RESULT_OUTPUT_MAX` stays the stored ceiling of older results.
 8. **«Aggiorna» waits for the chats at work** (`update/when-idle.ts`, `AppSourceService.updateNow`).
    - With chats running a turn, the update does not start. Its state is `waiting`, and the message names how many.
    - It goes by itself when none runs (looked at every 5 s).
-   - After 20 min it stops waiting and asks: «Aggiorna ora» interrupts N chats, or press «Aggiorna» later.
+   - After 20 min it asks: «Aggiorna ora» interrupts N chats; otherwise it still goes by itself when they end, so
+     «Controlla» is never needed.
    - «Aggiorna ora» (`source:updateNow { now: true }`) goes at once.
+   - The Orchestrator's code update (`app_update_code`, `pull()`) during the wait is no error: the wait holds until it
+     ends, and a dev build then relaunches on the code it pulled even though its own pull finds nothing new.
    - The confirm text says so. The wait is before the pull, so a turn started during the build is not covered.
 9. **Night mode parks only what his rules keep for him.**
-   - While he is away, the brain rules read a request with `NIGHT_BUDGET_MS` (2 s) instead of 250 ms: a request they did
-     not read in time under the evening's load is parked at night, not asked.
-   - A request no rule holds then passes as by day; what a rule holds, a role limit he set, the rules file, unreadable
+   - The main process never runs the brain rules longer than their 250 ms budget (`BUDGET_MS`; a first version raised
+     it to 2 s at night, which could block the main process for seconds).
+   - At night a request they did not read in time (`slow`) is not parked: it stays unanswered while
+     `policyReadOffThread` reads it in a worker thread (ended after 5 s). What his rules let through is then allowed
+     as by day; what a rule holds, a read that still cannot finish, a role limit he set, the rules file, unreadable
      rules and a cut request under a rule are parked as before.
    - `AWAY_PARKED` no longer says «the app never grants a permission» (older than ADR 0294). It names why it is his.
 
 ## Consequences
 
 - A role card change he asked for in his own words is applied even when the engine was slow to show his message, or
-  mail came in between. A typed time older than 2 min, or mail after 10 min, still holds it.
-- Every tool of the app is in every chat's prompt from its first turn: more prompt tokens per chat (the app's tools are a
-  few thousand tokens), no ToolSearch round trip and no failed call.
+  mail came in between. A typed time older than 2 min, or mail after 10 min, still holds it, and so does any mail for
+  a change that widens what agents may do.
+- Only each chat's required tools are in its prompt from the first turn (a few thousand tokens); the rest costs
+  nothing until ToolSearch loads it.
 - A report over 4000 characters, or a contract over 5000, costs one more call (the shorter one), never a cut text. A
   lost detail was worse.
 - An Orchestrator turn of one line for each result he asked about: a few cents, against his «come procede?» turn.
 - A chat compacted 3 times goes on in a fresh session: one cold start against the cost of a fourth compaction. After a
   restart the count starts again.
-- At night a request can hold the main process up to 2 s on a pathological pattern: bounded, and only when nobody is
-  waiting on the window anyway.
-- Tests (each red before, green after): `appctl-user-words.test.ts`, `appctl-config.test.ts` (point 1);
+- At night a slow request waits up to 5 s for the worker thread's read, with the main process free meanwhile.
+- Tests (each red before, green after): `appctl-user-words.test.ts`, `appctl-config.test.ts` (point 1, with the
+  review's injected mail asking for an autonomy root, a role's tools or ceiling);
   `mcp/always-load.test.ts`, `mcp/json-args.test.ts`, `yes-no.test.ts`, `chats/brief-options.test.ts`,
   `agents/delegation.test.ts` «first attempts» (point 2); `agents/strategy.test.ts` (point 3); `agents/delegation.test.ts`
   «point 4» and `agents/watched-asks.test.ts` (point 4); `chats/fresh-sessions.test.ts` (point 6);
-  `agents/delegation.test.ts` «point 7» (point 7); `update-when-idle.test.ts` (point 8); `chats/away.test.ts` (point 9).
+  `agents/delegation.test.ts` «point 7» (point 7); `update-when-idle.test.ts` (point 8); `chats/away.test.ts`,
+  `chats/permit-policy.test.ts` (point 9); `orchestrator-wake.test.ts` (point 4's single wake).
 - Not tried on a real PC yet.

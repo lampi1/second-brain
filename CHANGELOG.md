@@ -7,12 +7,13 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ### Added
 - Agent communication after the 26 Nov update (ADR 0371, #492): his own message counts as the ask for a role card even
-  when it landed late or mail came after it; the app's tools are always in every chat's prompt, their descriptions
-  list required fields and limits, and near-copies of a criterion, long evidence and hand-written JSON no longer fail a
-  call; no `agent_report` while a plan waits for approval; what he asked the Orchestrator about is told in one line when
-  it is done; a chat compacted 3 times goes on in a fresh one; reports over 4000 and contracts over 5000 characters
-  are sent back with «put the detail in a file»; «Aggiorna» waits for the chats at work (up to 20 minutes, then asks);
-  night mode no longer parks a command his rules let through.
+  when it landed late or mail came after it, never for a change that widens what agents may do; each chat's required
+  app tools are always in its prompt, their descriptions list required fields and limits, and near-copies of a
+  criterion, long evidence and hand-written JSON no longer fail a call; no `agent_report` while a plan waits for
+  approval; what he asked the Orchestrator about is told in one line when it is done; a chat compacted 3 times goes on
+  in a fresh one; reports over 4000 and contracts over 5000 characters are sent back with «put the detail in a file»;
+  «Aggiorna» waits for the chats at work (up to 20 minutes, then asks, and still goes by itself when they end); night
+  mode no longer parks a command his rules let through (a slow read finishes off the main thread).
 - `brain_edit` (ADR 0370): the Orchestrator makes a small edit to a `.md`/`.txt` file of the brain (at most 3 files, 40
   lines) in one step, with one compact line in the chat and «Annulla» for 24 h; settings, permissions, hooks and agent
   definitions stay out of it.
