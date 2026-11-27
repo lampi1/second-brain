@@ -18,22 +18,7 @@ export const agentsGridDe: typeof agentsGridIt = {
   'agentsGrid.levelHelpOrchestrator': 'Orchestrator: verdient mit den von ihm gestarteten Runs, die geprüfte Erfolge sind, dazu 1 XP für einen ohne Änderung genehmigten Plan. Halbe XP, wenn die Aufgabe an eine andere Rolle ging oder neu gemacht wurde.',
   'agentsGrid.levelHelpEx': ({ xp, wins, runs, level, next, left }) =>
     `${xp} XP aus ${wins} ${wins === 1 ? 'geprüftem Erfolg' : 'geprüften Erfolgen'} von ${runs} ${runs === 1 ? 'beendeten Run' : 'beendeten Runs'}: Lv ${level}` + (next === null ? ', das höchste.' : `; noch ${left} XP für Lv ${next}.`),
-  'agentsGrid.perf': 'Leistung',
-  'agentsGrid.perfBand': ({ v }) => v >= 0.85 ? 'Ausgezeichnet' : v >= 0.7 ? 'Gut' : v >= 0.5 ? 'Passabel' : 'Ausbaufähig',
-  'agentsGrid.perfWarmup': 'Wärmt sich auf',
-  'agentsGrid.perfWarmupCount': ({ n }) => n === 1 ? '1 Urteil, noch zu wenige' : `${n} Urteile, noch zu wenige`,
-  'agentsGrid.perfJudged': ({ n }) => n === 1 ? '1 Urteil' : `${n} Urteile`,
-  'agentsGrid.perfSpread': ({ v }) => `±${v}`,
-  'agentsGrid.perfSpreadTip': ({ v }) => `Unsicherheit: ±${v} Punkte`,
-  'agentsGrid.perfHelpTitle': 'Wie die Leistung berechnet wird',
-  'agentsGrid.perfHelp1': 'Eine Schätzung aus den Urteilen über seine Runs (Erfolg 100 %, teilweise 50 %, gescheitert 0 %). Sie beginnt bei 50 % und bewegt sich mit den Urteilen: wenige bewegen sie wenig. Das ± sagt, wie unsicher sie noch ist.',
-  'agentsGrid.perfHelp2': 'Jedes Urteil wiegt nach dem, der es gab: du und eine unabhängige Prüfung × 1, eine an dem Geschehenen gemessene Prüfung des Sentinels × 0,8, die Belege der App × 0,7, der Orchestrator × 0,6, ein Signal zu den Entscheidungen des Orchestrators (Aufgabe an eine andere Rolle gegeben, Plan genehmigt) und der geprüfte Eltern-Run × 0,5; der Agent über sich selbst zählt nicht. Ein 30 Tage altes Urteil wiegt halb so viel.',
-  'agentsGrid.perfHelp3': ({ min, spread }) => `Sie erscheint ab ${min} Urteilen und einer Unsicherheit von höchstens ±${spread}; davor „wärmt sie sich auf“. Stufen: ab 85 % ausgezeichnet, 70–84 % gut, 50–69 % passabel, unter 50 % ausbaufähig.`,
-  'agentsGrid.perfSources': ({ human, review, receipts, graded, orchestrator, decision, chain, self }) =>
-    `Urteile bisher: ${human} von dir, ${review} aus unabhängigen Prüfungen, ${receipts} aus Testbelegen, ${graded} am Geschehenen gemessene Prüfungen, ${chain} vom geprüften Eltern-Run, ${orchestrator} vom Orchestrator`
-    + (decision ? `, ${decision} zu seinen Entscheidungen` : '') + (self ? `; ${self} nur vom Agenten selbst, die nicht zählen.` : '.'),
   // the user's pats and whacks on the role's little person (ADR 0297)
-  'agentsGrid.perfTouches': ({ pat, whack }) => `Klapse und Stockhiebe auf sein Männchen: ${pat} und ${whack}. Jeder wiegt ein Zwanzigstel einer Bewertung von dir, einmal pro Arbeit, alle zusammen höchstens eine halbe Bewertung, und zählt nicht zu den Bewertungen.`,
   'agentsGrid.success': 'Erfolg',
   'agentsGrid.successFew': ({ n, min }: { n: number; min: number }) => `Zu wenige geprüfte Ergebnisse: ${n} von ${min}`,
   'agentsGrid.successNote': ({ n, min }: { n: number; min: number }) => `geprüft: ${n} von ${min} nötig`,

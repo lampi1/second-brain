@@ -1,8 +1,5 @@
 // The «Giornale» (ADR 0265, editions ADR 0280) in English: the same keys as news.it.ts.
 export const newsEn = {
-  'impara.tab.giornale': 'News',
-  'impara.tab.pr': 'Pull requests',
-  'impara.tab.lezioni': 'Lessons',
 
   'news.title': 'News',
   'news.lastAt': ({ when }: { when: string }) => `updated ${when}`,
@@ -42,7 +39,6 @@ export const newsEn = {
   'news.why': 'Why it matters to you',
   'news.noSummary': 'The AI summary comes with the next refresh. Above, the source\'s own words.',
   'news.explain': 'Ask Orchestrator',
-  'news.openLesson': 'Open the lesson',
   'news.save': 'Save for later',
   'news.savedOn': 'Saved',
   'news.markRead': 'Mark read',
@@ -128,23 +124,4 @@ export const newsEn = {
   'news.src.triedBad': ({ why }: { why: string }) => `I cannot read it: ${why}`,
   'news.src.none': 'No sources. Paste a link above, or ask the Orchestrator «find the sources for this edition».',
 
-  'impara.prs.filters': 'Filters',
-  'impara.prs.filter.todo': 'To study',
-  'impara.prs.filter.half': 'Half done',
-  'impara.prs.filter.done': 'Studied',
-  'impara.prs.filter.all': 'All',
-  'impara.prs.list': 'Your pull requests',
-  'impara.prs.refresh': 'Read the PRs now',
-  'impara.prs.none': 'No pull requests: they come from the Task page. For a GitHub PR paste its link in «Lessons».',
-  'impara.prs.noneHere': 'No pull requests with this filter.',
-  'impara.prs.pick': 'Pick a pull request on the left.',
-  'impara.prs.draft': 'draft',
-  'impara.prs.lesson': 'Your lesson',
-  'impara.prs.notYet': 'Not studied yet. «Learn» prepares the lesson from its diff.',
-  'impara.prs.seen': ({ seen, planned }: { seen: number; planned: number }) => `${seen} of ${planned} pieces seen`,
-  'impara.prs.study': 'Learn',
-  'impara.prs.open': 'Open the PR',
-  'impara.prs.reviewers': 'Reviewers',
-  'impara.prs.build': 'Build',
-  'impara.prs.items': 'Work items',
 };

@@ -158,8 +158,6 @@ export const dialogsEn: typeof dialogsIt = {
   // Sidebar
   'dialogs.sidebar.label': 'Sections',
   'dialogs.sidebar.work': 'Work',
-  'dialogs.sidebar.brain': 'Brain',
-  'dialogs.sidebar.app': 'App',
   'dialogs.sidebar.waiting': (p: { count: number }) => `${p.count} waiting for you`,
   'dialogs.sidebar.working': (p: { count: number }) => p.count === 1 ? '1 agent working' : `${p.count} agents working`,
   'dialogs.sidebar.new': (p: { count: number }) => `${p.count} new`,
