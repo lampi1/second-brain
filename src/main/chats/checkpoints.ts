@@ -115,10 +115,18 @@ export async function afterTree(root: string): Promise<string | null> {
   try { return await worktreeTree(root); } catch { return null; }
 }
 
-/** Deletes refs of this chat's checkpoints beyond the newest `keep`. */
+/** Deletes refs of this chat's checkpoints beyond the newest `keep`. Newest by the checkpoint's own time, the ref's last
+ *  segment (`…/<Date.now()>`): a clean tree's checkpoint is HEAD (turnCheckpoint), whose commit date may be days old, so
+ *  git's creatordate would put the newest checkpoints first in line for deletion (ADR 0368). */
 export async function prune(root: string, prefix: string, keep = KEEP): Promise<void> {
   const refs = (await git(root, ['for-each-ref', '--sort=-creatordate', '--format=%(refname)', prefix])).split('\n').filter(Boolean);
-  for (const ref of refs.slice(keep)) await git(root, ['update-ref', '-d', ref]).catch(() => {});
+  for (const ref of byCheckpointTime(refs).slice(keep)) await git(root, ['update-ref', '-d', ref]).catch(() => {});
+}
+
+/** Pure, for the tests: refs newest first by their numeric last segment; a ref without one keeps git's order, last. */
+export function byCheckpointTime(refs: readonly string[]): string[] {
+  const at = (ref: string): number => { const n = Number(ref.slice(ref.lastIndexOf('/') + 1)); return Number.isFinite(n) && n > 0 ? n : -1; };
+  return refs.map((ref, i) => ({ ref, i, t: at(ref) })).sort((a, b) => b.t - a.t || a.i - b.i).map(x => x.ref);
 }
 
 /** skipped: paths the turn changed that changed again since it ended, or nested repositories, left as they are */

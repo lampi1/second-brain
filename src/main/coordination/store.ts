@@ -28,6 +28,13 @@ const decodeRequests = (rows: JoinedRequest[]): RequestRecord[] => rows.map(r =>
 const changeStamp = (db: DatabaseSync): string =>
   `${(db.prepare('pragma data_version').get() as { data_version: number }).data_version}:${(db.prepare('select total_changes() n').get() as { n: number }).n}`;
 
+/** The delivered permissions the app's own gate allowed, asked before ?: what pruneAutoPermits removes. */
+const GATE_ALLOWED = `select r.id rid, d.id did from coordination_requests r
+  join coordination_decisions d on d.request_id=r.id join coordination_deliveries l on l.decision_id=d.id
+  where r.state='accepted' and r.at < ? and json_extract(r.json,'$.kind')='permission'
+    and json_extract(d.json,'$.actor.kind')='policy' and json_extract(d.json,'$.actor.policy') in ('auto-permit','role-gate')
+    and json_extract(d.json,'$.answer.allow')=1 and json_extract(l.json,'$.state')='delivered'`;
+
 export class CoordinationStore {
   private handle: DatabaseSync;
   private openCache?: { db: DatabaseSync; stamp: string; cap: number; rows: RequestRecord[] };
@@ -150,12 +157,7 @@ export class CoordinationStore {
    *  Returns how many requests it removed: fewer than `batch` means nothing is left. */
   pruneAutoPermits(before: number, batch = 500): number {
     return tx(this.db, () => {
-      const rows = this.db.prepare(`select r.id rid, d.id did from coordination_requests r
-        join coordination_decisions d on d.request_id=r.id join coordination_deliveries l on l.decision_id=d.id
-        where r.state='accepted' and r.at < ? and json_extract(r.json,'$.kind')='permission'
-          and json_extract(d.json,'$.actor.kind')='policy' and json_extract(d.json,'$.actor.policy') in ('auto-permit','role-gate')
-          and json_extract(d.json,'$.answer.allow')=1 and json_extract(l.json,'$.state')='delivered'
-        limit ?`).all(before, Math.max(1, Math.trunc(batch))) as { rid: string; did: string }[];
+      const rows = this.db.prepare(`${GATE_ALLOWED} limit ?`).all(before, Math.max(1, Math.trunc(batch))) as { rid: string; did: string }[];
       const byDecision = ['delete from coordination_execution where decision_id = ?', 'delete from coordination_deliveries where decision_id = ?',
         'delete from coordination_decisions where id = ?'].map(sql => this.db.prepare(sql));
       const request = this.db.prepare('delete from coordination_requests where id = ?'), open = this.db.prepare('delete from coordination_open_requests where request_id = ?');
@@ -163,6 +165,8 @@ export class CoordinationStore {
       return rows.length;
     });
   }
+  /** Whether any gate-allowed permission row is left, of any age (prune.ts: the job is done only when none is). */
+  autoPermitsLeft(): boolean { return !!this.db.prepare(`${GATE_ALLOWED} limit 1`).get(Number.MAX_SAFE_INTEGER); }
   /** A one-time job's mark in coordination_meta (prune.ts). */
   done(key: string): boolean { return !!this.db.prepare('select 1 from coordination_meta where key = ?').get(key); }
   markDone(key: string): void { this.db.prepare('insert into coordination_meta(key,value) values(?,?) on conflict(key) do nothing').run(key, 'done'); }

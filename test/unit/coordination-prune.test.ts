@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { CoordinationStore, proposalHash } from '../../src/main/coordination/store';
-import { PRUNE_AGE_MS, PRUNE_BATCH, PRUNE_DELAY_MS, PRUNE_GAP_MS, PRUNE_KEY, pruneAutoPermitsLater } from '../../src/main/coordination/prune';
+import { PRUNE_AGAIN_MS, PRUNE_AGE_MS, PRUNE_BATCH, PRUNE_DELAY_MS, PRUNE_GAP_MS, PRUNE_KEY, pruneAutoPermitsLater } from '../../src/main/coordination/prune';
 import { closeAppDbs } from '../../src/main/app-db';
 import type { DecisionActor, RequestKey } from '../../src/main/coordination/model';
 
@@ -63,6 +63,9 @@ describe('pruneAutoPermits', () => {
     expect(store.pruneAutoPermits(now - PRUNE_AGE_MS, 10)).toBe(2);
     expect(store.requests().map(r => r.key.originalRequestId).sort()).toEqual(['auto-new', 'away-old', 'pending-old', 'question-old', 'refused-old', 'user-old']);
     expect(store.pruneAutoPermits(now - PRUNE_AGE_MS, 10)).toBe(0);
+    expect(store.autoPermitsLeft()).toBe(true); // auto-new, younger than a day
+    expect(store.pruneAutoPermits(now, 10)).toBe(1);
+    expect(store.autoPermitsLeft()).toBe(false);
   });
   it('takes at most one batch per call', () => {
     const { store } = fixture();
@@ -75,10 +78,11 @@ describe('pruneAutoPermits', () => {
 });
 
 describe('pruneAutoPermitsLater', () => {
-  const fake = (batches: number[]) => {
+  const fake = (batches: number[], left: boolean[] = []) => {
     const calls: number[] = [];
     let done = false;
     const store = { pruneAutoPermits: (before: number, batch: number) => { calls.push(before); expect(batch).toBe(PRUNE_BATCH); return batches.shift() ?? 0; },
+      autoPermitsLeft: () => left.shift() ?? false,
       done: () => done, markDone: (k: string) => { expect(k).toBe(PRUNE_KEY); done = true; } };
     return { store, calls, isDone: () => done };
   };
@@ -99,6 +103,21 @@ describe('pruneAutoPermitsLater', () => {
     vi.advanceTimersByTime(PRUNE_GAP_MS * 10);
     expect(f.calls).toHaveLength(3);
   });
+  it('rows younger than a day wait: a day later it runs again, and is done only when none is left', () => {
+    vi.useFakeTimers();
+    let t = PRUNE_AGE_MS;
+    const f = fake([3, 2], [true, false]);
+    pruneAutoPermitsLater(f.store, { now: () => t, timers });
+    vi.advanceTimersByTime(PRUNE_DELAY_MS);
+    expect(f.calls).toHaveLength(1);
+    expect(f.isDone()).toBe(false);
+    vi.advanceTimersByTime(PRUNE_AGAIN_MS - 1);
+    expect(f.calls).toHaveLength(1);
+    t += PRUNE_AGAIN_MS;
+    vi.advanceTimersByTime(1);
+    expect(f.calls).toEqual([0, PRUNE_AGAIN_MS]);
+    expect(f.isDone()).toBe(true);
+  });
   it('never runs once done, and nothing runs after its stop', () => {
     vi.useFakeTimers();
     const f = fake([PRUNE_BATCH, PRUNE_BATCH]);
@@ -116,7 +135,7 @@ describe('pruneAutoPermitsLater', () => {
   it('a failing batch pauses the clean-up until the next start, without marking it done', () => {
     vi.useFakeTimers();
     let n = 0;
-    const store = { pruneAutoPermits: () => { n++; throw new Error('database is locked'); }, done: () => false, markDone: () => { throw new Error('not done'); } };
+    const store = { pruneAutoPermits: () => { n++; throw new Error('database is locked'); }, autoPermitsLeft: () => true, done: () => false, markDone: () => { throw new Error('not done'); } };
     pruneAutoPermitsLater(store, { timers });
     vi.advanceTimersByTime(PRUNE_DELAY_MS + PRUNE_GAP_MS * 5);
     expect(n).toBe(1);

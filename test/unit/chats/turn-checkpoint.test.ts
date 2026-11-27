@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as ChildProcess from 'node:child_process';
 
 const calls: string[][] = [];
-let status = '';
+let status = '', refs = '';
 vi.mock('node:child_process', async orig => {
   const real = await orig<typeof ChildProcess>();
   const execFile = (_cmd: string, args: string[], _opts: unknown, cb: (e: Error | null, out: string, err: string) => void) => {
@@ -15,12 +15,13 @@ vi.mock('node:child_process', async orig => {
       : a[0] === 'rev-parse' && a.includes('--show-toplevel') ? '/repo\n'
       : a[0] === 'rev-parse' && a.includes('--git-path') ? '/repo/.git/index\n'
       : a[0] === 'rev-parse' ? `${'a'.repeat(40)}\n`
+      : a[0] === 'for-each-ref' ? refs
       : a[0] === 'write-tree' ? `${'t'.repeat(40)}\n` : a[0] === 'commit-tree' ? `${'c'.repeat(40)}\n` : '';
     queueMicrotask(() => cb(null, out, ''));
   };
   return { ...real, execFile };
 });
-const { parseStatus, turnCheckpoint } = await import('../../../src/main/chats/checkpoints');
+const { byCheckpointTime, parseStatus, prune, turnCheckpoint } = await import('../../../src/main/chats/checkpoints');
 
 const HEAD = 'b'.repeat(40);
 beforeEach(() => { calls.length = 0; });
@@ -56,5 +57,17 @@ describe('turnCheckpoint', () => {
     status = '# branch.oid (initial)\0';
     await turnCheckpoint('/repo', 'refs/sb/checkpoints/c/3');
     expect(calls.map(c => c[0])).toContain('add');
+  });
+});
+
+describe('prune', () => {
+  it('keeps the newest checkpoints by their own time, whatever the date of the commit they point to', async () => {
+    // git's creatordate order: a HEAD checkpoint (an old commit) comes last although it is the newest
+    refs = ['refs/sb/checkpoints/c/300', 'refs/sb/checkpoints/c/200', 'refs/sb/checkpoints/c/100', 'refs/sb/checkpoints/c/400'].join('\n');
+    await prune('/repo', 'refs/sb/checkpoints/c/', 2);
+    expect(calls.filter(c => c[0] === 'update-ref').map(c => c[2])).toEqual(['refs/sb/checkpoints/c/200', 'refs/sb/checkpoints/c/100']);
+  });
+  it('orders by the ref\'s time, a ref without one last in git\'s order', () => {
+    expect(byCheckpointTime(['r/5', 'r/x', 'r/9', 'r/y'])).toEqual(['r/9', 'r/5', 'r/x', 'r/y']);
   });
 });
