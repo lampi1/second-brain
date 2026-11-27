@@ -32,7 +32,7 @@ import { admitNow, reqKey, toggleMaximize } from '../actions';
 import { useHandoffTabs } from '../store/handoffs';
 import { StripMeta } from './StripMeta';
 import { StripFace } from './StripFace';
-import { GrindInfo, PlanDots, SubCount } from './GrindStrip';
+import { GrindInfo, PlanDots, planOutcome, SubCount } from './GrindStrip';
 import { BrowserTile } from './BrowserTile';
 import { FullTools } from './FullTools';
 import { selectedHere } from '../lib/strip-click';
@@ -258,7 +258,8 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded,
           {/* «Role · what it does now» (ADR 0366) */}
           <span className="gs-now">{topic && <span className="gs-role" data-testid={`chat-topic-${chatId}`}>{name}</span>}<span className="chat-strip-line">{busyShown?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.plan?.phase==='proposed'?t('tree.plan.ready'):chat.lastText.slice(0,140)}</span></span>
         </div>
-        {row !== 'done' && <PlanDots id={chatId} plan={chat.plan} />}
+        {/* a finished plan stays on its row only when its result is not the planned one (blocked or partial) */}
+        {(row !== 'done' || planOutcome(chat.plan)) && <PlanDots id={chatId} plan={chat.plan} />}
         {/* the engine's own sub-agents as a count (their details in the ⓘ), a permission mode other than the default */}
         <SubCount id={chatId} agents={chat.agentChildren} />
         {perm && <span className="th-badge gs-perm" data-testid={`strip-perm-${chatId}`}>{perm}</span>}

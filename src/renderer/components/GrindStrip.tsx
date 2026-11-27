@@ -80,13 +80,25 @@ export function SubCount({ id, agents }: { id: string; agents: ChatSummary['agen
   return <span className="gs-subs" data-testid={`strip-subs-${id}`} aria-label={t('grind.subs', { n })} data-tip={t('grind.subs', { n })}>↳ {n}</span>;
 }
 
-/** A plan with steps: one dot per step (done green, the one under way accent, a blocked one amber, the rest empty) and
- *  «done/total». Nothing while it still asks or has no step. */
+/** What a plan's line says beside its count: a blocked step wins over a partial one (a blocked result is never shown as
+ *  merely partial); null when every step went or goes as planned. */
+export function planOutcome(plan: StrategyPlan | undefined): 'tree.plan.blocked' | 'tree.plan.partial' | null {
+  if (!plan) return null;
+  if (plan.steps.some(s => s.state === 'blocked')) return 'tree.plan.blocked';
+  return plan.steps.some(s => s.state === 'partial') ? 'tree.plan.partial' : null;
+}
+
+/** A plan with steps: one dot per step (done green, the one under way accent, a blocked one amber, the rest empty),
+ *  «done/total» and the outcome when a step is blocked or partial (planOutcome), with a progress bar for screen
+ *  readers. Nothing while it still asks or has no step. */
 export function PlanDots({ id, plan }: { id: string; plan: StrategyPlan | undefined }) {
   if (!plan || !plan.steps.length || plan.phase === 'asking' || plan.phase === 'revising') return null;
   const { done, total } = planCount(plan);
-  return <span className="gs-plan" data-testid={`plan-${id}`} data-phase={plan.phase} role="img" aria-label={t('tree.plan.progress', { done, total })}>
+  const note = planOutcome(plan);
+  return <span className="gs-plan" data-testid={`plan-${id}`} data-phase={plan.phase}>
     <span className="gs-steps" aria-hidden="true">{plan.steps.map((s, i) => <i key={i} className={`is-${s.state}`} />)}</span>
-    <small data-testid={`plan-percent-${id}`}>{done}/{total}</small>
+    <small data-testid={`plan-percent-${id}`} aria-hidden="true">{done}/{total}</small>
+    {note && <small className="gs-plan-note" data-testid={`plan-note-${id}`}>{t(note)}</small>}
+    <span className="sr-only" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done} aria-label={t('tree.plan.progress', { done, total })} />
   </span>;
 }

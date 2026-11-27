@@ -11,7 +11,7 @@ const estimate = vi.hoisted(() => ({ value: null as null | { timeMs: number | nu
 vi.mock('../../src/renderer/lib/run-estimates', async orig => ({ ...(await orig<object>()), useRunEstimates: () => (estimate.value ? { runs: { r1: { estimate: estimate.value } } } : null) }));
 import type { ChatSummary } from '../../src/shared/contract';
 import type { StrategyPlan } from '../../src/shared/strategy';
-import { GrindInfoView, infoLines, infoNext, PlanDots, SubCount, subLines } from '../../src/renderer/components/GrindStrip';
+import { GrindInfoView, infoLines, infoNext, PlanDots, planOutcome, SubCount, subLines } from '../../src/renderer/components/GrindStrip';
 import { StripMeta } from '../../src/renderer/components/StripMeta';
 import { setLang } from '../../src/renderer/i18n';
 
@@ -91,8 +91,18 @@ describe('PlanDots', () => {
   it('draws one dot per step by its state and «done/total»', () => {
     const html = renderToStaticMarkup(createElement(PlanDots, { id: 'p', plan: plan('running', ['done', 'done', 'now', 'blocked', 'todo']) }));
     expect(html.match(/<i class="is-[a-z]+"><\/i>/g)).toEqual(['<i class="is-done"></i>', '<i class="is-done"></i>', '<i class="is-now"></i>', '<i class="is-blocked"></i>', '<i class="is-todo"></i>']);
-    expect(html).toContain('<small data-testid="plan-percent-p">2/5</small>');
+    expect(html).toContain('<small data-testid="plan-percent-p" aria-hidden="true">2/5</small>');
     expect(html).toContain('aria-label="2 di 5 passaggi conclusi"');
+  });
+  it('says a blocked outcome over a partial one, nothing when the steps go as planned', () => {
+    expect(planOutcome(undefined)).toBeNull();
+    expect(planOutcome(plan('running', ['done', 'now', 'todo']))).toBeNull();
+    expect(planOutcome(plan('done', ['partial', 'done']))).toBe('tree.plan.partial');
+    expect(planOutcome(plan('done', ['partial', 'blocked']))).toBe('tree.plan.blocked');
+    const html = renderToStaticMarkup(createElement(PlanDots, { id: 'p', plan: plan('done', ['partial', 'partial', 'done']) }));
+    expect(html).toContain('<small class="gs-plan-note" data-testid="plan-note-p">risultato parziale</small>');
+    expect(html).toMatch(/role="progressbar"[^>]*aria-valuemax="3" aria-valuenow="\d"/);
+    expect(renderToStaticMarkup(createElement(PlanDots, { id: 'p', plan: plan('running', ['done', 'todo']) }))).not.toContain('plan-note-p');
   });
   it('shows nothing without a plan, without steps, or while the Strategist still asks', () => {
     for (const p of [undefined, plan('running', []), plan('asking', ['todo']), plan('revising', ['todo'])]) expect(renderToStaticMarkup(createElement(PlanDots, { id: 'p', plan: p }))).toBe('');

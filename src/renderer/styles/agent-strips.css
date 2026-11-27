@@ -263,6 +263,7 @@
 .chat-tile.is-strip .gs-now > .chat-strip-line { flex:1 1 0; min-width:0; display:block; padding:0; overflow:hidden; text-overflow:ellipsis; color:var(--text-2); font-size:12px; }
 .gs-now .typing { padding:0; font-size:12px; color:var(--text-2); }
 .gs-plan { flex:none; display:inline-flex; align-items:center; gap:6px; color:var(--text-3); font-size:11px; font-variant-numeric:tabular-nums; }
+.gs-plan > .gs-plan-note { color:var(--amber); }
 .gs-steps { display:inline-flex; gap:3px; }
 .gs-steps > i { width:7px; height:7px; border-radius:50%; background:var(--border-3); }
 .gs-steps > i.is-done { background:var(--green); }
@@ -331,7 +332,7 @@
 .grind-team .agent-pane-wrap.grind-tab { margin:4px 12px 8px 30px; }
 /* a browser of its own: a row after the sections */
 .grind-row { min-width:0; }
-@container (max-width: 600px) { .gs-meta { display:none; } .gs-plan > small { display:none; } }
+@container (max-width: 600px) { .gs-meta { display:none; } .gs-plan > small:not(.gs-plan-note) { display:none; } }
 @container (max-width: 480px) { .gs-plan { display:none; } .gs-state { min-width:0; } }
 /* the open chat in place of the strips: the bar (back, the team as tabs), then the chat filling the page */
 .agent-strips.bench-open { display:flex; flex-direction:column; min-height:360px; height:calc(100vh - var(--topbar-h, 52px) - 112px); padding-bottom:0; }
