@@ -15,33 +15,38 @@ test('strips show readable estimates from similar tasks, with their accuracy', a
   const { app, page } = await launchDemo({ width: 1600, height: 1000, orchestrator: true });
   try {
     // the QA run: the same agent on the same model; the SMS run (another model): the same agent on any model (ADR 0285)
-    // closed, the strip itself carries time and cost against the estimate (ADR 0292); the chip is in the details (ⓘ)
-    await expect(page.getByTestId('chat-meta-qa')).toContainText(/\d+ min \/ ~\d+ min/);
-    for (const id of ['qa', 'sms']) { await page.getByTestId(`chat-expand-${id}`).click(); await page.getByTestId(`chat-facts-${id}`).click(); }
-    const qa = page.getByTestId('chat-estimate-qa');
-    await expect(qa).toBeVisible();
-    await expect(qa).toContainText(/~\d+ min · ~\d+,\d\d\s\$ · su \d+ lavori simili/);
-    await expect(page.getByTestId('chat-estimate-sms')).toContainText('lavori simili');
-
-    // the Orchestrator's column starts with its messages: no plan panel (#124)
-    await expect(page.getByTestId('tile-orchestrator')).toBeVisible();
-    await expect(page.getByTestId('orchestrator-plan')).toHaveCount(0);
-    await shot(page, 'task-estimate-dark');
-
-    // the "?" explains the figure and the accuracy
-    await page.getByTestId('estimate-help-r_000000000002').click();
-    const bubble = page.getByTestId('estimate-help-r_000000000002-bubble');
-    await expect(bubble).toBeVisible();
-    await expect(bubble).toContainText('Come si calcola la stima');
-    await expect(bubble).toContainText('stesso agente (');
-    await expect(bubble).toContainText('Quanto tengono le stime');
-    await expect(bubble.getByTestId('estimate-accuracy')).toContainText(/entro ×2: \d+\/\d+/);
-    await expect(bubble.getByTestId('estimate-accuracy')).not.toContainText(/precisione|pt in/); // ADR 0101
-    await shot(page, 'task-estimate-help-dark');
-    await page.keyboard.press('Escape');
+    // closed, the strip carries time and cost so far; the estimate is in its ⓘ (ADR 0366), the chip in the open chat's details
+    await expect(page.getByTestId('chat-meta-qa')).toContainText(/\d+ min/);
+    await expect(page.getByTestId('strip-info-qa')).toHaveAttribute('aria-label', /stima ~\d+ min/);
+    // one chat open at a time (its team on the bench): QA's details and the "?" of its estimate, back, then SMS's
+    for (const id of ['qa', 'sms']) {
+      await page.getByTestId(`chat-expand-${id}`).click();
+      await page.getByTestId(`chat-facts-${id}`).click();
+      const est = page.getByTestId(`chat-estimate-${id}`);
+      await expect(est).toContainText('lavori simili');
+      if (id !== 'qa') continue;
+      await expect(est).toContainText(/~\d+ min · ~\d+,\d\d\s\$ · su \d+ lavori simili/);
+      // the Orchestrator's column starts with its messages: no plan panel (#124)
+      await expect(page.getByTestId('tile-orchestrator')).toBeVisible();
+      await expect(page.getByTestId('orchestrator-plan')).toHaveCount(0);
+      await shot(page, 'task-estimate-dark');
+      // the "?" explains the figure and the accuracy (QA's run)
+      await page.getByTestId('estimate-help-r_000000000002').click();
+      const bubble = page.getByTestId('estimate-help-r_000000000002-bubble');
+      await expect(bubble).toBeVisible();
+      await expect(bubble).toContainText('Come si calcola la stima');
+      await expect(bubble).toContainText('stesso agente (');
+      await expect(bubble).toContainText('Quanto tengono le stime');
+      await expect(bubble.getByTestId('estimate-accuracy')).toContainText(/entro ×2: \d+\/\d+/);
+      await expect(bubble.getByTestId('estimate-accuracy')).not.toContainText(/precisione|pt in/); // ADR 0101
+      await shot(page, 'task-estimate-help-dark');
+      await page.keyboard.press('Escape');
+      await page.getByTestId('bench-back').click();
+    }
+    await page.getByTestId('bench-back').click();
 
     // a run that ends: estimate → actual
-    await page.getByTestId('tile-chat-mappa').click();
+    await page.getByTestId('chat-expand-mappa').click();
     await page.getByTestId('tile-chat-mappa').getByTestId('run-outcome-success').click();
     await page.getByTestId('chat-facts-mappa').click();
     const mappa = page.getByTestId('chat-estimate-mappa');
