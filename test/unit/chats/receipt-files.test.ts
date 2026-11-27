@@ -12,7 +12,7 @@ const git = { snapshots: 0, trees: 0, fail: false };
 vi.mock('../../../src/main/chats/checkpoints', async orig => {
   const real = await orig<typeof Checkpoints>();
   return { ...real,
-    snapshot: async (cwd: string) => ({ commit: `c${++git.snapshots}`, at: Date.now(), root: cwd }),
+    turnCheckpoint: async (cwd: string) => ({ commit: `c${++git.snapshots}`, at: Date.now(), root: cwd }),
     afterTree: async () => git.fail ? null : `t${++git.trees}`,
     turnFiles: async () => ['src/first.ts'],
     treeFiles: async (_root: string, from: string, to: string) => [`src/${from}-${to}.ts`],

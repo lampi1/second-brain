@@ -7,7 +7,7 @@ import type * as Checkpoints from '../../../src/main/chats/checkpoints';
 let gate: Promise<void> | null = null;
 vi.mock('../../../src/main/chats/checkpoints', async orig => {
   const real = await orig<typeof Checkpoints>();
-  return { ...real, snapshot: async (cwd: string) => { const g = gate; gate = null; if (g) await g; return { commit: 'c0', at: Date.now(), root: cwd }; }, prune: async () => {} };
+  return { ...real, turnCheckpoint: async (cwd: string) => { const g = gate; gate = null; if (g) await g; return { commit: 'c0', at: Date.now(), root: cwd }; }, prune: async () => {} };
 });
 
 const { ChatManager } = await import('../../../src/main/chats/manager');
