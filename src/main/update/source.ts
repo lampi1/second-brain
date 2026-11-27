@@ -5,7 +5,9 @@
 // update an Orchestrator runs when the user asks (pull()), and, at start, whether the new version came up or the
 // launcher went back to the previous one, and why (the notice under the top bar, LaunchBanner.tsx). Only the user's
 // click updates and restarts: no agent tool calls updateNow(). Moved here from the retired "Migliora l'app" section
-// (ADR 0079). Used by wiring.ts (built once), index.ts (the source:* handlers) and appctl/tools.ts (app_update_code).
+// (ADR 0079). The same GitHub check also runs by itself a minute after the start and every half hour (autoCheck, ADR
+// 0366): the top bar's «Versione nuova · Aggiorna» chip needs its count without the Settings card being opened. Used by
+// wiring.ts (built once), index.ts (the source:* handlers) and appctl/tools.ts (app_update_code).
 import { execFile, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,6 +18,14 @@ import { timedOutText, UpdateWhenIdle, waitingText, type WhenIdleDeps } from './
 
 /** scripts/pull.mjs --json */
 export interface PullResult { ok: boolean; message: string; upToDate?: boolean; from?: string; to?: string; commits?: string[]; depsReinstalled?: boolean; built?: boolean; behind?: number; ahead?: number; canUpdate?: boolean; depsChanged?: boolean }
+
+/** Runs `run` after `firstMs` and then every `everyMs`, on timers that never keep the process alive; returns the stop. */
+export function scheduleChecks(run: () => void, firstMs: number, everyMs: number): () => void {
+  let every: ReturnType<typeof setInterval> | null = null;
+  const first = setTimeout(() => { run(); every = setInterval(run, everyMs); every.unref?.(); }, firstMs);
+  first.unref?.();
+  return () => { clearTimeout(first); if (every) clearInterval(every); };
+}
 
 export interface AppSourceDeps {
   userData: string;
@@ -208,6 +218,13 @@ export class AppSourceService {
   private updateRepo(): string | null { return this.d.stable ? this.repo() : this.d.devRepo; }
   /** pull.mjs flags: a stable copy is promoted, which needs a tree without untracked files too */
   private pullFlags(): string[] { return this.d.stable ? ['--strict'] : []; }
+
+  /** The GitHub check by itself (scheduleChecks): a minute after the start, then every half hour. It is the Settings
+   *  card's check: git fetch in a child process (pull.mjs --check), never work on the main thread, and it steps aside
+   *  while a check, an update or a restart runs. */
+  autoCheck(firstMs = 60_000, everyMs = 30 * 60_000): () => void {
+    return scheduleChecks(() => { void this.sourceCheck().catch(e => log.warn('update', 'automatic GitHub check failed', { cause: errText(e), hint: 'Settings → Aggiornamenti → Controlla shows the reason' })); }, firstMs, everyMs);
+  }
 
   /** Where the code folder stands against GitHub's main (git fetch only): the "Aggiorna" button's count. */
   async sourceCheck(): Promise<AppSourceState> {

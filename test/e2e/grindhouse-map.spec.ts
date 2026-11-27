@@ -1,5 +1,5 @@
 // The Grindhouse and the map told simply (OS · App semplice, branch C): the menu, Ctrl+1 and Esc always show the
-// overview of all the agents (every open chat folds); a card shows the skills its run used as chips; a plan step on the
+// overview of all the agents (every open chat folds); a strip's ⓘ says the skills its run used; a plan step on the
 // map says role · model · preset, with «previsto» before it starts; a group of steps of one turn counts live («5 in
 // parallelo · 1 al lavoro, 4 da far partire»). Frozen demo; screenshots in test-results/shots/grindhouse-*.png.
 import { expect, test, type ElectronApplication } from '@playwright/test';
@@ -42,25 +42,29 @@ test('the menu leaves a chat in focus mode and shows every agent', async () => {
   } finally { await app.close(); }
 });
 
-test('a card shows the skills its run used as chips', async () => {
+test('a strip\'s ⓘ says the skills its run used (no chips on the row, ADR 0366)', async () => {
   const { app, page } = await launchDemo({ width: 1600, height: 1200 });
   try {
     await demo(app, 'tree'); // the delegation tree's chats carry a run, the plain demo ones do not
     await demo(app, 'skills', 'tree-plan', ['code-work', 'air-qa', 'ops-core', 'wiz-pr']);
-    const chips = page.getByTestId('skill-chips-tree-plan');
-    await expect(chips).toBeVisible();
-    await expect(chips).toContainText('code-work');
-    await expect(chips).toContainText('+1');
-    // a Cursor chat reports no skill use: its role's loaded skills show, marked «uso non tracciato»
+    const info = page.getByTestId('strip-info-tree-plan');
+    await expect(info).toHaveAttribute('aria-label', /skill: code-work · air-qa · ops-core · wiz-pr/);
+    await expect(page.getByTestId('skill-chips-tree-plan')).toHaveCount(0);
+    // a Cursor chat reports no skill use: its role's loaded skills, marked «uso non tracciato»
     await demo(app, 'skills', 'sms', [], ['ops-core', 'air-qa', 'wiz-pr']);
-    const loaded = page.getByTestId('skill-chips-sms');
-    await expect(loaded).toContainText('ops-core');
-    await expect(loaded).toContainText('+1');
-    await expect(loaded).toContainText('uso non tracciato');
+    const loaded = page.getByTestId('strip-info-sms');
+    await expect(loaded).toHaveAttribute('aria-label', /uso non tracciato\): ops-core · air-qa · wiz-pr/);
     await loaded.scrollIntoViewIfNeeded();
-    await shot(page, 'grindhouse-skill-chips-untracked');
-    await chips.scrollIntoViewIfNeeded();
-    await shot(page, 'grindhouse-skill-chips');
+    await loaded.hover();
+    await expect(loaded.locator('.gs-tip')).toBeVisible();
+    await expect(loaded.locator('.gs-tip')).toContainText('uso non tracciato');
+    await shot(page, 'grindhouse-skills-untracked');
+    await page.mouse.move(2, 2); // its card closes when the pointer leaves
+    await expect(loaded.locator('.gs-tip')).toBeHidden();
+    await info.scrollIntoViewIfNeeded();
+    await info.hover();
+    await expect(info.locator('.gs-tip')).toContainText('code-work');
+    await shot(page, 'grindhouse-skills');
   } finally { await app.close(); }
 });
 

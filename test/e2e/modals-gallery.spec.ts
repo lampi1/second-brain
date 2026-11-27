@@ -5,10 +5,10 @@
 import { expect, test } from '@playwright/test';
 import { goPage, launchDemo, shot } from './helpers';
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`dialogs share one base · ${scheme}`, async () => {
     test.setTimeout(120_000);
-    const { app, page } = await launchDemo({ scheme, config: { theme: scheme }, orchestrator: true, height: 1000 });
+    const { app, page } = await launchDemo({ scheme, orchestrator: true, height: 1000 });
     try {
       // a confirmation: title, its text, Annulla and the primary action on the right
       await page.getByTestId('topbar-stopall').click();

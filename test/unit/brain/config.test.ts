@@ -18,14 +18,15 @@ describe('settings schema and validate()', () => {
     }
   });
 
-  it('protects engines, spending limits, notifications off and security keys; theme is free', () => {
+  it('protects engines, spending limits, notifications off and security keys; language is free, theme is gone', () => {
     const prot = schema().filter(d => d.protected).map(d => d.key);
     for (const k of ['engineOn.claude', 'engineOn.cursor', 'engines.claude', 'engines.cursor', 'budget.enabled', 'budget.claude.dailyUsd', 'budget.cursor.mode', 'osToasts', 'dnd', 'mute.*', 'brainRoot', 'mcpPort'])
       expect(prot, k).toContain(k);
     expect(defOf('tasks.enabled')!.protected).toBe(true);
     expect(validate('tasks.everyMin', 2).ok).toBe(false);
     expect(validate('tasks.everyMin', 60).ok).toBe(true);
-    expect(defOf('theme')!.protected).toBe(false);
+    expect(defOf('language')!.protected).toBe(false);
+    expect(defOf('theme' as never)).toBeNull(); // dark only (ADR 0366)
     expect(defOf('mute.chat-done')!.key).toBe('mute.*');
   });
 
@@ -36,7 +37,7 @@ describe('settings schema and validate()', () => {
     const bad: [string, unknown][] = [
       ['brainRoot', 'relative/path'], ['mcpPort', 70000], ['mcpPort', 1.5], ['view', 'mosaico'], ['osToasts', 'always'], ['dnd', 'yes'],
       ['mute.idea', 'yes'], ['mute.Bad Kind', true], ['budget.claude.mode', 'stop'], ['budget.claude.dailyUsd', -1], ['budget.enabled', 1],
-      ['theme', null], ['nope', 1], ['engines.claude', 'on'],
+      ['theme', 'light'], ['language', null], ['nope', 1], ['engines.claude', 'on'],
     ];
     for (const [k, v] of bad) {
       const r = validate(k, v);
@@ -133,7 +134,7 @@ describe('Chat aperte dall’Orchestrator (orchestratorChats)', () => {
 describe('settings store', () => {
   it('starts from generic defaults (no personal numbers, $ limits off, budget on in warn mode, engines on)', () => {
     const s = new ConfigStore(tmpDir(), {}).get();
-    expect(s).toMatchObject({ brainRoot: null, mcpPort: 4319, osToasts: 'urgent', theme: 'dark', dnd: false, mute: {}, engines: { claude: true, cursor: true } });
+    expect(s).toMatchObject({ brainRoot: null, mcpPort: 4319, osToasts: 'urgent', language: 'system', dnd: false, mute: {}, engines: { claude: true, cursor: true } });
     expect(s.budget).toEqual({ enabled: true, claude: { mode: 'warn', dailyUsd: null, perChatUsd: null }, cursor: { mode: 'warn', dailyUsd: null, perChatUsd: null } });
     expect(s.locked).toBeUndefined();
     expect(s.tasks).toEqual({ enabled: false, everyMin: 30, sound: true }); // Task reads only when the user turns it on; its alerts chime
@@ -145,11 +146,10 @@ describe('settings store', () => {
     const brain = path.join(dir, 'brain');
     a.set({ brainRoot: brain, language: 'it', mute: { idea: true }, budget: { claude: { dailyUsd: 200 } } });
     a.set({ mute: { error: true }, budget: { cursor: { mode: 'ask', perChatUsd: 5 } } });
-    expect(() => a.set({ theme: 'light', osToasts: 'always' as never })).toThrow();
+    expect(() => a.set({ language: 'en', osToasts: 'always' as never })).toThrow();
     const b = new ConfigStore(dir, {}).get();
     expect(b.brainRoot).toBe(path.normalize(brain));
-    expect(b.language).toBe('it');
-    expect(b.theme).toBe('dark'); // the bad patch changed nothing
+    expect(b.language).toBe('it'); // the bad patch changed nothing
     expect(b.mute).toEqual({ idea: true, error: true });
     expect(b.budget.claude).toEqual({ mode: 'warn', dailyUsd: 200, perChatUsd: null });
     expect(b.budget.cursor).toEqual({ mode: 'ask', dailyUsd: null, perChatUsd: 5 });
@@ -163,16 +163,17 @@ describe('settings store', () => {
     const c = new ConfigStore(dir, env);
     expect(c.get()).toMatchObject({ brainRoot: path.normalize(env.SB_BRAIN), mcpPort: 0, locked: ['brainRoot', 'mcpPort'] });
     expect(() => c.set({ brainRoot: path.join(dir, 'other') })).toThrow(/SB_BRAIN/);
-    c.set({ theme: 'light' });
+    c.set({ language: 'en' });
     const saved = JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'));
-    expect(saved).toMatchObject({ brainRoot: null, mcpPort: 4319, theme: 'light' });
+    expect(saved).toMatchObject({ brainRoot: null, mcpPort: 4319, language: 'en' });
     expect(saved.locked).toBeUndefined();
   });
 
   it('a broken or partly wrong file falls back to the defaults per key', () => {
     expect(fromSaved('nonsense')).toEqual(DEFAULTS);
-    const s = fromSaved({ view: 'grid', theme: 'light', mcpPort: 'x', budget: { enabled: false, claude: { mode: 'nope', dailyUsd: 50 } }, mute: { idea: true, 'Bad Kind': true } });
-    expect(s).toMatchObject({ theme: 'light', mcpPort: 4319, mute: { idea: true } });
+    const s = fromSaved({ view: 'grid', theme: 'light', language: 'en', mcpPort: 'x', budget: { enabled: false, claude: { mode: 'nope', dailyUsd: 50 } }, mute: { idea: true, 'Bad Kind': true } });
+    expect(s).toMatchObject({ language: 'en', mcpPort: 4319, mute: { idea: true } });
+    expect(s).not.toHaveProperty('theme'); // dark only (ADR 0366): a stored theme is dropped silently
     expect(s.budget.enabled).toBe(false);
     expect(s.budget.claude).toEqual({ mode: 'warn', dailyUsd: 50, perChatUsd: null });
     const dir = tmpDir();
@@ -184,10 +185,10 @@ describe('settings store', () => {
     const dir = tmpDir();
     const c = new ConfigStore(dir, {});
     c.set({ language: 'it' });
-    c.request('theme', 'light', { by: 'agent', chatId: 'chat-7' });
-    c.set({ theme: 'light' }); // same value: not a change
+    c.request('language', 'en', { by: 'agent', chatId: 'chat-7' });
+    c.set({ language: 'en' }); // same value: not a change
     const h = new ConfigStore(dir, {}).history();
-    expect(h.map(x => [x.key, x.by, x.before, x.after])).toEqual([['theme', 'agent', 'dark', 'light'], ['language', 'user', 'system', 'it']]);
+    expect(h.map(x => [x.key, x.by, x.before, x.after])).toEqual([['language', 'agent', 'it', 'en'], ['language', 'user', 'system', 'it']]);
     expect(h[0]!.chatId).toBe('chat-7');
   });
 
@@ -196,16 +197,16 @@ describe('settings store', () => {
     const c = new ConfigStore(dir, {});
     const seen: SettingChange[] = [];
     c.onChange(ch => seen.push(ch));
-    const r = c.request('theme', 'light', { by: 'agent', chatId: 'c1' });
+    const r = c.request('language', 'en', { by: 'agent', chatId: 'c1' });
     expect('applied' in r).toBe(true);
     const id = (r as { applied: SettingChange }).applied.id;
     const u = c.undo(id);
-    expect(u).toMatchObject({ key: 'theme', before: 'light', after: 'dark', by: 'user', undoOf: id });
-    expect(c.get().theme).toBe('dark');
-    expect(seen.map(x => x.after)).toEqual(['light', 'dark']);
+    expect(u).toMatchObject({ key: 'language', before: 'en', after: 'system', by: 'user', undoOf: id });
+    expect(c.get().language).toBe('system');
+    expect(seen.map(x => x.after)).toEqual(['en', 'system']);
     expect(() => c.undo(id)).toThrow(/già annullata/);
     const again = new ConfigStore(dir, {});
-    expect(again.get().theme).toBe('dark');
+    expect(again.get().language).toBe('system');
     expect(again.history().find(x => x.id === id)?.undone).toBe(true);
   });
 
@@ -215,8 +216,8 @@ describe('settings store', () => {
     const c = new ConfigStore(dir, {});
     let events = 0;
     c.onChange(() => events++);
-    expect(() => c.set({ theme: 'light' })).toThrow();
-    expect(c.get().theme).toBe('dark');
+    expect(() => c.set({ language: 'en' })).toThrow();
+    expect(c.get().language).toBe('system');
     const r = c.request('dnd', true, { by: 'agent' }) as { proposal: { id: string } };
     expect(() => c.confirm(r.proposal.id, true)).toThrow();
     expect(c.get().dnd).toBe(false);
@@ -258,16 +259,16 @@ describe('settings store', () => {
   it('reads change logs written before the rename to "user": the old value of the user\'s changes becomes "user"', () => {
     const dir = tmpDir();
     const legacy = ['dav', 'ide'].join(''); // the value logged for the user's own changes before the rename
-    fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ theme: 'light', language: 'it' }));
+    fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ osToasts: 'normal', language: 'it' }));
     fs.writeFileSync(path.join(dir, 'changes.jsonl'), [
-      JSON.stringify({ id: 'chg_old1', at: 1, by: legacy, key: 'theme', before: 'dark', after: 'light' }),
+      JSON.stringify({ id: 'chg_old1', at: 1, by: legacy, key: 'osToasts', before: 'urgent', after: 'normal' }),
       JSON.stringify({ id: 'chg_old2', at: 2, by: 'agent', key: 'language', before: 'system', after: 'it', chatId: 'c1' }),
     ].join('\n') + '\n');
     const c = new ConfigStore(dir, {});
     expect(c.history().map(x => [x.id, x.by])).toEqual([['chg_old2', 'agent'], ['chg_old1', 'user']]);
     // an old change can still be undone; the undo and the re-saved original are logged with the new value
-    expect(c.undo('chg_old1')).toMatchObject({ by: 'user', undoOf: 'chg_old1', before: 'light', after: 'dark' });
-    expect(c.get().theme).toBe('dark');
+    expect(c.undo('chg_old1')).toMatchObject({ by: 'user', undoOf: 'chg_old1', before: 'normal', after: 'urgent' });
+    expect(c.get().osToasts).toBe('urgent');
     const again = new ConfigStore(dir, {}).history();
     expect(again.find(x => x.id === 'chg_old1')).toMatchObject({ by: 'user', undone: true });
     expect(again.every(x => x.by === 'user' || x.by === 'agent')).toBe(true);
@@ -280,7 +281,7 @@ describe('retired view setting', () => {
     const dir = tmpDir();
     const file = path.join(dir, 'config.json');
     const domains = [path.join(dir, 'other-domain')];
-    const choices = { theme: 'light', language: 'it', engineOn: { cursor: false }, engines: { cursor: false }, orchestratorChats: { harness: 'cursor' } };
+    const choices = { language: 'it', engineOn: { cursor: false }, engines: { cursor: false }, orchestratorChats: { harness: 'cursor' } };
     const oldChange = { id: 'chg_old_view', at: 1, by: 'user', key: 'view', before: 'mosaico', after: 'corsie' };
     fs.writeFileSync(file, JSON.stringify({ view: 'corsie', ...choices, domains }));
     fs.writeFileSync(path.join(dir, 'changes.jsonl'), `${JSON.stringify(oldChange)}
@@ -303,7 +304,7 @@ describe('retired view setting', () => {
   it('DevOps became Task (ADR 0079): devops.* and the old mute keys load as tasks.* and task, written once with the new names', () => {
     const dir = tmpDir();
     const file = path.join(dir, 'config.json');
-    fs.writeFileSync(file, JSON.stringify({ theme: 'light', devops: { enabled: true, everyMin: 60, sound: false }, mute: { devops: true, 'devops-alert': true, idea: true } }));
+    fs.writeFileSync(file, JSON.stringify({ language: 'it', devops: { enabled: true, everyMin: 60, sound: false }, mute: { devops: true, 'devops-alert': true, idea: true } }));
     const store = new ConfigStore(dir, {});
     expect(store.get().tasks).toEqual({ enabled: true, everyMin: 60, sound: false });
     expect(store.get().mute).toMatchObject({ task: true, 'task-alert': true, idea: true });
@@ -311,7 +312,7 @@ describe('retired view setting', () => {
     expect('devops' in migrated).toBe(false);
     expect(migrated.tasks).toEqual({ enabled: true, everyMin: 60, sound: false });
     expect(Object.keys(migrated.mute).sort()).toEqual(['idea', 'task', 'task-alert']);
-    expect(migrated.theme).toBe('light');
+    expect(migrated.language).toBe('it');
     // a file that already has tasks keeps them: an old devops block next to it never wins
     fs.writeFileSync(file, JSON.stringify({ tasks: { enabled: false, everyMin: 15, sound: true }, devops: { enabled: true, everyMin: 60, sound: false } }));
     expect(new ConfigStore(dir, {}).get().tasks).toEqual({ enabled: false, everyMin: 15, sound: true });
@@ -367,15 +368,31 @@ describe('settings of removed features (ADR 0201)', () => {
   it('drops the Battito, its headline and the composer\'s model suggestion from config.json once, keeping the rest', () => {
     const dir = tmpDir();
     const file = path.join(dir, 'config.json');
-    fs.writeFileSync(file, JSON.stringify({ theme: 'light', suggestOn: false, suggestModel: true, suggestDailyUsd: 0.05, headlineOn: true, headlineModel: 'x', pulse: { on: true, dailyUsd: 0.25 } }));
-    expect(new ConfigStore(dir, {}).get()).toMatchObject({ theme: 'light', suggestOn: false });
+    fs.writeFileSync(file, JSON.stringify({ language: 'it', suggestOn: false, suggestModel: true, suggestDailyUsd: 0.05, headlineOn: true, headlineModel: 'x', pulse: { on: true, dailyUsd: 0.25 } }));
+    expect(new ConfigStore(dir, {}).get()).toMatchObject({ language: 'it', suggestOn: false });
     const migrated = fs.readFileSync(file, 'utf8');
     const saved = JSON.parse(migrated) as Record<string, unknown>;
     for (const k of ['pulse', 'headlineOn', 'headlineModel', 'suggestModel', 'suggestDailyUsd']) expect(saved, k).not.toHaveProperty(k);
-    expect(saved).toMatchObject({ theme: 'light', suggestOn: false });
+    expect(saved).toMatchObject({ language: 'it', suggestOn: false });
     // a file without them is not rewritten
     new ConfigStore(dir, {});
     expect(fs.readFileSync(file, 'utf8')).toBe(migrated);
+  });
+
+  it('drops a stored theme once (dark only, ADR 0366), silently: no change logged, the rest kept', () => {
+    const dir = tmpDir();
+    const file = path.join(dir, 'config.json');
+    fs.writeFileSync(file, JSON.stringify({ theme: 'light', language: 'it' }));
+    const store = new ConfigStore(dir, {});
+    expect(store.get()).not.toHaveProperty('theme');
+    expect(store.get().language).toBe('it');
+    const migrated = fs.readFileSync(file, 'utf8');
+    expect(JSON.parse(migrated)).not.toHaveProperty('theme');
+    expect(JSON.parse(migrated)).toMatchObject({ language: 'it' });
+    expect(store.history()).toEqual([]);
+    new ConfigStore(dir, {});
+    expect(fs.readFileSync(file, 'utf8')).toBe(migrated);
+    expect(store.request('theme' as never, 'light', { by: 'agent' })).toHaveProperty('error');
   });
 
   it('drops the saved delegation.maxParallel once (no limit on children at once, 2026-11-23), keeping the other delegation keys', () => {
@@ -384,7 +401,7 @@ describe('settings of removed features (ADR 0201)', () => {
     expect(savedHas({ delegation: 3 }, 'delegation.maxParallel')).toBe(false);
     const dir = tmpDir();
     const file = path.join(dir, 'config.json');
-    fs.writeFileSync(file, JSON.stringify({ theme: 'light', delegation: { maxParallel: 3, maxDepth: 3 } }));
+    fs.writeFileSync(file, JSON.stringify({ language: 'it', delegation: { maxParallel: 3, maxDepth: 3 } }));
     const store = new ConfigStore(dir, {});
     expect(store.get().delegation).not.toHaveProperty('maxParallel');
     expect(store.get().delegation.maxDepth).toBe(3);

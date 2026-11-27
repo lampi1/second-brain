@@ -1,15 +1,27 @@
 /* Settings → Aggiornamenti beyond the "Aggiorna" row (AppUpdateSettings.tsx): the staged updater's card
    (UpdatePanel, PreparedUpdateCard) and a paused recovery (UpdateRecoveryPanel); and the restart notice under the top
-   bar (LaunchBanner.tsx). Tokens only (styles/tokens.css), so both themes and densities work. */
+   bar (LaunchBanner.tsx), now only a fallback; the version chip of the top bar (VersionChip.tsx). Tokens only (styles/tokens.css), so both themes and densities work. */
 .upd-card { display: grid; gap: 8px; margin-top: 10px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--r-l); }
 .upd-card h3 { margin: 0; font-size: var(--fs-l); font-weight: 600; }
 .upd-card p { margin: 0; color: var(--text-2); }
 
+/* the version chip of the top bar (VersionChip.tsx, ADR 0366): small and neutral, the sha green, a green dot when a
+   newer version waits; never a tinted box */
+.version-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 6px 0 10px; border: 1px solid var(--border-2); border-radius: var(--r-m); background: transparent; color: var(--text-2); font: 12.5px var(--font); white-space: nowrap; }
+.version-chip.is-new { padding-right: 10px; cursor: pointer; }
+.version-chip.is-new:hover { background: var(--surface-2); color: var(--text); }
+.version-chip.is-new > b { color: var(--text); font-weight: 600; }
+.version-chip:focus-visible, .version-chip button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.version-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+.version-sha { color: var(--green); font: 500 12px var(--mono); }
+.version-sep { color: var(--text-3); }
+.version-link { all: unset; cursor: pointer; color: var(--text-2); border-radius: var(--r-s); }
+.version-link:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+.version-x { all: unset; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: var(--r-s); color: var(--text-3); cursor: pointer; }
+.version-x:hover { background: var(--surface-3); color: var(--text); }
+
 .launch-banner { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--border-2); font-size: var(--fs-m); color: var(--text); }
-.launch-banner.ok { background: var(--green-bg); }
-.launch-banner.ok > svg { color: var(--green); }
 .launch-banner.warn { background: var(--amber-bg); border-bottom-color: var(--amber-line); }
 .launch-banner.warn > svg { color: var(--amber); }
 .launch-text { flex: 1; min-width: 0; }
 .launch-banner.warn b { color: var(--amber); }
-.launch-banner.ok b { color: var(--green); }

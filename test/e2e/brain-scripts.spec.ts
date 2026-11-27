@@ -39,7 +39,7 @@ test('Skill: a skill shows its scripts and queries; the old ones not in a skill 
 });
 
 test('Log: the brain changelog is on the Log page; the tasks are chains, a step opens its details', async () => {
-  await page.getByTestId('nav-log').click();
+  await goPage(page, 'log'); // out of ☰ (ADR 0366): G N
   const p = page.getByTestId('log-page');
   await expect(p).toBeVisible();
   await expect(page.getByTestId('nav-changelog')).toHaveCount(0);

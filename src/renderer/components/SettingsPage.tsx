@@ -47,7 +47,7 @@ export function Switch({ on, onChange, label, busy, testid }: { on: boolean; onC
   return <button type="button" role="switch" aria-checked={on} aria-label={label} disabled={busy} className={`st-switch ${on ? 'on' : ''}`} onClick={() => onChange(!on)} data-testid={testid}><span className="st-knob" aria-hidden="true" /></button>;
 }
 
-/** A few exclusive choices side by side (theme, density, notifications): the macOS segmented control. */
+/** A few exclusive choices side by side (density, notifications): the macOS segmented control. */
 export function Segmented<V extends string>({ value, options, onChange, label, testid }: { value: V; options: readonly { value: V; label: string }[]; onChange: (v: V) => void; label: string; testid?: string }) {
   // a radio group: one tab stop (the chosen one), the arrows move and choose, like native radios
   const step = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -167,8 +167,6 @@ export function SettingsPage() {
     { ...meta.voice, icon: <IconMic size={16} />, body: <VoiceSettings /> },
     { ...meta.phone, icon: <IconPhone size={16} />, body: <PhoneSettings /> },
     { ...meta.appearance, icon: <IconMoon size={16} />, body: <>
-      <Row title={t('essential.theme')} description={t('stx.themeHint')}><Segmented label={t('essential.theme')} testid="st-theme-select" value={prefs.theme} onChange={theme => { setPrefs({ theme }); savedLocally(); }}
-        options={(['system', 'light', 'dark'] as const).map(value => ({ value: choose(value), label: t(`essential.${value}`) }))} /></Row>
       <Row title={t('settings.language')} description={t('stx.languageHint')}><Select aria-label={t('settings.language')} value={settings.language} onChange={event => { const language = event.target.value; if (language === 'system' || isLang(language)) void setSetting({ language }); }} data-testid="st-language-select">{(['system', ...LANGS] as const).map(value => <option key={value} value={value}>{t(`settings.language.${value}`)}</option>)}</Select></Row>
       <Row title={t('essential.density')} description={t('stx.densityHint')}><Segmented label={t('essential.density')} testid="st-density-select" value={prefs.density} onChange={density => { setPrefs({ density }); savedLocally(); }}
         options={(['comfortable', 'compact'] as const).map(value => ({ value: choose(value), label: t(`essential.${value}`) }))} /></Row>

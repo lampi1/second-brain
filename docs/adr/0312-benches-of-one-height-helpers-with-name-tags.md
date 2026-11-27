@@ -1,6 +1,6 @@
 # ADR 0312 · Benches of one height, helpers with name tags, a torch for who works, people who speak only where asked
 
-Date: 2026-11-15 · Status: accepted (owner, thread «Proporre nuova Grindhouse e Orchestrator», 2026-11-15: «le card
+Date: 2026-11-15 · Status: superseded by ADR 0366 (thin strips grouped by Strategist replace the benches); before that accepted (owner, thread «Proporre nuova Grindhouse e Orchestrator», 2026-11-15: «le card
 della grindhouse devono essere tutte sempre alte uguali … devo anche poter vedere i figli dei figli dell'artisan nella
 card doppia. Devo vedere a colpo d'occhio chi è in attività o chi no»; «quello che manca nella card doppia è la
 possibilità di cliccare un agente e andare direttamente nella sua tab, però non voglio perdere le reaction al click»;

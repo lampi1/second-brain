@@ -119,7 +119,7 @@
 .vw-main .bx-md h3 { font-size: 15.5px; font-weight: 650; margin: 22px 0 6px; }
 .vw-main .bx-md > h2:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
 .vw-main .bx-md p, .vw-main .bx-md ul, .vw-main .bx-md ol { margin: 9px 0; }
-.vw-main .bx-md blockquote { margin: 12px 0; padding: 4px 14px; border-left: 3px solid var(--bx-blue-line); color: var(--bx-text-2); background: var(--bx-blue-bg); border-radius: 0 8px 8px 0; }
+.vw-main .bx-md blockquote { margin: 12px 0; padding: 4px 14px; border-left: 3px solid var(--bx-blue-line); color: var(--bx-text-2); background: var(--bx-blue-bg); border-radius: 0 var(--r-l) var(--r-l) 0; }
 
 /* code: an editor gutter, the cited line amber, a picked line blue */
 .vw-main .bx-code { max-height: none; padding: 10px 0; font-size: 12.5px; line-height: 1.68; border-radius: var(--r-l); background: color-mix(in srgb, var(--bx-surface-2) 70%, var(--bx-surface)); }
@@ -208,7 +208,7 @@ mark.bx-word { color: inherit; border-radius: 3px; padding: 0 1px; background: c
 .vw-toc li { margin: 0; }
 .vw-toc button {
   display: block; width: 100%; margin-left: -1px; padding: 5px 8px 5px calc(13px + var(--toc-depth, 0) * 12px);
-  border: 0; border-left: 2px solid transparent; border-radius: 0 7px 7px 0; background: transparent;
+  border: 0; border-left: 2px solid transparent; border-radius: 0 var(--r-l) var(--r-l) 0; background: transparent;
   color: var(--bx-text-3); font: inherit; line-height: 1.38; text-align: left; cursor: pointer;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
@@ -308,18 +308,7 @@ mark.bx-word { color: inherit; border-radius: 3px; padding: 0 1px; background: c
   font-size: 13px; line-height: 1.62; tab-size: 4; font-variant-ligatures: none; color: var(--code-fg);
   -webkit-font-smoothing: antialiased;
 }
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) .vw-main .bx-code {
-    --code-fg: #24292f; --code-dim: #6e7781; --code-comment: #6a737d; --code-keyword: #8250df; --code-control: #c2185b;
-    --code-fn: #0550ae; --code-type: #0a7f78; --code-string: #116329; --code-number: #b35900; --code-prop: #0b5c8f;
-    --code-param: #8a4b00; --code-meta: #7d5d00; --code-tag: #b42318; --code-escape: #0b6fa4; --code-guide: rgba(0, 0, 0, 0.08);
-  }
-}
-:root[data-theme="light"] .vw-main .bx-code {
-  --code-fg: #24292f; --code-dim: #6e7781; --code-comment: #6a737d; --code-keyword: #8250df; --code-control: #c2185b;
-  --code-fn: #0550ae; --code-type: #0a7f78; --code-string: #116329; --code-number: #b35900; --code-prop: #0b5c8f;
-  --code-param: #8a4b00; --code-meta: #7d5d00; --code-tag: #b42318; --code-escape: #0b6fa4; --code-guide: rgba(0, 0, 0, 0.08);
-}
+
 .vw-main .bx-code .bx-lc { position: relative; }
 .vw-main .bx-code .bx-ig { position: absolute; left: 0; top: 0; bottom: 0; pointer-events: none;
   background-image: repeating-linear-gradient(to right, var(--code-guide) 0 1px, transparent 1px var(--ig, 4ch)); }

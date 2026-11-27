@@ -1,7 +1,7 @@
 // UI state (not data): maximized tile, focus mode, open dialog, the current place (a brain page, the Grindhouse with the agents, the
 // map) with its back/forward history, the notification center and its read state, the Orchestrator widget (expanded, size,
 // tab, when its replies were last seen; ADR 0021, 0028), toasts, the tile
-// to flash/focus, the chat whose hand-off dialog is open, and the preferences the app remembers across restarts (density, theme, the Orchestrator column,
+// to flash/focus, the chat whose hand-off dialog is open, and the preferences the app remembers across restarts (density, the Orchestrator column,
 // tile sizes, sections, last new-chat choices) in localStorage (the app's own file:// page, kept in userData).
 // Used by every component and by App.tsx's keyboard and ui:command handlers.
 import type { Effort, Harness, NoticeTone, PermissionMode } from '@shared/contract';
@@ -17,7 +17,6 @@ import{t,type TextKey}from'../i18n';
 import { emptyViewer, type ViewerState } from '../lib/viewer-stack';
 
 export type Density = 'comfortable' | 'compact';
-export type Theme = 'system' | 'light' | 'dark';
 export type Modal = 'palette' | 'shortcuts' | 'confirm' | 'settings' | 'orchestratorRenew' | 'handoff' | 'credentials' | 'stato' | 'visual' | 'setup';
 export { BRAIN_PAGES, type BrainPageId };
 export const isBrainPage = (id: string): id is BrainPageId => id==='file'||BRAIN_PAGES.some(p => p.id === id);
@@ -57,7 +56,6 @@ export interface Prefs {
   /** left sidebar width in px (null = DEFAULT_SIDEBAR_WIDTH), dragged via its right edge handle */
   sidebarWidth?: number | null;
   density: Density;
-  theme: Theme;
   /** the Orchestrator widget bottom-right (ADR 0028): expanded or the collapsed bar; the expanded size (null = the default);
    *  the tab shown; when the user last saw its replies (the bar's unread count starts there) */
   orchestratorOpen: boolean;
@@ -123,7 +121,7 @@ export interface QWin { open: boolean; first: string | null; call: number; shown
 const PREFS_KEY = 'sb.prefs.v1';
 export const defaultPrefs: Prefs = {
   appearance:readAppearance(null),chatPanelsV:2,chatExpanded:{},agentView:{},agentSplit:{},treeCollapsed:{},sidebarWidth:null,
-  density: 'comfortable', theme: 'dark', orchestratorOpen: true, orchestratorSize: null, orchestratorSizeV: DEFAULT_V, orchestratorSeenAt: 0,
+  density: 'comfortable', orchestratorOpen: true, orchestratorSize: null, orchestratorSizeV: DEFAULT_V, orchestratorSeenAt: 0,
   newChat: { harness: 'claude', cwd: '', model: '', effort: '', permissionMode: '' }, lastFocus: null, usagePinned: ['claude'],
 };
 const READ_KEY = 'sb.read.v1';
@@ -153,9 +151,10 @@ export function loadPrefs(raw: string | null, at = Date.now()): Prefs {
     // Corsie views); navCollapsed (the icon-only sidebar); orchestratorPlacement, orchestratorTopHeight (the Orchestrator at the top);
     // browsersHidden (the retired "hide browsers" switch, #82: an opened browser always shows); feedOpen (the Orchestrator's
     // "Novità" feed, replaced by "N novità in attesa", #88); role (a composition of pages and agents, now workProfile);
-    // pairSplit (focus mode's one split, now agentSplit per chat) and browserOpen (now agentView: an opened one is 'split'), ADR 0287.
-    const { orchestratorRect: _a, view: _b, cols: _c, rows: _d, browserZone: _e, navCollapsed: _f, orchestratorPlacement: _g, orchestratorTopHeight: _h, browsersHidden: _i, feedOpen: _j, role: _k, pairSplit: _l, browserOpen, workProfile, ...p } =
-      JSON.parse(raw) as Partial<Prefs> & Record<'orchestratorRect' | 'view' | 'cols' | 'rows' | 'browserZone' | 'navCollapsed' | 'orchestratorPlacement' | 'orchestratorTopHeight' | 'browsersHidden' | 'feedOpen' | 'role' | 'pairSplit' | 'browserOpen', unknown>;
+    // pairSplit (focus mode's one split, now agentSplit per chat) and browserOpen (now agentView: an opened one is 'split'), ADR 0287;
+    // theme (the app is dark only, ADR 0366).
+    const { orchestratorRect: _a, view: _b, cols: _c, rows: _d, browserZone: _e, navCollapsed: _f, orchestratorPlacement: _g, orchestratorTopHeight: _h, browsersHidden: _i, feedOpen: _j, role: _k, pairSplit: _l, theme: _m, browserOpen, workProfile, ...p } =
+      JSON.parse(raw) as Partial<Prefs> & Record<'orchestratorRect' | 'view' | 'cols' | 'rows' | 'browserZone' | 'navCollapsed' | 'orchestratorPlacement' | 'orchestratorTopHeight' | 'browsersHidden' | 'feedOpen' | 'role' | 'pairSplit' | 'theme' | 'browserOpen', unknown>;
     return {
       ...defaultPrefs, ...p,
       appearance:readAppearance(p.appearance),
@@ -166,7 +165,6 @@ export function loadPrefs(raw: string | null, at = Date.now()): Prefs {
       treeCollapsed:flags(p.treeCollapsed),
       sidebarWidth: typeof p.sidebarWidth === 'number' && Number.isFinite(p.sidebarWidth) ? Math.round(Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, p.sidebarWidth))) : null,
       density: p.density === 'compact' ? 'compact' : 'comfortable',
-      theme: p.theme === 'light' || p.theme === 'dark' ? p.theme : 'system',
       newChat: { ...defaultPrefs.newChat, ...(p.newChat ?? {}) },
       orchestratorOpen: p.orchestratorOpen === true,
       // a size saved under an older default goes back to the new default once (ADR 0028, 2026-10-13: wider and lower)

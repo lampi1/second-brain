@@ -1,6 +1,6 @@
 # ADR 0311 · The Grindhouse becomes a workshop: square benches, scenes without screens, a vice at rest
 
-Date: 2026-11-14 · Status: accepted, amended by ADR 0312 (benches of one height, helpers with name tags) (owner, thread «Proporre nuova Grindhouse e Orchestrator»: «mi piace procedi»,
+Date: 2026-11-14 · Status: superseded by ADR 0366 (thin strips grouped by Strategist replace the benches); before that accepted, amended by ADR 0312 (benches of one height, helpers with name tags) (owner, thread «Proporre nuova Grindhouse e Orchestrator»: «mi piace procedi»,
 then «si bellissimo la a» for the helpers, and the vices one by one) · Amends: ADR 0287 and 0292 (a closed chat is a
 bench, not a one-line strip), ADR 0293 (children are rows at the parent's bench), ADR 0295 and 0305 (scenes without
 computers, a vice at rest)

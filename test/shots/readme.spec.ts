@@ -117,7 +117,7 @@ test('README screenshots', async () => {
   await save('grindhouse');
 
   // 1b. Agenti: the agent catalog as cards, with the changes waiting for the user's approval
-  await page.getByTestId('nav-agenti').click();
+  await goPage(page, 'agenti'); // the ☰ menu holds the link (ADR 0366): the G key opens it
   await expect(page.getByTestId('agent-overview')).toBeVisible({ timeout: 30_000 });
   await waitThumbs(page);
   await save('agents');
@@ -173,7 +173,7 @@ test('README showcase: Memoria, agent levels, Orchestrator, reactions', async ()
 
   // Memoria: the live head with its counters, the tabs, the Proposals deck with its top card held mid-swipe
   await setSize(app, W, 1240);
-  await page.getByTestId('nav-memoria').click();
+  await goPage(page, 'memoria');
   const mem = page.getByTestId('bm-memory-page');
   await expect(mem).toHaveAttribute('data-tab', 'proposte');
   const top = page.getByTestId('pd-card-top');
@@ -367,7 +367,7 @@ test('README showcase: voice, Log, recordings, quality, learn, news, costs, tren
   await save('trends', await frameOf(page.getByTestId('use-tab')));
 
   // Maintenance: one click, then the celebrating notice over Memoria when it ends
-  await page.getByTestId('nav-memoria').click();
+  await goPage(page, 'memoria');
   await expect(page.getByTestId('bm-memory-page')).toBeVisible();
   for (const x of await page.getByTestId('toast-close').all()) await x.click();
   await page.getByTestId('settings').click();

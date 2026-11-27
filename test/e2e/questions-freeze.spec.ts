@@ -8,7 +8,7 @@ const demo = <A extends unknown[]>(app: ElectronApplication, fn: (d: D, ...a: A)
   app.evaluate((_e, [src, args]) => { const d = (globalThis as unknown as { __sbDemo: D }).__sbDemo; return new Function('d', 'a', `return (${src})(d, ...a)`)(d, args); }, [fn.toString(), a] as const);
 test('an open question card does not change under the reader; its answers stay in sight', async () => {
   test.setTimeout(120_000);
-  const { app, page } = await launchDemo({ scheme: 'dark', width: 1366, height: 900, config: { theme: 'dark' } });
+  const { app, page } = await launchDemo({ scheme: 'dark', width: 1366, height: 900 });
   for (const id of ['orchestrator', 'qa', 'feedback', 'fix', 'sms', 'mappa']) await demo(app, (d, c) => d.stop(c), id);
   for (let i = 0; i < 5; i++) { await page.waitForTimeout(300); const x = page.getByTestId('qwin-card-dismiss'); if (!(await x.count())) break; await x.click(); }
   await demo(app, (d, id, t) => d.say(id, t), 'fix', 'Ho analizzato il problema. '.repeat(40));

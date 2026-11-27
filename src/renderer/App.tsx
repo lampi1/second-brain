@@ -3,7 +3,7 @@
 // persistent Orchestrator column on the right (always, on every page, the 3D map included: the user,
 // 2026-10-18, «io voglio sempre l'orchestratore a destra»; OrchestratorOverlay.tsx, ADR 0068), the notification center, toasts, the live
 // region, tooltips, the questions window ("Domande in finestra") and dialogs. It owns the global keyboard map
-// (lib/keys.ts → actions.ts, G-letter go-to sequences), theme and density, highlights the element a link points to, and
+// (lib/keys.ts → actions.ts, G-letter go-to sequences), the dark theme (ADR 0366) and density, highlights the element a link points to, and
 // tells the browser-view reporter when something covers everything. Mounted by main.tsx.
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react';
 import{t}from'./i18n';
@@ -220,7 +220,6 @@ export function App() {
   useHighlight();
   useBrainToastRelay();
   const density = ui.use(s => s.prefs.density);
-  const theme = ui.use(s => s.prefs.theme);
   const appearance=ui.use(s=>s.prefs.appearance);
   const maximized = ui.use(s => s.maximized);
   const focusMode = ui.use(s => s.focusMode);
@@ -235,10 +234,10 @@ export function App() {
 
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === 'system') delete root.dataset.theme; else root.dataset.theme = theme;
+    root.dataset.theme = 'dark'; // dark only (ADR 0366): a saved light or system preference is ignored
     root.dataset.density = density;
     root.dataset.appearance=appearance.preset;
-  }, [theme, density,appearance]);
+  }, [density, appearance]);
   const qShown = ui.use(s => s.qwin.shown);
   const viewerOpen = ui.use(s => s.viewer.open);
   useEffect(() => { setBlocked(modal !== null || qShown); }, [modal, qShown]);

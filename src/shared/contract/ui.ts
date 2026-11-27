@@ -4,7 +4,7 @@
 import type { AssetAssign, AssetAssignResult, LibSkill, SkillFileText, SkillLibraryState, SkillVersion, SkillWrite, SkillWriteResult } from '../skill-library';
 import type { LogList } from '../activity-log';
 import type { Harness } from './engines';
-import type { Lang, ThemeMode } from './settings';
+import type { Lang } from './settings';
 
 /** On after "Rispondi dopo" on any question or permission: every open request waits in the "Da rispondere" queue and
  *  new ones join it silently (no window, card, toast or Windows notification; only the top bar's counter) until the user
@@ -25,7 +25,6 @@ export interface HeldNewsState { items: HeldNewsItem[] }
 // browser tiles and pages. Requests never float here: every question, permission and command is answered in the
 // questions window (always on since 2026-10-22). The app page decides what it shows, the layer only renders it.
 export interface OverlayModel {
-  theme: ThemeMode;
   /** the app page's resolved UI language (ADR 0057) */
   lang?: Lang;
   density: 'comfortable' | 'compact';

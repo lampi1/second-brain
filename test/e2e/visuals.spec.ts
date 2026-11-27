@@ -37,12 +37,11 @@ const CHARTS = [
   '```',
 ].join('\n');
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`a reply's mermaid diagram and charts are drawn (${scheme})`, async () => {
     const { app, page } = await launchDemo({ scheme });
     const csp: string[] = [];
     page.on('console', m => { if (/Content Security Policy|unsafe-eval/i.test(m.text())) csp.push(m.text()); });
-    if (scheme === 'light') await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
     await say(app, 'fix', DIAGRAM);
     // the demo's open questions show in the questions window: answered later, so the chat is reachable
     for (let i = 0; i < 10 && await page.getByTestId('qwin-backdrop').isVisible(); i++) await page.getByTestId('qwin-later').click();

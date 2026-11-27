@@ -48,7 +48,8 @@ test('brain: an idea line becomes a live feed event; settings change live, undo,
   expect(s.brainRoot).toBe(path.normalize(brain));
   expect(s.locked).toContain('brainRoot');
   const schema = await page.evaluate(() => window.sb.invoke('settings:schema', undefined));
-  expect(schema.find(d => d.key === 'theme')).toMatchObject({ protected: false, label: 'Tema' });
+  expect(schema.find(d => d.key === 'language')).toMatchObject({ protected: false, label: 'Lingua' });
+  expect(schema.some(d => d.key === ('theme' as string))).toBe(false); // dark only (ADR 0366)
   expect(schema.some(d => d.key === ('view' as string))).toBe(false);
   await page.evaluate(() => window.sb.invoke('settings:set', { language: 'it' }));
   await expect.poll(() => page.evaluate(() => (window as unknown as W).__changes.map(c => `${c.key}:${String(c.after)}:${c.by}`))).toContain('language:it:user');
@@ -56,8 +57,8 @@ test('brain: an idea line becomes a live feed event; settings change live, undo,
   const undo = await page.evaluate(id => window.sb.invoke('settings:undo', { changeId: id }), last!.id);
   expect(undo).toMatchObject({ key: 'language', before: 'it', after: 'system', undoOf: last!.id });
   // an agent's request: a free key applies at once, a protected key becomes a proposal until the user clicks
-  const free = await page.evaluate(() => window.sb.invoke('settings:propose', { key: 'theme', value: 'light', chatId: 'e2e' }));
-  expect(free).toMatchObject({ applied: { key: 'theme', by: 'agent', chatId: 'e2e' } });
+  const free = await page.evaluate(() => window.sb.invoke('settings:propose', { key: 'language', value: 'it', chatId: 'e2e' }));
+  expect(free).toMatchObject({ applied: { key: 'language', by: 'agent', chatId: 'e2e' } });
   const prot = await page.evaluate(() => window.sb.invoke('settings:propose', { key: 'dnd', value: true, reason: 'test' }));
   expect('proposal' in prot).toBe(true);
   expect((await page.evaluate(() => window.sb.invoke('settings:get', undefined))).dnd).toBe(false);
@@ -65,7 +66,7 @@ test('brain: an idea line becomes a live feed event; settings change live, undo,
   expect((await page.evaluate(() => window.sb.invoke('settings:pending', undefined))).map(p => p.id)).toEqual([pid]);
   const ok = await page.evaluate(id => window.sb.invoke('settings:confirm', { proposalId: id, accept: true }), pid);
   expect(ok.change).toMatchObject({ key: 'dnd', after: true, by: 'user', proposalId: pid });
-  await expect(page.evaluate(() => window.sb.invoke('settings:set', { theme: 'griglia' as never }))).rejects.toThrow(/Tema/);
+  await expect(page.evaluate(() => window.sb.invoke('settings:set', { language: 'griglia' as never }))).rejects.toThrow(/Lingua/);
 
   // the brain's data server through the GET-only proxy; /api/send is never forwarded
   const tables = await page.evaluate(() => window.sb.invoke('brain:api', { path: '/api/tables' }));

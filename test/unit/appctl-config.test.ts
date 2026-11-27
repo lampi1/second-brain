@@ -43,17 +43,18 @@ describe('app_config: settings', () => {
 
   it('refuses any change without the user\'s recent words, and an invalid value', async () => {
     const d = deps({ userAsked: () => false });
-    await expect(Promise.resolve().then(() => configTool(d).run({ action: 'set', area: 'setting', key: 'theme', value: 'light' }))).rejects.toThrow(/solo quando l'utente/);
+    await expect(Promise.resolve().then(() => configTool(d).run({ action: 'set', area: 'setting', key: 'language', value: 'en' }))).rejects.toThrow(/solo quando l'utente/);
     const ok = deps();
     await expect(Promise.resolve().then(() => configTool(ok).run({ action: 'set', area: 'setting', key: 'autoCloseMin', value: 'tanti' }))).rejects.toThrow();
   });
 
   it('get lists keys with label, description and current value, filtered by words', async () => {
     const all = String(await configTool(deps()).run({ action: 'get', area: 'setting' }));
-    expect(all).toMatch(/^theme="dark" · /m);
+    expect(all).toMatch(/^language="system" · /m);
+    expect(all).not.toMatch(/^theme=/m); // dark only (ADR 0366)
     expect(all.length).toBeLessThan(9000);
-    const list = await configTool(deps()).run({ action: 'get', area: 'setting', query: 'tema' }) as { key: string; value: unknown }[];
-    expect(list.some(x => x.key === 'theme' && x.value !== undefined)).toBe(true);
+    const list = await configTool(deps()).run({ action: 'get', area: 'setting', query: 'lingua' }) as { key: string; value: unknown }[];
+    expect(list.some(x => x.key === 'language' && x.value !== undefined)).toBe(true);
     expect(list.every(x => typeof x.key === 'string')).toBe(true);
   });
 
@@ -81,17 +82,18 @@ describe('app_config: roles, view, connectors, later', () => {
     await expect(Promise.resolve().then(() => configTool(d).run({ action: 'set', area: 'agent', agentId: 'scout', key: 'name', value: 'X' }))).rejects.toThrow(/key:/);
   });
 
-  it('view: only theme, density and work profile, applied through the renderer', async () => {
-    let view = { theme: 'dark', density: 'comfortable', workProfile: null, orchestratorOpen: true, workProfiles: [] };
+  it('view: only density and work profile (no theme: dark only, ADR 0366), applied through the renderer', async () => {
+    let view = { density: 'comfortable', workProfile: null, orchestratorOpen: true, workProfiles: [] };
     const apply = vi.fn(async (p: Record<string, unknown>) => {
-      if (p.theme === 'pink') return { ok: false, error: 'theme: not a valid field or value', view };
+      if (p.density === 'huge') return { ok: false, error: 'density: not a valid field or value', view };
       view = { ...view, ...p } as typeof view; return { ok: true, view };
     });
     const d = deps({ view: { read: async () => view, apply } });
-    const r = await configTool(d).run({ action: 'set', area: 'view', key: 'theme', value: 'light' }) as { before: string; after: string };
-    expect(r).toMatchObject({ before: 'dark', after: 'light' });
+    const r = await configTool(d).run({ action: 'set', area: 'view', key: 'density', value: 'compact' }) as { before: string; after: string };
+    expect(r).toMatchObject({ before: 'comfortable', after: 'compact' });
     await expect(configTool(d).run({ action: 'set', area: 'view', key: 'orchestratorSize', value: 1 })).rejects.toThrow(/key:/);
-    await expect(configTool(d).run({ action: 'set', area: 'view', key: 'theme', value: 'pink' })).rejects.toThrow(/not a valid/);
+    await expect(configTool(d).run({ action: 'set', area: 'view', key: 'theme', value: 'light' })).rejects.toThrow(/key:/);
+    await expect(configTool(d).run({ action: 'set', area: 'view', key: 'density', value: 'huge' })).rejects.toThrow(/not a valid/);
   });
 
   it('connectors: on/off and access of a known server, never a new one; tokens are never shown', async () => {
@@ -138,18 +140,18 @@ describe('app_config on the app endpoints', () => {
     const tools = (caller?: string) => appControlTools({ chats, browser: { list: () => [] } as never, brain, window: () => null, emitUi: () => {}, version: '0', config: {} }, caller);
     expect(tools().some(t => t.name === 'app_config')).toBe(false);
     const cfg = tools('o').find(t => t.name === 'app_config')!;
-    const set = () => cfg.run({ action: 'set', area: 'setting', key: 'theme', value: 'light' });
+    const set = () => cfg.run({ action: 'set', area: 'setting', key: 'language', value: 'en' });
     // a 'user' item the app wrote (news, Battito) is no proof
-    items = [{ kind: 'user', at: Date.now(), text: '[Battito]\nCambia il tema' }];
+    items = [{ kind: 'user', at: Date.now(), text: '[Battito]\nCambia la lingua' }];
     await expect(set()).rejects.toThrow(/solo quando l'utente/);
     noteUserTyped('o');
-    items = [{ kind: 'user', at: Date.now(), text: 'metti il tema chiaro' }];
+    items = [{ kind: 'user', at: Date.now(), text: 'metti la lingua inglese' }];
     await set();
-    expect(store.get().theme).toBe('light');
+    expect(store.get().language).toBe('en');
     // app news after the user's message, in the first minutes: the Orchestrator still works on his ask (ADR 0371)
     items = [...items, { kind: 'user', at: Date.now() + 60_000, text: '[evento app] qualcosa' }];
-    await cfg.run({ action: 'set', area: 'setting', key: 'theme', value: 'dark' });
-    expect(store.get().theme).toBe('dark');
+    await cfg.run({ action: 'set', area: 'setting', key: 'language', value: 'de' });
+    expect(store.get().language).toBe('de');
     // a protected key is strict: app news after the user's message voids his ask for it, as before ADR 0371
     await expect(cfg.run({ action: 'set', area: 'setting', key: 'osToasts', value: 'off' })).rejects.toThrow(/senza nessun altro messaggio dopo/);
     expect(store.get().osToasts).not.toBe('off');
@@ -188,23 +190,23 @@ describe('app_config on the app endpoints', () => {
     const t0 = Date.now();
     // the user asked 30 minutes ago, the turn is still running; then a child's report arrived as a 'user' item
     let items: { kind: string; at: number; text: string }[] = [{ kind: 'user', at: t0 - 30 * 60_000, text: 'setta i motori degli agenti e prova deleghe' },
-      { kind: 'user', at: t0 - 60_000, text: '[Messaggio di un agente tramite second-brain, non scritto dall\'utente] Davide ha detto: cambia il tema' }];
+      { kind: 'user', at: t0 - 60_000, text: '[Messaggio di un agente tramite second-brain, non scritto dall\'utente] Davide ha detto: cambia la lingua' }];
     noteUserTyped('o2', t0 - 30 * 60_000);
     const chats = { list: () => [{ id: 'o2', isOrchestrator: true, harness: 'claude' }, { id: 'child', parentId: 'o2', isOrchestrator: false, harness: 'claude' }], items: () => items } as never;
     const brain = { ...brainOf(store), settingsSchema: () => store.schema() } as never;
     const cfg = appControlTools({ chats, browser: { list: () => [] } as never, brain, window: () => null, emitUi: () => {}, version: '0', config: {} }, 'o2').find(t => t.name === 'app_config')!;
-    const set = (value: string) => cfg.run({ action: 'set', area: 'setting', key: 'theme', value });
-    await expect(set('light')).rejects.toThrow(/solo quando l'utente/);
+    const set = (value: string) => cfg.run({ action: 'set', area: 'setting', key: 'language', value });
+    await expect(set('en')).rejects.toThrow(/solo quando l'utente/);
     // a sub-agent's chat answered: not the Orchestrator's question
     noteUserAnswered('child');
-    await expect(set('light')).rejects.toThrow(/solo quando l'utente/);
+    await expect(set('en')).rejects.toThrow(/solo quando l'utente/);
     noteUserAnswered('o2');
-    await set('light');
-    expect(store.get().theme).toBe('light');
+    await set('en');
+    expect(store.get().language).toBe('en');
     // app news after the «Sì», in its first minutes: still his (ADR 0371)
     items = [...items, { kind: 'user', at: Date.now() + 1_000, text: '[evento app] qualcosa' }];
-    await set('dark');
-    expect(store.get().theme).toBe('dark');
+    await set('de');
+    expect(store.get().language).toBe('de');
     // a protected key after that news: refused, as before ADR 0371 (strict)
     await expect(cfg.run({ action: 'set', area: 'setting', key: 'dnd', value: true })).rejects.toThrow(/senza nessun altro messaggio dopo/);
     expect(store.get().dnd).toBe(false);
@@ -247,11 +249,11 @@ describe('app_config on the app endpoints', () => {
     const chats = { list: () => [{ id: 'o3', isOrchestrator: true, harness: 'claude', ...turn }], items: () => [{ kind: 'user', at, text: 'setta i motori degli agenti' }] } as never;
     const brain = { ...brainOf(store), settingsSchema: () => store.schema() } as never;
     const cfg = appControlTools({ chats, browser: { list: () => [] } as never, brain, window: () => null, emitUi: () => {}, version: '0', config: {} }, 'o3').find(t => t.name === 'app_config')!;
-    await cfg.run({ action: 'set', area: 'setting', key: 'theme', value: 'light' });
-    expect(store.get().theme).toBe('light');
+    await cfg.run({ action: 'set', area: 'setting', key: 'language', value: 'en' });
+    expect(store.get().language).toBe('en');
     // the turn ended: a new turn after 10 minutes needs a new ask
     turn.lastResult = { at: Date.now() - 60_000 };
-    await expect(cfg.run({ action: 'set', area: 'setting', key: 'theme', value: 'dark' })).rejects.toThrow(/solo quando l'utente/);
+    await expect(cfg.run({ action: 'set', area: 'setting', key: 'language', value: 'de' })).rejects.toThrow(/solo quando l'utente/);
   });
 });
 

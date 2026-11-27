@@ -24,7 +24,7 @@
 .tk-tabs > button:hover { color: var(--text); background: var(--surface-2); }
 .tk-tabs > button.on { color: var(--text); background: var(--surface-3); }
 .tk-tabs > button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-.tk-tabs .n { min-width: 18px; height: 18px; padding: 0 5px; display: inline-grid; place-items: center; border-radius: 999px; font-size: var(--fs-xs); font-weight: 700;
+.tk-tabs .n { min-width: 18px; height: 18px; padding: 0 5px; display: inline-grid; place-items: center; border-radius: var(--r-s); font-size: var(--fs-xs); font-weight: 700;
   font-variant-numeric: tabular-nums; color: var(--text-2); background: var(--surface-2); }
 .tk-tabs > button.on .n { color: var(--bg); background: var(--accent); }
 
@@ -36,7 +36,7 @@
 .tk-strip:hover { background: var(--surface); }
 .tk-strip.on { background: var(--surface-2); border-color: var(--border-2); }
 .tk-strip.t-warn { --tone: var(--amber); } .tk-strip.t-bad { --tone: var(--red); } .tk-strip.t-blue { --tone: var(--blue); } .tk-strip.t-violet { --tone: var(--violet); } .tk-strip.t-good { --tone: var(--green); }
-.tk-glyph { flex: none; width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; color: var(--tone); background: color-mix(in srgb, var(--tone) 14%, transparent); }
+.tk-glyph { flex: none; width: 32px; height: 32px; border-radius: var(--r-l); display: grid; place-items: center; color: var(--tone); background: color-mix(in srgb, var(--tone) 14%, transparent); }
 .tk-strip.t-none .tk-glyph, .tk-strip.t-outline .tk-glyph { background: var(--surface-2); }
 .tk-strip-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .tk-strip-top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }

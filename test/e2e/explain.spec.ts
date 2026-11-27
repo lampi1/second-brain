@@ -10,10 +10,9 @@ type Demo = { ask(c: string, r: object): void; stop(c: string): Promise<void> };
 const ask = (app: ElectronApplication, chatId: string, req: object) =>
   app.evaluate((_e, [c, r]) => { (globalThis as unknown as { __sbDemo: Demo }).__sbDemo.ask(c, r); }, [chatId, req] as const);
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`every command says what it does, the raw command folded under it (${scheme})`, async () => {
     const { app, page } = await launchDemo({ scheme });
-    if (scheme === 'light') await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
     // Claude tool rows
     await page.getByTestId('chat-max-fix').click();
     await expect(page.getByTestId('tool-line-fix-t1')).toHaveText('Legge OrderTotalsService.cs');

@@ -5,12 +5,12 @@
 // Orchestrator's input, not sent, and creates no work chat (owner, 2026-10-19: the Orchestrator delegates); sent, the
 // row shows "Discusso". PRs, test plans and test cases have the same button. Screenshots in test-results/shots/.
 import { expect, test } from '@playwright/test';
-import { launchDemo, layerPage, shot, windowShot } from './helpers';
+import { goPage, launchDemo, layerPage, shot, windowShot } from './helpers';
 
 test('Task: a new mention alerts with a chime (never on the first read); Discuti on a record drafts to the Orchestrator and opens no work chat', async () => {
   const { app, page } = await launchDemo({ width: 1600, height: 1000 });
   try {
-    await page.getByTestId('nav-task').click();
+    await goPage(page, 'task'); // out of ☰ (ADR 0366): G O
     const dv = page.getByTestId('brain-page-task');
     await dv.getByTestId('task-refresh').click();
     await expect(dv.getByTestId('task-row-news:mention:demo-1')).toBeVisible({ timeout: 30_000 });
@@ -34,7 +34,7 @@ test('Task: a new mention alerts with a chime (never on the first read); Discuti
     await expect(sound.getByRole('button', { name: 'Acceso' })).toHaveAttribute('aria-pressed', 'true');
     await sound.getByRole('button', { name: 'Spento' }).click();
     await expect(sound.getByRole('button', { name: 'Spento' })).toHaveAttribute('aria-pressed', 'true');
-    await page.getByTestId('nav-task').click();
+    await goPage(page, 'task'); // out of ☰ (ADR 0366): G O
 
     // "Discuti": every kind of record has it in the detail pane; one click on a work item drafts to the Orchestrator
     await dv.getByTestId('task-tab-prs').click();

@@ -106,11 +106,9 @@ test('Skill: list and filters, create from the form, editor checks and hook refu
     await expect(pg.getByTestId('sl-history').locator('[data-testid^="sl-version-"]').first()).toContainText('creata');
 
     // light theme
-    await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
     await page.emulateMedia({ colorScheme: 'light' });
     await page.waitForTimeout(300);
     await shot(page, 'skills-light');
-    await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'dark' }));
     await page.emulateMedia({ colorScheme: 'dark' });
 
     // delete after a confirmation

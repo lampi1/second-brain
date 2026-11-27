@@ -4,7 +4,7 @@
    event, shared by the chips, the badges and the stream. Motion off for reduced-motion users. */
 .lg-page { --k-task: var(--accent); --k-classifier: var(--violet); --k-estimate: #4fb8d1; --k-error: var(--red); --k-memory: var(--green);
   --k-brain: var(--amber); --k-app: var(--text-3); }
-:root[data-theme="light"] .lg-page { --k-estimate: #1f8aa3; }
+
 .lg-page .lg-live { display: inline-flex; align-items: center; gap: 8px; align-self: flex-end; margin-bottom: 8px; }
 .lg-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .lg-stat-warn { border-color: var(--amber-line); background: linear-gradient(145deg, color-mix(in srgb, var(--amber) 9%, var(--surface-2)), var(--surface)); }

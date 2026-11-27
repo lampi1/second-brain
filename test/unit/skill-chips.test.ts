@@ -1,34 +1,28 @@
-// The skills on a Grindhouse card: Claude's from the run's tags, other engines' from the SKILL.md they read, else
-// «uso non tracciato» (SkillChips.tsx skillChipsOf, main/agents/runs.ts skillOfRead and addSkill).
+// The skills of a Grindhouse strip, in its ⓘ (ADR 0366): Claude's from the run's tags, other engines' from the SKILL.md
+// they read, else the ones the role loaded marked «uso non tracciato» (GrindStrip.tsx infoLines, main/agents/runs.ts
+// skillOfRead and addSkill).
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(), on: () => () => {} } }));
 import type { AgentRun } from '../../src/shared/agents';
-import { skillChipsOf } from '../../src/renderer/components/SkillChips';
+import { infoLines } from '../../src/renderer/components/GrindStrip';
 import { addSkill, skillOfRead } from '../../src/main/agents/runs';
 
 const run = (skills: string[]) => ({ tags: { skills, app: null, repo: null } }) as unknown as AgentRun;
 
-describe('skillChipsOf', () => {
-  it('shows the skills of a Claude run, at most three and the rest counted', () => {
-    expect(skillChipsOf({ harness: 'claude', run: run(['a', 'b']) })).toEqual({ names: ['a', 'b'], more: 0, untracked: false });
-    expect(skillChipsOf({ harness: 'claude', run: run(['a', 'b', 'c', 'd', 'e']) })).toEqual({ names: ['a', 'b', 'c'], more: 2, untracked: false });
+describe('the skills in the ⓘ of a strip (infoLines)', () => {
+  const skills = (c: object) => infoLines({ id: 'c', model: 'claude-opus-4-5', harness: 'claude', cwd: '', ...c } as never, null).lines.filter(l => l.startsWith('skill'));
+  it('lists every skill a run used, Claude or another engine', () => {
+    expect(skills({ harness: 'claude', run: run(['a', 'b', 'c', 'd']) })).toEqual(['skill: a · b · c · d']);
+    expect(skills({ harness: 'cursor', run: run(['ops-core']) })).toEqual(['skill: ops-core']);
   });
-  it('says «uso non tracciato» for another engine with none recorded, nothing for Claude or a chat that is no run', () => {
-    expect(skillChipsOf({ harness: 'codex', run: run([]) })).toEqual({ names: [], more: 0, untracked: true });
+  it('another engine that reports none: the skills its role loaded, marked as not tracked; Claude never', () => {
+    expect(skills({ harness: 'codex', run: run([]), loadedSkills: ['code-work', 'air-qa'] })).toEqual(['skill caricate (uso non tracciato): code-work · air-qa']);
+    expect(skills({ harness: 'codex', run: run(['ops-core']), loadedSkills: ['code-work'] })).toEqual(['skill: ops-core']);
+    expect(skills({ harness: 'claude', run: run([]), loadedSkills: ['code-work'] })).toEqual([]);
   });
-  it('marks the skills the role loaded as «uso non tracciato» when the engine reports none (two shown, the rest counted)', () => {
-    expect(skillChipsOf({ harness: 'codex', run: run([]), loadedSkills: ['code-work', 'air-qa'] })).toEqual({ names: ['code-work', 'air-qa'], more: 0, untracked: true });
-    expect(skillChipsOf({ harness: 'cursor', run: run([]), loadedSkills: ['a', 'b', 'c', 'd'] })).toEqual({ names: ['a', 'b'], more: 2, untracked: true });
-    // what the engine really read wins over the loaded list; Claude reports its own and never shows the mark
-    expect(skillChipsOf({ harness: 'codex', run: run(['ops-core']), loadedSkills: ['code-work'] })).toEqual({ names: ['ops-core'], more: 0, untracked: false });
-    expect(skillChipsOf({ harness: 'claude', run: run([]), loadedSkills: ['code-work'] })).toBeNull();
-  });
-  it('shows nothing extra for chats that are no run', () => {
-    expect(skillChipsOf({ harness: 'claude', run: run([]) })).toBeNull();
-    expect(skillChipsOf({ harness: 'codex' })).toBeNull();
-  });
-  it('shows what another engine recorded from a SKILL.md read', () => {
-    expect(skillChipsOf({ harness: 'cursor', run: run(['ops-core']) })?.untracked).toBe(false);
+  it('says nothing for a chat that is no run, or a run with no skill', () => {
+    expect(skills({ harness: 'codex', loadedSkills: ['x'] })).toEqual([]);
+    expect(skills({ harness: 'claude', run: run([]) })).toEqual([]);
   });
 });
 

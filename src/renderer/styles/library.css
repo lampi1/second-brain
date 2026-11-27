@@ -83,7 +83,7 @@ button.lib-chat:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 .lib-lines{position:absolute;inset:12px 10% 0;margin:0;padding:12px 12px 0;border-radius:var(--r-s) var(--r-s) 0 0;background:var(--surface);box-shadow:0 10px 22px -16px rgba(0,0,0,.6);overflow:hidden;font:10px/1.5 var(--font-mono,ui-monospace,monospace);color:var(--text-3);white-space:pre;-webkit-mask-image:linear-gradient(to bottom,#000 70%,transparent)}
 .lib-lines::before{content:"";position:absolute;inset:0 0 auto;height:3px;background:var(--k)}
 .lib-tile{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:0 18px;text-align:center}
-.lib-tile em{display:grid;place-items:center;min-width:64px;height:76px;padding:0 10px;border-radius:var(--r-m) 18px var(--r-m) var(--r-m);font:800 15px/1 var(--font-display);font-style:normal;letter-spacing:.04em;color:var(--k);background:color-mix(in srgb,var(--k) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--k) 35%,transparent)}
+.lib-tile em{display:grid;place-items:center;min-width:64px;height:76px;padding:0 10px;border-radius:var(--r-m) var(--r-l) var(--r-m) var(--r-m);font:800 15px/1 var(--font-display);font-style:normal;letter-spacing:.04em;color:var(--k);background:color-mix(in srgb,var(--k) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--k) 35%,transparent)}
 .lib-tile span{max-width:100%;font-size:var(--fs-xs,11px);color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* the list view: one row per artifact */

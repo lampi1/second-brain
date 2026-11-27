@@ -5,11 +5,10 @@
 import { expect, test } from '@playwright/test';
 import { launchDemo, moreAction, shot } from './helpers';
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`the Credenziali panel lists the environments with Copia password (${scheme})`, async () => {
     const { app, page } = await launchDemo({ scheme });
     try {
-      if (scheme === 'light') await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
       // from the palette
       await page.keyboard.press('Control+K');
       await page.getByTestId('palette-input').fill('credenziali');

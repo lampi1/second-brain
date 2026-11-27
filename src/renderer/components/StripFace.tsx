@@ -57,7 +57,8 @@ function useSettled<T>(value: T, ms: number): T {
  *  page does not celebrate again, a new end after more work does. */
 const celebrated = new Map<string, string>();
 
-export function StripFace({ chatId, avatar, name, tone, size, height = 40, ...o }: { chatId: string; avatar: Avatar | undefined; name: string; tone: string; size: number; height?: number; waitsUser: boolean; error: boolean; busy: boolean; done: boolean; pending?: boolean }) {
+/** `still`: the person stands in its rest pose whatever it does (a line of «Finite oggi» in the Grindhouse, ADR 0366). */
+export function StripFace({ chatId, avatar, name, tone, size, height = 40, still, ...o }: { chatId: string; avatar: Avatar | undefined; name: string; tone: string; size: number; height?: number; still?: boolean; waitsUser: boolean; error: boolean; busy: boolean; done: boolean; pending?: boolean }) {
   const thinking = useApp(s => o.busy && isThinking(s.items[chatId]));
   const own = useOwnPicture(avatar);
   const state = spriteStateOf({ ...o, thinking });
@@ -80,6 +81,6 @@ export function StripFace({ chatId, avatar, name, tone, size, height = 40, ...o 
   // a picture of the user's own, or a character without a person, stays a portrait with its state dot
   if (own || (avatar?.kind === 'character' && !isSpriteId(avatar.value)))
     return <span className="strip-face"><AgentAvatar avatar={avatar} name={name} size={size} /><span className={`strip-dot lead tone-${tone}`} aria-hidden="true" /></span>;
-  return <span className="strip-face" data-person><AgentSprite id={spriteIdOf(avatar)} state={state} activity={activity} still={state === 'done' && seen} height={height} label={t('product.avatar', { name })}
+  return <span className="strip-face" data-person><AgentSprite id={spriteIdOf(avatar)} state={state} activity={activity} still={!!still || (state === 'done' && seen)} height={height} label={t('product.avatar', { name })}
     onTouch={onTouch} tip={t(!hasRun ? 'sprite.tip' : touched === 1 ? 'sprite.tipPat' : touched === -1 ? 'sprite.tipWhack' : 'sprite.tipRun')} /></span>;
 }

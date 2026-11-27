@@ -30,7 +30,6 @@ export const treeEn: typeof treeIt = {
   'tree.state.blocked': 'blocked',
   'tree.state.closed': 'closed',
   'tree.kids': (p: { n: number }) => p.n === 1 ? '1 child' : `${p.n} children`,
-  'tree.openHelper': (p: { name: string; state: string }) => `Open ${p.name} (${p.state})`,
   'tree.kidsRun': (p: { n: number }) => `${p.n} working`,
   'tree.kidsWait': (p: { n: number }) => `${p.n} waiting for you`,
   'tree.kidsStuck': (p: { n: number }) => `${p.n} stalled`,

@@ -8,7 +8,7 @@
 .rec-lead{margin:4px 0 0;color:var(--text-3);font-size:13px;max-width:640px;line-height:1.5}
 .rec-head-actions{display:flex;gap:8px;align-items:center}
 .rec-cta{gap:8px;padding-inline:16px;font-weight:600}
-.rec-cta[aria-pressed="false"]{background:var(--red);border-color:var(--red);color:#fff}
+.rec-cta[aria-pressed="false"]{background:var(--red);border-color:var(--red);color:var(--on-red)}
 .rec-cta[aria-pressed="false"]:hover:not(:disabled){background:color-mix(in srgb,var(--red) 88%,#fff)}
 .rec-cta-dot{width:9px;height:9px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 25%,transparent)}
 

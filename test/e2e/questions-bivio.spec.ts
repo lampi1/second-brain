@@ -26,10 +26,10 @@ const BRIEF = { id: 'brief-bivio', target: 'next-ask', component: 'brief', title
     yesSteps: ['Commit sul ramo fix/at-7', 'Aggiorno la PR 815', 'Chiedo la review a Sara'], noSteps: ['Le modifiche restano non salvate', 'Mi fermo e aspetto te'],
     checks: [{ label: '42/42 test', status: 'ok' }], files: [{ path: 'src/Orders/Refund.cs', why: 'il calcolo', added: 6, removed: 2 }] } };
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`a question as «Bivio»: context, before → after, roads with next steps · ${scheme}`, async () => {
     test.setTimeout(120_000);
-    const { app, page } = await launchDemo({ scheme, width: 1366, height: 900, config: { theme: scheme } });
+    const { app, page } = await launchDemo({ scheme, width: 1366, height: 900 });
     await clear(app, page);
     expect(await demo(app, (d, id, a) => d.show(id, a), 'fix', BRIEF)).toContain('Mostrato');
     await demo(app, (d, id, q) => d.ask(id, q), 'fix', yn('Faccio il commit del fix sul rimborso?'));

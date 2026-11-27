@@ -15,7 +15,7 @@ const CMD2 = process.platform === 'win32' ? "Write-Output 'fix verificato'" : "e
 
 test('a command to run is a «Bivio» question; after Sì its run shows in the strip', async () => {
   test.setTimeout(120_000);
-  const { app, page } = await launchDemo({ scheme: 'dark', width: 1366, height: 900, config: { theme: 'dark', runResults: true }, env: { SB_RUN_RESULTS: '1' } });
+  const { app, page } = await launchDemo({ scheme: 'dark', width: 1366, height: 900, config: { runResults: true }, env: { SB_RUN_RESULTS: '1' } });
   for (const id of ['orchestrator', 'qa', 'feedback', 'fix', 'sms', 'mappa']) await demo(app, (d, c) => d.stop(c), id);
   for (let i = 0; i < 5; i++) { await page.waitForTimeout(300); const x = page.getByTestId('qwin-card-dismiss'); if (!(await x.count())) break; await x.click(); }
   await expect(page.getByTestId('qwin')).toHaveCount(0);

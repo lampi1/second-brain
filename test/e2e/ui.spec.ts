@@ -3,7 +3,7 @@
 // pages and live demo streaming. Behavior and geometry are asserted; screenshots for native visual review
 // (including 1280x800 and light theme) are captured in test-results/shots/.
 import { expect, test } from '@playwright/test';
-import { choose, demoLayout, expandChats, showBrowsers, launch, launchDemo, setSize, shot, waitThumbs } from './helpers';
+import { demoLayout, expandChats, showBrowsers, launch, launchDemo, setSize, shot, waitThumbs } from './helpers';
 
 test('agents workspace: one column of chat strips, each browser inside its chat\'s window', async () => {
   const { app, page } = await launchDemo();
@@ -186,19 +186,6 @@ test('screenshots at 1280x800, in light theme, and with no data (empty states)',
     const { page, app } = await launchDemo({ width: 1280, height: 800 });
     await waitThumbs(page);
     await shot(page, 'agents-1280');
-    await app.close();
-  }
-  {
-    const { page, app } = await launchDemo({ scheme: 'light' });
-    // the app's theme setting (default dark), on the Settings page: light
-    await page.getByTestId('settings').click();
-    await page.getByTestId('settings-all').click();
-    await choose(page.getByTestId('st-theme-select'), 'light');
-    await page.getByTestId('nav-home').click();
-    await expect(page.locator('html[data-theme="light"]')).toHaveCount(1);
-    await waitThumbs(page);
-    await page.mouse.move(2, 2);
-    await shot(page, 'agents-light');
     await app.close();
   }
   {

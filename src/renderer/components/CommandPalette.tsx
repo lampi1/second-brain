@@ -100,8 +100,6 @@ function buildCommands(): Cmd[] {
       ...(to ? [{ id: 'orchestratorengine', title: auditText('cmp.palette.orchestratorEngine', { engine: engineName(to) }), sub: auditText('cmp.palette.orchestratorEngineSub', { engine: engineName(orchestrator.harness) }), icon: <HarnessMark harness={to} size={18} />, run: () => askRenewOrchestrator(to) }] : []),
     ] : []),
     { id: 'density', title: u.prefs.density === 'compact' ? auditText('cmp.palette.densityComfortable') : auditText('cmp.palette.densityCompact'), icon: <IconLayers />, run: () => setPrefs({ density: u.prefs.density === 'compact' ? 'comfortable' : 'compact' }) },
-    { id: 'theme', title: auditText('cmp.palette.theme'), sub: auditText(u.prefs.theme === 'system' ? 'cmp.palette.themeNowSystem' : u.prefs.theme === 'dark' ? 'cmp.palette.themeNowDark' : 'cmp.palette.themeNowLight'), icon: <IconSettings />,
-      run: () => setPrefs({ theme: u.prefs.theme === 'system' ? 'dark' : u.prefs.theme === 'dark' ? 'light' : 'system' }) },
     { id: 'credentials', title: auditText('cmp.palette.credentials'), sub: auditText('cmp.palette.credentialsSub'), icon: <IconLogin />, run: () => openModal('credentials'),
       text: 'credenziali password utente login account ambienti test url pms' },
     { id: 'keys', title: auditText('cmp.palette.shortcuts'), shortcut: 'Ctrl+/', icon: <IconKeyboard />, run: () => openModal('shortcuts') },

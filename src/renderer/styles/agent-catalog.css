@@ -56,7 +56,6 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .catalog-badge[data-state=working]{color:var(--green);border-color:color-mix(in srgb,var(--green) 40%,transparent);background:var(--green-bg)}
 .catalog-badge[data-state=trial]{color:var(--amber);border-color:var(--amber-line);background:var(--amber-bg)}
 
-
 .catalog-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0 10px;margin:0;padding-top:12px;border-top:1px solid var(--border)}
 .catalog-stats>div{min-width:0}
 .catalog-stats dt{font-size:var(--fs-xs);color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -175,8 +174,8 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .judging-cost { margin: 0; color: var(--text-3); font-size: var(--fs-s); font-variant-numeric: tabular-nums; }
 .judging-off { margin: 0; color: var(--amber); font-size: var(--fs-s); }
 .judging-switch[data-on="true"] .judging-cost { color: var(--text-2); }
-.judging-toggle { flex: none; position: relative; width: 42px; height: 24px; border-radius: 999px; border: 1px solid var(--border-control); background: var(--surface-4); cursor: pointer; padding: 0; transition: background var(--dur-fast) var(--ease); }
-.judging-toggle .judging-knob { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--text-2); transition: transform var(--dur-fast) var(--ease); }
+.judging-toggle { flex: none; position: relative; width: 42px; height: 24px; border-radius: var(--r-s); border: 1px solid var(--border-control); background: var(--surface-4); cursor: pointer; padding: 0; transition: background var(--dur-fast) var(--ease); }
+.judging-toggle .judging-knob { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: var(--r-xs); background: var(--text-2); transition: transform var(--dur-fast) var(--ease); }
 .judging-toggle.on { background: var(--green); border-color: var(--green); }
 .judging-toggle.on .judging-knob { transform: translateX(18px); background: #fff; }
 .judging-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

@@ -9,11 +9,10 @@ type Spec = { tone: string; title: string; label?: string; detail?: string; chip
 // runs in the page: functions cannot cross page.evaluate, so the action is built there
 const notify = (s: Spec) => (globalThis as unknown as { __sbNotify: (s: unknown) => number }).__sbNotify({ ...s, ...(s.act ? { action: { label: s.act, run: () => {} } } : {}) });
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`notices: one card for every tone, each with its own sound (${scheme})`, async () => {
     const { app, page } = await launchDemo({ orchestrator: true, scheme });
     await expect(page.getByTestId('workspace')).toBeVisible();
-    await page.evaluate(t => window.sb.invoke('settings:set', { theme: t }), scheme);
     const chimes = () => page.evaluate(() => Number(document.documentElement.dataset.chimes ?? 0));
     const before = await chimes();
     await page.evaluate(notify, { tone: 'ok', label: 'Chat finita', title: 'Artisan ha finito «Fix export Safari»', detail: '4 file cambiati · 2 min', act: 'Apri' });

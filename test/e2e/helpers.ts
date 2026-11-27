@@ -212,6 +212,14 @@ export async function goPage(page: Page, id: keyof typeof GO_KEY): Promise<void>
   await page.keyboard.press(GO_KEY[id]);
 }
 
+/** Opens a page from the rail's ☰ menu (ADR 0366: the rail holds Grindhouse; the other pages sit in the menu), opening
+ *  the menu first unless it already is. */
+export async function navMenu(page: Page, id: string): Promise<void> {
+  const item = page.getByTestId(id === 'home' ? 'nav-menu-home' : `nav-${id}`);
+  if (!(await page.getByTestId('nav-menu').isVisible())) await page.getByTestId('nav-menu-btn').click();
+  await item.click();
+}
+
 /** Opens Impara (G I) on one of its tabs (ADR 0265: «Giornale», «Pull Request», «Lezioni»; plain Impara opens the one used
  *  last, the Giornale on a fresh start). */
 export async function goImpara(page: Page, tab: 'giornale' | 'pr' | 'lezioni' = 'lezioni'): Promise<void> {

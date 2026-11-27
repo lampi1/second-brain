@@ -1,6 +1,6 @@
 # ADR 0353 · Every helper at the bench, the ones at work first, and a limit that says what it means
 
-Date: 2026-11-15 · Status: accepted (owner, thread «Proporre nuova Grindhouse e Orchestrator», 2026-11-15: «Non capisco
+Date: 2026-11-15 · Status: superseded by ADR 0366 (thin strips grouped by Strategist replace the benches); before that accepted (owner, thread «Proporre nuova Grindhouse e Orchestrator», 2026-11-15: «Non capisco
 questa cosa del limite di 5 figli. e perchè se io volessi scorrere tutti i figli dovrei poterlo fare e vorrei vedere
 quelli in attività per primi») · Renumbered from 0314 on 2026-11-25 (ADR 0352: two records had that number) · Amends: ADR 0312 (point 2: up to five helpers and «+N»; the limit chip)
 

@@ -152,7 +152,7 @@ describe('prefs', () => {
     // the retired views (Mosaico, Corsie), the icon-only sidebar and the top Orchestrator leave nothing behind
     const p = loadPrefs(JSON.stringify({ view: 'corsie', density: 'compact', theme: 'weird', cols: { 3: [1, 2, 1] }, rows: {}, browserZone: 0.5, navCollapsed: true, orchestratorPlacement: 'top', orchestratorTopHeight: 300 }));
     expect(p.density).toBe('compact');
-    expect(p.theme).toBe('system');
+    expect(p).not.toHaveProperty('theme'); // dark only (ADR 0366): a stored theme is dropped
     for (const key of ['view', 'cols', 'rows', 'browserZone', 'navCollapsed', 'orchestratorPlacement', 'orchestratorTopHeight']) expect(p).not.toHaveProperty(key);
     // the retired hide-browsers switch (#82): a saved "on" is dropped, an opened browser always shows
     expect(loadPrefs(JSON.stringify({ browsersHidden: true, density: 'compact' }))).not.toHaveProperty('browsersHidden');

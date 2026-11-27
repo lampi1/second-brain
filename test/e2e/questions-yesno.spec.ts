@@ -32,14 +32,14 @@ function png(w: number, h: number, rgb: [number, number, number]): Buffer {
 }
 
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`a yes/no question with its brief: the context is all inside the card · ${scheme}`, async () => {
     test.setTimeout(120_000);
     const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-decision-'));
     const shotFile = path.join(userData, 'evidence', 'fix-at-7', 'carrello-dopo.png');
     fs.mkdirSync(path.dirname(shotFile), { recursive: true });
     fs.writeFileSync(shotFile, png(640, 360, [50, 120, 80]));
-    const { app, page } = await launchDemo({ width: 1366, height: 900, scheme, userData, config: { theme: scheme } });
+    const { app, page } = await launchDemo({ width: 1366, height: 900, scheme, userData });
     for (const id of ['orchestrator', 'qa', 'feedback', 'fix', 'sms', 'mappa']) await demo(app, (d, c) => d.stop(c), id);
     for (let i = 0; i < 5; i++) {
       await page.waitForTimeout(300);
@@ -80,8 +80,7 @@ for (const scheme of ['dark', 'light'] as const) {
     await expect(page.locator('.qwin .gu-yn')).toHaveCount(0);
     await page.mouse.move(2, 2);
     await page.waitForTimeout(400);
-    await shot(page, scheme === 'dark' ? 'qdecision-window' : 'qdecision-light');
-    if (scheme === 'light') { await app.close(); return; }
+    await shot(page, 'qdecision-window');
 
     // T: write an answer; Esc goes back to the buttons
     await card.focus();
@@ -108,7 +107,7 @@ test('a brief whose screenshot cannot be shown: no empty column, the line and it
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-decision-'));
   const outside = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-outside-')), 'impostazioni-microfono.png');
   fs.writeFileSync(outside, png(320, 200, [60, 60, 140]));
-  const { app, page } = await launchDemo({ width: 1366, height: 900, scheme: 'dark', userData, config: { theme: 'dark' } });
+  const { app, page } = await launchDemo({ width: 1366, height: 900, scheme: 'dark', userData });
   for (const id of ['orchestrator', 'qa', 'feedback', 'fix', 'sms', 'mappa']) await demo(app, (d, c) => d.stop(c), id);
   for (let i = 0; i < 5; i++) {
     await page.waitForTimeout(300);

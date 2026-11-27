@@ -83,11 +83,6 @@ for (const [name, extra] of [['demo', 0], ['large', 140]] as const) {
       // ResizeObserver and the map layout settle separately; horizontal fill alone can already pass on old geometry.
       await expect(async () => expectFilled(await measure(page))).toPass({ timeout: 5000 });
       await shot(page, `dashboard-map-fit-${name}-narrow`);
-      if (name === 'large') {
-        await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
-        await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-        await shot(page, `dashboard-map-fit-${name}-light`);
-      }
     } finally { await app.close(); }
   });
 }

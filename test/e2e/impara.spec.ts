@@ -126,7 +126,6 @@ test('a saved lesson reopens where it was, light theme, rail with numbers beside
   test.setTimeout(60_000);
   const { app, page } = await launchDemo({ scheme: 'light' });
   try {
-    await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
     await page.emulateMedia({ colorScheme: 'light' });
     await goImpara(page);
     const card = page.getByTestId('impara-lessons').locator('.ip-card', { hasText: 'PR #249' });
@@ -353,7 +352,7 @@ test('the tutor beside a lesson (ADR 0190): coach first, «Dimmelo e basta», ci
 
     // learning from where you are: the Task page (a PR: its lesson)
     await page.keyboard.press('Escape');
-    await page.getByTestId('nav-task').click();
+    await goPage(page, 'task'); // out of ☰ (ADR 0366): G O
     const dv = page.getByTestId('brain-page-task');
     await dv.getByTestId('task-refresh').click();
     await dv.getByTestId('task-tab-prs').click();

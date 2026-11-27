@@ -22,10 +22,9 @@ const multi = {
   ],
 };
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`question panels look like a product and answer from the keyboard (${scheme})`, async () => {
     const { app, page } = await launchDemo({ scheme, questions: true });
-    if (scheme === 'light') await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
     const pick = (key: string) => page.locator(`[data-testid="qwin-pick"][data-key^="${key}"]`).click();
     const card = page.getByTestId('qwin-card');
     // a single-choice question with a recommended option and descriptions (Claude)

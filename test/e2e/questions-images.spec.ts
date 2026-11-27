@@ -35,7 +35,7 @@ function png(w: number, h: number, rgb: [number, number, number]): Buffer {
   return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`a question shows its images, large on a click · ${scheme}`, async () => {
     const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-'));
     const ev = path.join(userData, 'evidence', 'qimg');
@@ -45,7 +45,7 @@ for (const scheme of ['dark', 'light'] as const) {
     const outside = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-out-')), 'fuori.png');
     fs.writeFileSync(outside, png(40, 40, [200, 200, 0]));
 
-    const { app, page } = await launchDemo({ scheme, userData, config: { theme: scheme } });
+    const { app, page } = await launchDemo({ scheme, userData });
     for (const id of ['orchestrator', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
     await leaveFields(page);
     const q = `Approvi il nuovo disegno? ![Prima (oggi)](${path.join(ev, '0-prima.png')}) ![Dopo](${path.join(ev, '1-proposta.png')})`;

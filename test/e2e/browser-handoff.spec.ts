@@ -136,10 +136,8 @@ test.describe.serial('login hand-off', () => {
     await banner.getByTestId(/^handoff-copy-user-/).click();
     expect(await clip()).toBe('mario@example.com');
 
-    await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
     await page.waitForTimeout(300);
     await shot(page, 'handoff-banner-light');
-    await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'dark' }));
 
     await banner.getByTestId(/^handoff-done-/).click();
     await expect(banner).toBeHidden();
