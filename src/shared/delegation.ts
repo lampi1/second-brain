@@ -136,7 +136,8 @@ export interface DelegationLimitHit { kind: 'depth' | 'parallel'; limit: number;
 /** The limit mark a chat shows: only the depth limit still exists. */
 export const shownLimit = (h: DelegationLimitHit | undefined): DelegationLimitHit | undefined => h?.kind === 'depth' ? h : undefined;
 
-export const GOAL_MAX = 2000, OUTPUT_MAX = 2000, CONTEXT_MAX = 6000, CRITERION_MAX = 300, CRITERIA_MAX = 12, SUMMARY_MAX = 300, RESULT_OUTPUT_MAX = 12000, EVIDENCE_MAX = 1000;
+// CONTEXT_MAX was 6000, above the whole contract's CONTRACT_TEXT_MAX: no field alone may pass the total (ADR 0371 point 7)
+export const GOAL_MAX = 2000, OUTPUT_MAX = 2000, CONTEXT_MAX = 3000, CRITERION_MAX = 300, CRITERIA_MAX = 12, SUMMARY_MAX = 300, RESULT_OUTPUT_MAX = 12000, EVIDENCE_MAX = 1000;
 /** ADR 0371 point 7: what one agent writes to another stays short; the detail goes in a file, its path in the text.
  *  agent_report's output (RESULT_OUTPUT_MAX stays the stored ceiling of older results) and the whole text of one
  *  delegation contract (agent_delegate, agent_assign_task: every field summed). Over it the call is refused, saying so. */

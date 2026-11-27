@@ -17,7 +17,7 @@ import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/m
 import { delegationTools, stalledMin } from '../../../src/main/agents/delegation';
 import { gateRequest } from '../../../src/main/agents/role-gate';
 import { ROLE_DEFAULTS, ROLE_PREAMBLE, rolePreamble, ROLE_IDS, WORK_ROLE_IDS, DELEGATION_DEFAULTS, isWorkRole, launchGap, type DelegationSettings, type RoleId } from '../../../src/shared/roles';
-import { capText, REPORT_OUTPUT_MAX, checkContract, checkResult, delegationPrompt, depthOf, readDelegation, resultMessage } from '../../../src/shared/delegation';
+import { capText, CONTEXT_MAX, CONTRACT_TEXT_MAX, GOAL_MAX, NOTE_MAX, OUTPUT_MAX, REPORT_OUTPUT_MAX, WHY_MAX, checkContract, checkResult, delegationPrompt, depthOf, readDelegation, resultMessage } from '../../../src/shared/delegation';
 import { AGENT_LABEL, oneLine } from '../../../src/shared/agent-label';
 import type { AgentCatalog } from '../../../src/shared/agents';
 import type { NewChat } from '../../../src/shared/contract';
@@ -236,7 +236,7 @@ describe('agent_delegate', () => {
   it('#492 point 7: a delegation contract over its total cap is refused with where its detail goes', async () => {
     const f = fixture();
     const parent = await f.root('strategist');
-    const big = { ...f.task('scout', 'Ordini · Troppo'), contract: { goal: 'Trova il bug', doneWhen: ['criterion A'], context: 'contesto '.repeat(560) } };
+    const big = { ...f.task('scout', 'Ordini · Troppo'), contract: { goal: 'Trova il bug', doneWhen: ['criterion A'], context: 'contesto '.repeat(330), constraints: 'vincolo '.repeat(240), alreadyDecided: 'deciso '.repeat(60) } };
     await expect(f.call('agent_delegate', parent.id, { tasks: [big] })).rejects.toThrow(/contract.*the limit is 5000.*file/);
     expect(f.m.list().filter(c => c.parentId === parent.id)).toHaveLength(0);
   });
@@ -1314,6 +1314,14 @@ describe('flat JSON-string parameters for Cursor/Gemini (#487)', () => {
     await f.call('agent_report', childId, { outcome: 'done', summary: 'ok', output: 'ok', doneWhen: [{ criterion: 'criterion A', met: true }] });
     const out3 = await f.call('agent_assign_task', parent.id, { chatId: childId, roleId: 'scout', mode: 'continue', contractJson: JSON.stringify({ goal: 'Next', doneWhen: ['criterion B'] }) });
     expect(out3.chatId).toBe(childId);
+  });
+});
+
+describe('#492 point 7 (review): the contract caps agree (ADR 0371)', () => {
+  it('no field alone may pass the whole contract\'s cap, and a field at its own cap is a valid contract', () => {
+    for (const cap of [GOAL_MAX, OUTPUT_MAX, CONTEXT_MAX, WHY_MAX, NOTE_MAX]) expect(cap).toBeLessThanOrEqual(CONTRACT_TEXT_MAX);
+    expect(checkContract({ goal: 'g', doneWhen: ['a'], context: 'c'.repeat(CONTEXT_MAX) }, 'scout').context).toHaveLength(CONTEXT_MAX);
+    expect(() => checkContract({ goal: 'g', doneWhen: ['a'], context: 'c'.repeat(CONTEXT_MAX + 1) }, 'scout')).toThrow(/contract.context/);
   });
 });
 
