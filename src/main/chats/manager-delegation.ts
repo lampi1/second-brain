@@ -343,6 +343,9 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     if (review && (!['success', 'partial', 'fail'].includes(result.verdict ?? '') || !['yes', 'partial', 'no'].includes(result.verified ?? ''))) throw new Error('Independent reviews require explicit verdict and verified fields.');
     if (review && (run.endedAt !== undefined || r.s.closedAt)) throw new Error('The review assignment has already ended.');
     this.checkReportVersion(r, result);
+    // «done» while the running plan still has open steps would freeze them as never done: refused, nothing changes
+    const open = r.s.plan?.phase === 'running' && result.outcome === 'done' ? r.s.plan.steps.flatMap((s, i) => ['todo', 'now', 'check'].includes(s.state) ? [`${i + 1}. ${s.title}`] : []) : [];
+    if (open.length) throw new Error(`agent_report: outcome "done" refused, the plan still has unfinished steps: ${open.join('; ')}. Mark each one with plan_update (done with its proof, or cancelled), or report outcome "partial".`);
     if (r.s.plan && r.s.plan.phase !== 'approved' && result.outcome !== 'blocked') r.s.plan = finishPlan(r.s.plan, Date.now());
     const reported = run.report?.via === 'agent_report' || r.rootReportAt !== undefined && r.rootReportAt >= (r.s.work?.updatedAt ?? 0);
     // a correction goes the same way as the first result, with the same delivery policy: display and notify stay a

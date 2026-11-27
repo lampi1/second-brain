@@ -389,7 +389,7 @@ export class Plans {
     if (m.deletedAt !== undefined) throw new Error('Il piano è nel cestino: ripristinalo prima di cambiarlo.');
     const words = c.set || c.add || c.remove ? this.withWords(m, c) : m;
     if (c.steps?.length) {
-      const chat = this.ownerChat(m);
+      const chat = this.liveChat(m);
       // a live chat carries the plan: the steps change there, and the plan follows it
       if (chat && this.d.chats.planEdit) {
         applySteps(m.plan ?? { phase: 'asking', clarified: [], steps: [], at: 0 }, c.steps, this.now(), by === 'user' ? 'user' : 'strategist');
@@ -411,7 +411,7 @@ export class Plans {
     if (!a || !b || baseId === otherId) throw new Error('Servono due piani diversi.');
     if (a.deletedAt !== undefined || b.deletedAt !== undefined) throw new Error('Un piano nel cestino non si unisce: ripristinalo prima.');
     for (const p of [a, b]) if (this.busyChat(p)) throw new Error(`«${p.title}» ha una chat al lavoro: fermala o aspetta che finisca, poi unisci.`);
-    const steps = b.plan?.steps ?? [], chat = this.ownerChat(a);
+    const steps = b.plan?.steps ?? [], chat = this.liveChat(a);
     let cur = a;
     if (steps.length) {
       const ops = [{ op: 'import' as const, steps }], start = a.plan ?? { phase: 'asking' as const, clarified: [], steps: [], at: this.now() };
@@ -554,6 +554,9 @@ export class Plans {
     for (let n = 0; c?.continuedBy && n < 20; n++) c = all.find(x => x.id === c!.continuedBy!.id) ?? c;
     return c && (m.owner!.task === 'chat' || taskOf(c) === m.owner!.task || !!c.continuedFrom) ? c : null;
   }
+  /** The owner chat only while it still carries a plan: a chat whose plan is gone (a later job, a plan archived away)
+   *  cannot take step edits, so the map's own plan is edited instead. */
+  private liveChat(m: Plan): ChatSummary | null { const c = this.ownerChat(m); return c?.plan ? c : null; }
   private needChat(c: ChatSummary | null): ChatSummary { if (!c) throw new Error('La chat di questo lavoro non c’è più: riprendilo.'); return c; }
 
   private edit(id: string, by: string, fn: (m: Plan) => Plan): void { this.put(fn(this.maps.get(id)!), by); }

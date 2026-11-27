@@ -261,14 +261,38 @@ describe('a worker that delivered its final report closes by itself (#86)', () =
     expect(f.chat(w.id).work?.status).toBe('completed');
   });
 
-  it('an explicit non-blocked report finalizes a running plan before the plan guard, then completes', async () => {
+  it('an explicit partial report finalizes a running plan before the plan guard, then completes', async () => {
     const f = fixture(), r = await f.orchestrator();
     const w = await f.worker(r.id, { answer: 'Avviato.' });
     f.m.seedPlan(w.id, { phase: 'running', clarified: [], steps: [{ id: 's1', title: 'Review', state: 'todo' }], at: Date.now() });
-    f.script.get(w.id)!.push({ report: 'Chiuso con quello che c’è.', answer: 'Fatto.' });
+    f.script.get(w.id)!.push({ report: 'Chiuso con quello che c’è.', outcome: 'partial', answer: 'Fatto.' });
     await f.m.send(w.id, 'Risultato', undefined, false, 'Orchestrator');
     expect(f.chat(w.id).plan?.phase).toBe('done');
+    expect(f.chat(w.id).plan?.steps[0]?.state).toBe('todo');
     expect(f.chat(w.id).work?.status).toBe('completed');
+  });
+
+  it('«done» on a running plan with unfinished steps is refused, naming them; nothing changes', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { answer: 'Avviato.' });
+    const steps = [{ id: 's1', title: 'Build', state: 'done' as const, proof: { at: 1, by: 'report' as const, text: 'ok' } }, { id: 's2', title: 'Review', state: 'now' as const },
+      { id: 's3', title: 'QA', state: 'check' as const }, { id: 's4', title: 'Docs', state: 'todo' as const }, { id: 's5', title: 'Extra', state: 'cancelled' as const }, { id: 's6', title: 'Wait', state: 'blocked' as const }];
+    f.m.seedPlan(w.id, { phase: 'running', clarified: [], steps, at: Date.now() });
+    const report = () => f.m.reportRoot(w.id, { outcome: 'done', summary: 'Fatto tutto.', output: 'x', doneWhen: [] });
+    expect(report).toThrow(/2\. Review; 3\. QA; 4\. Docs\. Mark each one with plan_update .* or report outcome "partial"/);
+    expect(f.chat(w.id).plan?.phase).toBe('running');
+    expect(f.chat(w.id).run?.report).toBeUndefined();
+    // partial and blocked stay allowed on the same plan
+    expect(() => f.m.reportRoot(w.id, { outcome: 'blocked', summary: 'Manca l’accesso.', output: 'x', doneWhen: [] })).not.toThrow();
+    expect(f.chat(w.id).plan?.phase).toBe('running');
+  });
+
+  it('«done» is accepted once every step of the running plan is done, cancelled, blocked or partial', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { answer: 'Avviato.' });
+    f.m.seedPlan(w.id, { phase: 'running', clarified: [], steps: [{ id: 's1', title: 'Build', state: 'done', proof: { at: 1, by: 'report', text: 'ok' } }, { id: 's2', title: 'Extra', state: 'cancelled' }, { id: 's3', title: 'Half', state: 'partial' }], at: Date.now() });
+    expect(() => f.m.reportRoot(w.id, { outcome: 'done', summary: 'Fatto.', output: 'x', doneWhen: [] })).not.toThrow();
+    expect(f.chat(w.id).plan?.phase).toBe('done');
   });
 
   it('a later clean report after a waiting one completes it', async () => {

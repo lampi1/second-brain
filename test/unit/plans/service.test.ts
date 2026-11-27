@@ -468,4 +468,20 @@ describe('what the two reviews found (ADR 0363)', () => {
     expect(edits).toHaveLength(1);
     expect(w.get(b.id)!.deletedAt).toBeDefined();
   });
+  it('an owner chat that no longer carries a plan takes no step edits: change and merge edit the map itself', async () => {
+    const w = maps(), m = saw(w, chat('a', { state: 'idle', plan: plan('running', 100, steps('done', 'todo')) }));
+    // the chat's plan is gone (archived away, a later job): it would answer «Questa chat non ha un piano.»
+    const { plan: _p, ...bare } = chats.find(c => c.id === 'a')!; put(bare as ChatSummary);
+    const planEdit = vi.fn(() => { throw new Error('Questa chat non ha un piano.'); });
+    (w as unknown as { d: { chats: { planEdit?: unknown } } }).d.chats.planEdit = planEdit;
+    const out = await w.change(m.id, { steps: [{ op: 'done', step: 2, proof: 'verificato' }] as never });
+    expect(planEdit).not.toHaveBeenCalled();
+    expect(out.plan!.steps[1]).toMatchObject({ state: 'done', proof: { text: 'verificato' } });
+    const b = w.idea({ title: 'B' });
+    await w.change(b.id, { steps: [{ op: 'add', title: 'Passo di B', after: [] }] as never });
+    const merged = await w.merge(m.id, b.id);
+    expect(planEdit).not.toHaveBeenCalled();
+    expect(merged.plan!.steps.map(s => s.title)).toContain('Passo di B');
+    expect(w.get(b.id)!.deletedAt).toBeDefined();
+  });
 });
