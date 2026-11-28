@@ -345,6 +345,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0370](0370-small-brain-edits-and-broken-connectors.md) The Orchestrator applies small brain edits itself; a connector that keeps failing is held back with one notice — accepted
 - [0371](0371-agent-communication-after-the-26-nov-update.md) Agent communication after the 26 Nov update: his words count, tools right the first time, short messages, told when done — accepted
 - [0372](0372-a-plan-passes-from-one-strategist-to-another.md) A plan passes from one Strategist to another, and widens on the way — accepted
+- [0373](0373-scheduled-activities.md) Scheduled activities: the app watches DevOps, Outlook, Teams and Gmail on a timer, at zero tokens until something matters — accepted
 
 ## Replaced
 

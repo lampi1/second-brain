@@ -8,6 +8,8 @@ import type { AgentImages } from './agent-images';
 import type { AgentCatalog } from './agents';
 import type { AppUpdateState, UpdateCheckpointRequest } from './app-update';
 import type { AutoCloseStatus } from './auto-close';
+import type { ActivitiesState } from './activities';
+import type { ActivitiesInvokeMap } from './contract/activities';
 import type { AgentsInvokeMap } from './contract/agents';
 import type { AppSourceState, CliStatus, Usage, AppInvokeMap } from './contract/app';
 import type { BrainInvokeMap } from './contract/brain';
@@ -40,6 +42,7 @@ export * from './contract/agents';
 export * from './contract/media';
 export * from './contract/chess';
 export * from './contract/library';
+export * from './contract/activities';
 export * from './contract/phone';
 export * from './contract/phone-ipc';
 // Internal identity only: exporting its data type adds no renderer channel or authority.
@@ -48,7 +51,7 @@ export type { RuntimeIdentity, RuntimeOutcome } from './agent-runtime';
 /** renderer → main. Each entry: [argument, result]. One interface per area (src/shared/contract/*.ts). */
 export interface InvokeMap extends
   EnginesInvokeMap, ChatsInvokeMap, BrowserInvokeMap, FeedInvokeMap, AppInvokeMap,
-  SettingsInvokeMap, BrainInvokeMap, UiInvokeMap, AgentsInvokeMap, MediaInvokeMap, ChessInvokeMap, LibraryInvokeMap {}
+  SettingsInvokeMap, BrainInvokeMap, UiInvokeMap, AgentsInvokeMap, MediaInvokeMap, ChessInvokeMap, LibraryInvokeMap, ActivitiesInvokeMap {}
 
 /** main → renderer. */
 export interface EventMap {
@@ -137,6 +140,8 @@ export interface EventMap {
   'news:changed': NewsState;
   /** Memoria → Artifact (ADR 0328): the index changed (an agent saved one, the user removed one, a file went) */
   'library:changed': void;
+  /** «Attività pianificate» (ADR 0373): an activity was saved, switched, deleted or ran; the whole state after it */
+  'activities:changed': ActivitiesState;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -181,6 +186,7 @@ export const INVOKE_CHANNELS = [
   'plans:list', 'plans:view', 'plans:idea', 'plans:approve', 'plans:keep', 'plans:start', 'plans:stop', 'plans:resume', 'plans:replan', 'plans:archive', 'plans:reopen', 'plans:seen', 'plans:delete', 'plans:restore', 'plans:change', 'plans:merge', 'plans:split', 'plans:forget',
   'chess:move', 'chess:stop', 'chess:save', 'chess:history',
   'library:list', 'library:thumb', 'library:open', 'library:remove',
+  'activities:state', 'activities:save', 'activities:enable', 'activities:remove', 'activities:pause', 'activities:run', 'activities:history',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'work:changed',
@@ -200,6 +206,7 @@ export const EVENT_CHANNELS = [
   'news:changed',
   'plans:changed',
   'library:changed',
+  'activities:changed',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;

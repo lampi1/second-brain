@@ -25,6 +25,7 @@ import { cleanMoves } from '../shared/chess';
 import { ChessEngine, ENGINE_JS, scriptedProc, spawnStockfish } from './chess/engine';
 import { DEMO_CHESS_GAMES, chessGames } from './chess/store';
 import { chessHandlers } from './ipc-handlers/chess';
+import { activitiesHandlers } from './ipc-handlers/activities';
 import { libraryHandlers } from './ipc-handlers/library';
 import { LibraryService } from './library/service';
 import { nativeThumb } from './library/thumbs';
@@ -267,6 +268,7 @@ app.whenReady().then(async () => {
     ...mediaHandlers(ctx),
     ...chessHandlers(chessEngine, chessGames),
     ...libraryHandlers(library),
+    ...activitiesHandlers(),
   };
   // the deck's sources call the same handlers their old pages called (never a second path to the same write)
   const call = <K extends InvokeChannel>(ch: K, arg: InvokeArg<K>): Promise<InvokeResult<K>> =>
