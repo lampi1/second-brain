@@ -240,7 +240,7 @@ export class McpOAuth {
       await this.d.openExternal(auth.toString());
       const got = await code;
       if (secretDest && !cfg.secretPin?.origin) cfg.secretPin?.set(secretDest);   // first use: from now on only there
-      const tok =await this.token(disc.as.token_endpoint, { grant_type: 'authorization_code', code: got, redirect_uri: redirect, client_id: clientId, code_verifier: verifier, resource: disc.resource, ...(clientSecret ? { client_secret: clientSecret } : {}) });
+      const tok = await this.token(disc.as.token_endpoint, { grant_type: 'authorization_code', code: got, redirect_uri: redirect, client_id: clientId, code_verifier: verifier, resource: disc.resource, ...(clientSecret ? { client_secret: clientSecret } : {}) });
       if (cancelled) throw new McpClientError('auth', 'Login interrotto.', 'Premi di nuovo «Accedi».');
       const s: OAuthSession = { ...tok, clientId, ...(clientSecret ? { clientSecret } : {}), tokenEndpoint: disc.as.token_endpoint, resource: disc.resource, ...(scope ? { scope } : {}), origin: new URL(serverUrl).origin, at: this.now() };
       if (!this.d.save(id, s)) throw new McpClientError('auth', 'L’indirizzo del connettore è cambiato durante il login.', 'Premi di nuovo «Accedi».');
