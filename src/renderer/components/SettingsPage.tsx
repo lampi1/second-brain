@@ -34,7 +34,6 @@ import { BrainShareSetting } from './BrainShareSetting';
 import { ConnectorsHub, McpAdvanced } from './ConnectorsHub';
 import { CodexAutonomy } from './CodexAutonomy';
 import { AppUpdateSettings } from './AppUpdateSettings';
-import { TaskReadSettings } from './TaskReadSettings';
 import { SuggestSettings } from './SuggestSettings';
 import { AwaySettings } from './AwayToggle';
 import { QueueSettings } from './QueueSettings';
@@ -177,7 +176,6 @@ export function SettingsPage() {
         <Segmented label={t('essential.toasts')} testid="st-toasts-select" value={settings.osToasts} onChange={osToasts => void setSetting({ osToasts })}
           options={(['urgent', 'normal', 'off'] as const).map(value => ({ value: choose(value), label: t(value === 'off' ? 'essential.none' : `essential.${value}`) }))} />
       </Row>
-      <TaskReadSettings />
     </> },
     { ...meta.advanced, icon: <IconSettings size={16} />, body: <><QueueSettings /><McpAdvanced /><WorktreeSettings /></> },
   ];

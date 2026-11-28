@@ -15,7 +15,6 @@ export const brainLibDe: typeof brainLibIt = {
   'brainLib.charts.firstLabel': (p: { n: number; first: string; value: string }) => `${p.n} Einträge; erster: ${p.first}, ${p.value}.`,
 
   // record-discuss.ts
-  'brainLib.recordDiscuss.untitled': 'ohne Titel',
 
   // stats.ts
   'brainLib.stats.trendStable': 'stabil',

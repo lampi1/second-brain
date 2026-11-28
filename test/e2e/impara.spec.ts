@@ -312,7 +312,7 @@ test('the review: score, subjects and levels, today’s cards (recall, choice, c
   }
 });
 
-test('the tutor beside a lesson (ADR 0190): coach first, «Dimmelo e basta», cites, a review card, a click on the diagram; learning from Task, Memoria and the Guide', async () => {
+test('the tutor beside a lesson (ADR 0190): coach first, «Dimmelo e basta», cites, a review card, a click on the diagram; learning from Memoria and the Guide', async () => {
   test.setTimeout(120_000);
   const { app, page } = await launchDemo();
   try {
@@ -349,20 +349,6 @@ test('the tutor beside a lesson (ADR 0190): coach first, «Dimmelo e basta», ci
     await shot(page, 'impara-tutor-dark');
     await page.getByTestId('impara-tutor-input').press('Escape');
     await expect(tutor).toHaveCount(0);
-
-    // learning from where you are: the Task page (a PR: its lesson)
-    await page.keyboard.press('Escape');
-    await goPage(page, 'task'); // out of ☰ (ADR 0366): G O
-    const dv = page.getByTestId('brain-page-task');
-    await dv.getByTestId('task-refresh').click();
-    await dv.getByTestId('task-tab-prs').click();
-    await dv.getByTestId('task-row-pr:812').click({ timeout: 30_000 });
-    await dv.getByTestId('task-detail').getByTestId('task-learn-pr-812').first().click();
-    await expect(page.getByTestId('impara-kind')).toHaveAttribute('data-kind', 'pr');
-    await expect(page.getByTestId('impara-ask-what')).toHaveValue(/812/);
-    await expect(page.getByTestId('impara-from')).toHaveCount(0);
-    await page.getByTestId('impara-start-btn').click();
-    await expect(page.getByTestId('impara-preparing')).toBeVisible();
   } finally {
     await app.close();
   }

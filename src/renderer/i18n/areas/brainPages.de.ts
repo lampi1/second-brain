@@ -23,34 +23,6 @@ export const brainPagesDe: typeof brainPagesIt = {
 
   // Esplora.tsx
 
-  // Task.tsx (ADR 0079: the DevOps page became Task)
-  'brainPages.task.title': 'Tasks',
-  'brainPages.task.subtitle': 'Deine PRs, Reviews, Work Items und Neuigkeiten aus Azure DevOps, mit Inhalt direkt hier. Nur lesend, null Tokens.',
-  'brainPages.task.refresh': 'Jetzt aktualisieren',
-  'brainPages.task.reading': 'Lese…',
-  'brainPages.task.updated': (p: { ago: string }) => `aktualisiert ${p.ago}`,
-  'brainPages.task.auto': 'Automatisches Lesen',
-  'brainPages.task.readHint': 'Die Task-Seite liest PRs, Work Items und Erwähnungen aus Azure DevOps selbst neu ein (nur lesend, null Tokens).',
-  'brainPages.task.settingsLink': 'Leseeinstellungen',
-  'brainPages.task.readState': (p: { on: boolean; every: string }) => (p.on ? `Automatisches Lesen alle ${p.every}` : 'Automatisches Lesen aus'),
-  'brainPages.task.autoLabel': 'Automatisch aktualisieren',
-  'brainPages.task.every': 'Alle',
-  'brainPages.task.everyLabel': 'Wie viele Minuten zwischen den Lesevorgängen',
-  'brainPages.task.sound': 'Hinweiston',
-  'brainPages.task.soundTip': 'Jeder Hinweis, der von selbst kommt, spielt einen Ton, je nach Art verschieden: Frage, Fehler, Erwähnung, Login- oder Sync-Problem, Ende der Wartung',
-  'brainPages.task.off': 'Aus',
-  'brainPages.task.on': 'Ein',
-  'brainPages.task.next': (p: { when: string }) => `nächstes Lesen ${p.when}`,
-  'brainPages.task.sections': 'Task-Bereiche',
-  'brainPages.task.neverTitle': 'Tasks noch nicht gelesen',
-  'brainPages.task.neverBody': 'Drück „Jetzt aktualisieren“: Neuigkeiten, PRs und Work Items aus Azure DevOps erscheinen hier.',
-  'brainPages.task.firstRead': 'Lese Azure DevOps (beim ersten Mal kann das ein paar Minuten dauern)…',
-  'brainPages.task.loading': 'Lese den Stand der Tasks…',
-
-
-  // RecordDiscussButton.tsx
-  'brainPages.recordDiscuss.title': 'Öffnet den Orchestrator neben der Seite mit einer fertigen Nachricht zu diesem Eintrag: wenn Arbeit nötig ist, öffnet er den Chat',
-  'brainPages.recordDiscuss.markTitle': (p: { day: string }) => `Mit dem Orchestrator besprochen, ${p.day}: zurück zum Orchestrator`,
   // Discuss.tsx
   'brainPages.discuss.discussBtn': 'Besprechen',
   'brainPages.discuss.discussButtonLabel': (p: { topic: string }) => `Mit dem Orchestrator besprechen: ${p.topic}`,

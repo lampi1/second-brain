@@ -124,14 +124,6 @@ export const toolsEn: typeof toolsIt = {
   'tools.routing.kindOther': 'Other',
 
   // DevOps
-  'tools.tasks.notReadTimeout': 'Tasks not read: login expired, run «az login» in a terminal',
-  'tools.tasks.notRead': 'Tasks not read:',
-  'tools.tasks.updated': 'Tasks updated:',
-  'tools.tasks.updatedWithNews': (p: { unread: number }) => `Tasks updated: ${p.unread} new items to read`,
-  'tools.tasks.updatedNoNews': 'Tasks updated: no news',
-  'tools.tasks.settingsSaved': 'Setting saved',
-  'tools.tasks.settingsNotSaved': 'Setting not saved:',
-  'tools.tasks.notMarkedRead': 'Not marked as read:',
   // Ctrl+K: the brain search's model (searching by meaning)
   'tools.search.modelDownloading': p => `Search by meaning: downloading the model ${p.pct}%`,
   'tools.search.wordsOnly': 'Brain: searching by words only',

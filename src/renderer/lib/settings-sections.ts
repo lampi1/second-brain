@@ -19,7 +19,7 @@ export function settingsSections(engineNames: readonly string[]): Record<Setting
     voice: { id: 'voice', description:t('voice.groupDesc'),title:t('voice.group'),search:[t('voice.asrTitle'),t('voice.nameTitle'),t('voice.modelsTitle'),'voce microfono whisper piper parla ascolta voice mic speech Ctrl+M'].join(' ') },
     phone: { id: 'phone', description:t('phone.groupDesc'),title:t('phone.group'),search:[t('phone.tokenTitle'),t('phone.pairTitle'),t('phone.quietTitle'),'telefono phone Telegram bot BotFather cellulare mobile token associa pair'].join(' ') },
     appearance: { id: 'appearance', description:t('essential.desc.appearance'),title:t('essential.appearance'),search:[t('settings.language'),t('essential.density')].join(' ') },
-    notifications: { id: 'notifications', description:t('essential.desc.notifications'),title:t('essential.notifications'),search:`${t('essential.toasts')} ${t('brainPages.task.autoLabel')} ${t('brainPages.task.sound')} Task` },
+    notifications: { id: 'notifications', description:t('essential.desc.notifications'),title:t('essential.notifications'),search:`${t('essential.toasts')}` },
     advanced: { id: 'advanced', description:t('hub.adv.groupDesc'),title:t('hub.adv.group'),search:'MCP server stdio http comando command argomenti args env variabili headers intestazioni importa import Claude Cursor Codex avanzate advanced coda queue avvii freddo cold start slot core freno brake emergenza CPU RAM memoria worktree copie copies disco disk spazio space pulizia cleanup' },
   };
 }

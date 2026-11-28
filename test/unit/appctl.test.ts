@@ -551,8 +551,8 @@ describe('app control tools', () => {
     const out = await tool('app_logs').run({ level: 'warn', grep: 'slow' }) as { msg: string }[];
     expect(out.map(e => e.msg)).toContain('session slow');
     expect(out.every(e => e.msg !== 'tab opened')).toBe(true);
-    await tool('app_ui').run({ action: 'page', value: 'task' });
-    expect(ui).toEqual([{ action: 'page', value: 'task' }]);
+    await tool('app_ui').run({ action: 'page', value: 'attivita' });
+    expect(ui).toEqual([{ action: 'page', value: 'attivita' }]);
     expect(() => tool('app_ui').run({ action: 'view', value: 'corsie' })).toThrow(/not allowed/);
   });
 

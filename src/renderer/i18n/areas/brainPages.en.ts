@@ -23,34 +23,6 @@ export const brainPagesEn: typeof brainPagesIt = {
 
   // Esplora.tsx
 
-  // Task.tsx (ADR 0079: the DevOps page became Task)
-  'brainPages.task.title': 'Tasks',
-  'brainPages.task.subtitle': 'Your PRs, reviews, work items and news from Azure DevOps, with their content right here. Read-only, zero tokens.',
-  'brainPages.task.refresh': 'Refresh now',
-  'brainPages.task.reading': 'Reading…',
-  'brainPages.task.updated': (p: { ago: string }) => `updated ${p.ago}`,
-  'brainPages.task.auto': 'Automatic read',
-  'brainPages.task.readHint': 'The Task page re-reads Azure DevOps PRs, work items and mentions by itself (read only, zero tokens).',
-  'brainPages.task.settingsLink': 'Reading settings',
-  'brainPages.task.readState': (p: { on: boolean; every: string }) => (p.on ? `Automatic read every ${p.every}` : 'Automatic read off'),
-  'brainPages.task.autoLabel': 'Automatic refresh',
-  'brainPages.task.every': 'Every',
-  'brainPages.task.everyLabel': 'How many minutes between reads',
-  'brainPages.task.sound': 'Alert sound',
-  'brainPages.task.soundTip': 'Every notice that arrives by itself plays a sound, a different one per kind: question, error, mention, login or sync problem, end of the maintenance',
-  'brainPages.task.off': 'Off',
-  'brainPages.task.on': 'On',
-  'brainPages.task.next': (p: { when: string }) => `next read ${p.when}`,
-  'brainPages.task.sections': 'Task sections',
-  'brainPages.task.neverTitle': 'Tasks not read yet',
-  'brainPages.task.neverBody': 'Press "Refresh now": news, PRs and work items from Azure DevOps show up here.',
-  'brainPages.task.firstRead': 'Reading Azure DevOps (the first time can take a few minutes)…',
-  'brainPages.task.loading': 'Reading the task state…',
-
-
-  // RecordDiscussButton.tsx
-  'brainPages.recordDiscuss.title': 'Opens the Orchestrator next to the page with a ready message about this record: if work is needed, it opens the chat',
-  'brainPages.recordDiscuss.markTitle': (p: { day: string }) => `Discussed with the Orchestrator, ${p.day}: back to the Orchestrator`,
   // Discuss.tsx
   'brainPages.discuss.discussBtn': 'Discuss',
   'brainPages.discuss.discussButtonLabel': (p: { topic: string }) => `Discuss with Orchestrator: ${p.topic}`,

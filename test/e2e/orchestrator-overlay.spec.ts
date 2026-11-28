@@ -93,9 +93,9 @@ for (const [W, H] of [[1366, 728], [1920, 1040]] as const) {
     await page.mouse.move(2, 2);
     await shot(page, `orchestrator-dock-${W}-chat`);
     await page.keyboard.press('Control+K');
-    await page.getByTestId('palette-input').fill('task');
+    await page.getByTestId('palette-input').fill('attivit');
     await page.keyboard.press('Enter');
-    await expect(page.getByTestId('brain-page-task')).toBeVisible();
+    await expect(page.getByTestId('brain-page-attivita')).toBeVisible();
     await expect(page.getByTestId('orchestrator-overlay')).toBeVisible(); // the same column on every place
     await apart(page, '.page-frame');
     await page.mouse.move(2, 2);

@@ -21,34 +21,6 @@ export const brainPagesIt = {
 
   // Esplora.tsx
 
-  // Task.tsx (ADR 0079: the DevOps page became Task)
-  'brainPages.task.title': 'Task',
-  'brainPages.task.subtitle': 'Le tue PR, le review, i work item e le novità da Azure DevOps, con i contenuti qui dentro. Sola lettura, zero token.',
-  'brainPages.task.refresh': 'Aggiorna ora',
-  'brainPages.task.reading': 'Leggo…',
-  'brainPages.task.updated': (p: { ago: string }) => `aggiornato ${p.ago}`,
-  'brainPages.task.auto': 'Lettura automatica',
-  'brainPages.task.readHint': 'La pagina Task rilegge da sola PR, work item e menzioni di Azure DevOps (sola lettura, zero token).',
-  'brainPages.task.settingsLink': 'Impostazioni di lettura',
-  'brainPages.task.readState': (p: { on: boolean; every: string }) => (p.on ? `Lettura automatica ogni ${p.every}` : 'Lettura automatica spenta'),
-  'brainPages.task.autoLabel': 'Aggiornamento automatico',
-  'brainPages.task.every': 'Ogni',
-  'brainPages.task.everyLabel': 'Ogni quanti minuti',
-  'brainPages.task.sound': 'Suono degli avvisi',
-  'brainPages.task.soundTip': 'Ogni avviso che arriva da solo suona, con un suono diverso per tipo: domanda, errore, menzione, problema di login o sincronizzazione, fine della Manutenzione',
-  'brainPages.task.off': 'Spento',
-  'brainPages.task.on': 'Acceso',
-  'brainPages.task.next': (p: { when: string }) => `prossima lettura ${p.when}`,
-  'brainPages.task.sections': 'Sezioni di Task',
-  'brainPages.task.neverTitle': 'Task non ancora letti',
-  'brainPages.task.neverBody': 'Premi «Aggiorna ora»: novità, PR e work item da Azure DevOps compaiono qui.',
-  'brainPages.task.firstRead': 'Leggo Azure DevOps (la prima volta anche qualche minuto)…',
-  'brainPages.task.loading': 'Leggo lo stato dei task…',
-
-
-  // RecordDiscussButton.tsx
-  'brainPages.recordDiscuss.title': "Apre l’Orchestrator qui accanto con un messaggio già pronto su questo record: se serve lavoro, è lui ad aprire la chat",
-  'brainPages.recordDiscuss.markTitle': (p: { day: string }) => `Discusso con l’Orchestrator, ${p.day}: torna all’Orchestrator`,
   // Discuss.tsx
   'brainPages.discuss.discussBtn': 'Discuti',
   'brainPages.discuss.discussButtonLabel': (p: { topic: string }) => `Discuti con l’Orchestrator: ${p.topic}`,

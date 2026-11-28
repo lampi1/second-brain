@@ -4,7 +4,7 @@
 // explanation before the block as its title, its two-word summary, Esegui / Copia / Non serve, the chat's name in its
 // label, and the open requests go up by one; Esegui there runs it in the chat that proposed it (output under the block)
 // and the request leaves. An example in the middle of an explanation asks for nothing. A work chat's command never
-// shows in the Orchestrator; "Non serve" takes it away. On a page (Task) the same window shows it, with "Apri chat".
+// shows in the Orchestrator; "Non serve" takes it away. On a page (Attività pianificate) the same window shows it, with "Apri chat".
 // A production block asks a second click too. When the run ends the chat gets its result by itself (run/results.ts).
 // Screenshots: test-results/shots/command-ask-window.png, command-ask-not-orchestrator.png, command-ask-page.png,
 // command-run-result.png.
@@ -116,8 +116,8 @@ test('a work chat\'s command never shows in the Orchestrator: it waits in the qu
 
 test('on a page the command shows in the questions window and Esegui there runs it in its chat', async () => {
   const { app, page } = await launchDemo();
-  await goPage(page, 'task');
-  await expect(page.getByTestId('brain-page-task')).toBeVisible(); // a page (Oggi is now Task)
+  await goPage(page, 'attivita');
+  await expect(page.getByTestId('brain-page-attivita')).toBeVisible(); // a page (Oggi is now Attività pianificate)
   await turn(app, 'mappa', ASK);
   const card = page.getByTestId('qwin-card');
   await expect(card).toHaveAttribute('data-kind', 'command');

@@ -58,9 +58,8 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     const menu = page.getByTestId('nav-menu');
     await expect(menu.locator('.nav-title')).toHaveCount(3);
     const navOrder = await menu.locator('.nav-title, .nav-item').evaluateAll(els => els.map(e => e.getAttribute('data-testid')));
-    expect(navOrder.filter(id => id !== 'nav-task')).toEqual(['nav-group-work', 'nav-menu-home', 'nav-piani', 'nav-group-leisure', 'nav-impara', 'nav-scacchi',
+    expect(navOrder).toEqual(['nav-group-work', 'nav-menu-home', 'nav-piani', 'nav-attivita', 'nav-group-leisure', 'nav-impara', 'nav-scacchi',
       'nav-group-system', 'nav-agenti', 'nav-memoria', 'nav-andamento', 'nav-impostazioni']);
-    if (navOrder.includes('nav-task')) expect(navOrder.indexOf('nav-task')).toBe(navOrder.indexOf('nav-piani') + 1);
     for (const gone of ['nav-registrazioni', 'nav-collegamenti', 'nav-log', 'nav-workspace', 'nav-dashboard', 'nav-skill', 'nav-regole', 'nav-script', 'nav-idee',
       'nav-apprendimento', 'nav-costi', 'nav-qualita', 'nav-classificatori', 'nav-miglioramento', 'nav-migliora', 'nav-devops']) expect(navOrder).not.toContain(gone);
     await expect(nav).not.toContainText('DevOps');

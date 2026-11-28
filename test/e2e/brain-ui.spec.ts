@@ -42,13 +42,13 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => { await app?.close(); });
 
-test('Oggi, Adesso and DevOps are gone: their old links open Task', async () => {
+test('Oggi, Adesso and DevOps are gone: their old links open Attività pianificate', async () => {
   await open('devops');
-  await expect(page.getByTestId('brain-page-task')).toBeVisible();
+  await expect(page.getByTestId('brain-page-attivita')).toBeVisible();
   await open('oggi');
-  await expect(page.getByTestId('brain-page-task')).toBeVisible();
+  await expect(page.getByTestId('brain-page-attivita')).toBeVisible();
   await open('adesso');
-  await expect(page.getByTestId('brain-page-task')).toBeVisible();
+  await expect(page.getByTestId('brain-page-attivita')).toBeVisible();
   // "home" is no longer an alias of Oggi: since 73a4e37 it is the Home page itself (index.tsx BRAIN_PAGES)
   await open('home');
   await expect(page.getByTestId('brain-page-home')).toBeVisible();

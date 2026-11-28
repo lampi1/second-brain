@@ -13,7 +13,6 @@ export const brainLibIt = {
   'brainLib.charts.firstLabel': (p: { n: number; first: string; value: string }) => `${p.n} voci; la prima: ${p.first}, ${p.value}.`,
 
   // record-discuss.ts
-  'brainLib.recordDiscuss.untitled': 'senza titolo',
 
   // stats.ts
   'brainLib.stats.trendStable': 'stabile',

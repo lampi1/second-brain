@@ -15,7 +15,7 @@ test('a role page opens its editor on Modifica and the draft survives page navig
     await expect(page.getByTestId('agent-editor')).toBeVisible(); // openAgents chose Modifica il ruolo
     await shot(page, 'role-page-dark');
     await page.getByTestId('agent-instructions').fill('Cerca prima nel repository, poi sul web.');
-    await goPage(page, 'task'); // out of ☰ (ADR 0366): G O
+    await goPage(page, 'attivita'); // out of ☰ (ADR 0366): G O
     await openAgents(page, 'scout');
     await expect(page.getByTestId('agent-instructions')).toHaveValue('Cerca prima nel repository, poi sul web.');
     await shot(page, 'role-editor-dark');

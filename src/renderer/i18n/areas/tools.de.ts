@@ -124,14 +124,6 @@ export const toolsDe: typeof toolsIt = {
   'tools.routing.kindOther': 'Sonstiges',
 
   // DevOps
-  'tools.tasks.notReadTimeout': 'Tasks nicht gelesen: Anmeldung abgelaufen, führe «az login» in einem Terminal aus',
-  'tools.tasks.notRead': 'Tasks nicht gelesen:',
-  'tools.tasks.updated': 'Tasks aktualisiert:',
-  'tools.tasks.updatedWithNews': (p: { unread: number }) => p.unread === 1 ? 'Tasks aktualisiert: 1 neuer Eintrag zu lesen' : `Tasks aktualisiert: ${p.unread} neue Einträge zu lesen`,
-  'tools.tasks.updatedNoNews': 'Tasks aktualisiert: nichts Neues',
-  'tools.tasks.settingsSaved': 'Einstellung gespeichert',
-  'tools.tasks.settingsNotSaved': 'Einstellung nicht gespeichert:',
-  'tools.tasks.notMarkedRead': 'Nicht als gelesen markiert:',
   // Ctrl+K: the brain search's model (searching by meaning)
   'tools.search.modelDownloading': p => `Suche nach Bedeutung: lade das Modell ${p.pct}%`,
   'tools.search.wordsOnly': 'Brain: Suche nur nach Wörtern',
