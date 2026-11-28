@@ -84,6 +84,7 @@ import type { TaskAssignmentOptions } from '../../shared/delegation';
 import { answeredText, lastAnswered, lastTyped, ownItem, userAsked } from './user-words';
 import { recordingTools, type RecordingsRead } from './recordings';
 import { newsTools, type NewsControl } from './news';
+import { activityTools, type ActivitiesControl } from './activities';
 import { childOutputTool } from './child-output';
 import { credentialsCardTool } from './credential-card-tool';
 import { agentsRecapTool } from './agents-recap';
@@ -146,6 +147,8 @@ export interface AppCtlDeps {
   brainEdit?: BrainQuickEdit;
   /** the «Giornale» (ADR 0280): app_news, app_news_edition, app_news_source, app_news_refresh on the Orchestrator's own endpoint */
   news?: NewsControl;
+  /** the scheduled activities (ADR 0373): app_activity on the Orchestrator's own endpoint; the engine's service */
+  activities?: ActivitiesControl;
   /** the configuration the Orchestrator changes for the user (app_config, ADR 0149); settings come from `brain` */
   config?: Omit<ConfigDeps, 'callerId' | 'userAsked' | 'saidYesTo' | 'brain'>;
 }
@@ -282,6 +285,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     ...(d.recordings && authed() ? recordingTools(d.recordings, d.emitUi) : []),
     ...(d.plans && authed() ? [{ name: 'plans', description: PLAN_TOOL_TEXT, inputSchema: obj(PLAN_TOOL_PROPS, ['action']), annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false }, run: (a: Record<string, unknown>) => planAction(d.plans!, { kind: 'orchestrator' }, a) } satisfies ToolDef] : []),
     ...(d.news && authed() ? newsTools(d.news, d.emitUi) : []),
+    ...(d.activities && authed() ? activityTools(d.activities) : []),
     ...(d.skillLibrary && authed() ? skillTools(d.skillLibrary, () => caller()?.title || 'Orchestrator') : []),
     ...(d.brainEdit && authed() ? [brainEditTool(d.brainEdit, () => caller()?.title || 'Orchestrator')] : []),
     ...(authed() ? [childOutputTool({ chats: () => d.chats.list(), runs: () => d.runFeedback?.runList() ?? [] }), agentsRecapTool({ chats: () => d.chats.list(), items: id => d.chats.items(id), pending: () => [...d.chats.pending(), ...(d.commandAsks?.() ?? [])], runs: () => d.runFeedback?.runList() ?? [] })] : []),

@@ -1605,6 +1605,42 @@ export const CONCEPTS: readonly ConceptCard[] = [
     sources: ['src/renderer/components/plans/PlansPage.tsx', 'src/renderer/components/plans/PlanView.tsx', 'src/renderer/components/plans/PlanSteps.tsx', 'src/renderer/lib/plans.ts', 'src/shared/plan.ts', 'src/shared/plan-steps.ts', 'src/shared/plan-edit.ts', 'src/shared/strategy.ts', 'src/main/plans/service.ts', 'src/main/plans/tools.ts', 'src/main/plans/migrate.ts', 'src/main/plans/start.ts'],
   },
   {
+    id: 'activities',
+    title: b('Attività pianificate', 'Scheduled activities'),
+    summary: b('L’app guarda DevOps, Outlook, Teams e Gmail a intervalli e ti avvisa solo quando qualcosa conta, senza spendere token finché non serve.',
+      'The app watches DevOps, Outlook, Teams and Gmail at intervals and tells you only when something matters, spending no tokens until it must.'),
+    points: [
+      // src/shared/activities.ts ActivityInput
+      b('Un’attività è una cosa da tenere d’occhio: una fonte (DevOps, Outlook, Teams o Gmail), ogni quanto guardare (da 5 minuti a 12 ore, se vuoi solo certi giorni e una fascia oraria), un filtro e una frase tua su cosa proporti.',
+        'An activity is one thing to keep an eye on: a source (DevOps, Outlook, Teams or Gmail), how often to look (5 minutes to 12 hours, optionally only some days and a time window), a filter and a sentence of yours on what to propose.'),
+      // src/shared/activities.ts selectNew, passesFilter
+      b('A ogni giro l’app legge la fonte a zero token, tiene solo ciò che è nuovo dall’ultima volta e passa il filtro (mittenti, parole nel titolo, solo non lette, solo dove ti nominano, niente no-reply). Se non resta niente, il giro finisce lì.',
+        'On every run the app reads the source at zero tokens, keeps only what is new since last time and passes the filter (senders, title words, unread only, only where you are named, no no-reply). If nothing is left, the run ends there.'),
+      // src/shared/activities.ts clipForTriage
+      b('Solo se qualcosa è rimasto parte un solo passaggio del modello più economico, senza strumenti, su al massimo 15 elementi corti. Se propone qualcosa, l’Orchestrator riceve una notizia raggruppata e te lo chiede con Sì/No, uno alla volta.',
+        'Only if something is left does one pass of the cheapest model run, with no tools, on at most 15 short items. If it proposes something, the Orchestrator gets one grouped news and asks you Yes/No, one at a time.'),
+      // src/shared/activities.ts ACTIVITY_CAP_DEFAULT
+      b('Ogni attività ha un tetto di passaggi al giorno (20 di base, al massimo 100): raggiunto, si ferma e lo dice. Ogni giro resta nella cronologia (gli ultimi 20) con cosa ha letto, tenuto, proposto e quanto è costato.',
+        'Every activity has a cap of passes per day (20 by default, at most 100): reached, it stops and says so. Every run stays in the history (the last 20) with what it read, kept, proposed and what it cost.'),
+      // src/main/appctl/activities.ts activityTools
+      b('L’Orchestrator le gestisce per te: le elenca, ne crea di nuove da una frase, le cambia, le accende e le spegne, le cancella, le fa girare subito e legge la cronologia. Non serve la tua conferma: un’attività non invia né cambia nulla, propone soltanto.',
+        'The Orchestrator manages them for you: it lists them, creates new ones from a sentence, changes them, turns them on and off, deletes them, runs them at once and reads the history. No confirmation of yours is needed: an activity sends and changes nothing, it only proposes.'),
+      // src/shared/activities.ts nextRunAt
+      b('I giri partono solo con l’app aperta; una pausa generale ferma tutto il timer (l’esecuzione a mano resta possibile). Gmail costa token a ogni giro finché l’app non ha un suo connettore.',
+        'Runs happen only while the app is open; a global pause stops the whole timer (a manual run still works). Gmail costs tokens on every run until the app has its own connector.'),
+    ],
+    analogy: b('Come un portiere che controlla la posta a orari fissi e ti bussa alla porta solo se arriva qualcosa che ti riguarda.',
+      'Like a doorman who checks the post at fixed times and knocks on your door only if something that concerns you arrives.'),
+    tech: [
+      tech(DATA, 'Attività, filtro, cursore e giri: forme e regole pure in shared/activities.ts; IPC activities:state, activities:save, activities:enable, activities:remove, activities:pause, activities:run, activities:history e l’evento activities:changed.',
+        'Activities, filter, cursor and runs: shapes and pure rules in shared/activities.ts; IPC activities:state, activities:save, activities:enable, activities:remove, activities:pause, activities:run, activities:history and the event activities:changed.'),
+      tech(LIMITS, 'Al massimo 30 attività, ogni 5-720 minuti, tetto 1-100 al giorno, 15 elementi da 300 caratteri per passaggio, 20 giri di cronologia.',
+        'At most 30 activities, every 5-720 minutes, cap 1-100 per day, 15 items of 300 characters per pass, 20 runs of history.'),
+      tech(TOOLS, 'app_activity sull’endpoint dell’Orchestrator (list, create, update, enable, disable, delete, run, history).', 'app_activity on the Orchestrator’s endpoint (list, create, update, enable, disable, delete, run, history).'),
+    ],
+    sources: ['src/shared/activities.ts', 'src/main/appctl/activities.ts', 'docs/adr/0373-scheduled-activities.md'],
+  },
+  {
     id: 'brain-map',
     title: b('Collegamenti e mappa 3D', 'Links and the 3D map'),
     summary: b('Chi usa cosa nel tuo brain: agenti, skill, regole, memoria e note, anche in 3D.',
