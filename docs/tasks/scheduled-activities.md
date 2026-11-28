@@ -27,3 +27,19 @@ different shape asks; it never edits another part's files).
    before the real sources exist.
 4. A branch's gate: `npm run check:quick` green, a clean Sentinel, the guard; merge to `main` only when verified (rules 7-9).
 5. Nothing is sent, deleted or run on production by an activity: it only proposes (ADR 0373 decision 4).
+
+## Wiring notes: the tools part (`app_activity`)
+
+- `src/main/appctl/activities.ts` exports `activityTools(svc)` and `ActivitiesControl` (`state`, `save`, `enable`, `remove`, `run`,
+  `history`: the same shapes as the page's `activities:*` handlers, each may be sync or async). `appctl/tools.ts` already mounts it
+  on the Orchestrator's endpoint when `AppControlDeps.activities` is set (the only touch outside the part's files).
+- **Integrator, once the engine has landed:** pass the engine's service as `activities` where `news` is passed to `appControlTools`
+  (`src/main/index.ts`), mapping `save` ← `activities:save`, `enable` ← `activities:enable`, `remove` ← `activities:remove`, `run` ←
+  `activities:run`, `history` ← `activities:history`, `state` ← `activities:state`. No adapter is needed if the service methods keep
+  those argument shapes. Until then the tool is simply not offered.
+- The global pause has no action in `ActivityToolArgs`: `list` only reports it. Add `pause` to the contract if the Orchestrator
+  should flip it too.
+- The page's route is unknown to the tool, so `create` does not open the page (the Giornale's tools do via `emitUi`); add it with the
+  page's route once it exists.
+- The `activities` concept card (`src/shared/concept-guide.ts`) describes the page's behaviour in words; the page part should extend
+  its points and sources with the page's files and screenshot.
