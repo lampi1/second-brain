@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { StrategyPlan } from '../../src/shared/strategy';
-import { keepQuestionsAside, launch, setQuestionsAside, openOrchestrator, openNotesMap, setSize, waitThumbs, goPage, goImpara } from '../e2e/helpers';
+import { keepQuestionsAside, launch, setQuestionsAside, openOrchestrator, setSize, waitThumbs, goPage } from '../e2e/helpers';
 // @ts-expect-error plain ESM helper without types
 import { demoBrain } from '../../scripts/demo-brain.mjs';
 
@@ -95,8 +95,6 @@ async function saveBuffers(name: string, buffers: Buffer[]): Promise<void> {
 
 const demo = <T,>(fn: string, ...args: unknown[]): Promise<T> =>
   app.evaluate((_e, [f, a]) => ((globalThis as unknown as { __sbDemo: Record<string, (...x: unknown[]) => unknown> }).__sbDemo[f as string]!)(...(a as unknown[])), [fn, args] as const) as Promise<T>;
-const tool = (chatId: string, t: { id: string; name: string; input: unknown; summary?: string }) =>
-  app.evaluate((_e, [c, x]) => (globalThis as unknown as { __sbDemo: { tool(c: string, t: unknown): void } }).__sbDemo.tool(c, x), [chatId, t] as const);
 
 test('README screenshots', async () => {
   test.setTimeout(180_000);
@@ -117,7 +115,7 @@ test('README screenshots', async () => {
   await save('grindhouse');
 
   // 1b. Agenti: the agent catalog as cards, with the changes waiting for the user's approval
-  await page.getByTestId('nav-agenti').click();
+  await goPage(page, 'agenti'); // the ☰ menu holds the link (ADR 0366): the G key opens it
   await expect(page.getByTestId('agent-overview')).toBeVisible({ timeout: 30_000 });
   await waitThumbs(page);
   await save('agents');
@@ -142,18 +140,6 @@ test('README screenshots', async () => {
   await page.getByTestId('focus-exit').click();
   await setSize(app, W, H);
 
-  // 4. The 3D brain map, lit where the chats are working right now
-  await tool('fix', { id: 'shot-read', name: 'Read', input: { file_path: 'C:\\brains\\demo\\now.md' }, summary: 'now.md' });
-  await tool('fix', { id: 'shot-agent', name: 'Agent', input: { subagent_type: 'reviewer' }, summary: 'reviewer' });
-  await tool('orchestrator', { id: 'shot-send', name: 'mcp__second-brain-app__app_send_to_chat', input: { chatId: 'feedback', text: 'go' }, summary: 'App · Feedback' });
-  await openNotesMap(page);
-  await page.getByRole('button', { name: 'Explore in 3D' }).click();
-  await expect(page.getByTestId('brain-map').getByTestId('bx-map-canvas').locator('canvas')).toHaveCount(1, { timeout: 30_000 });
-  await page.waitForTimeout(5000); // the layout settles
-  await save('brain-map', page.getByTestId('brain-map'));
-  await page.keyboard.press('Escape');
-  await expect(page.getByTestId('brain-map')).toHaveCount(0);
-
 
 });
 
@@ -173,7 +159,7 @@ test('README showcase: Memoria, agent levels, Orchestrator, reactions', async ()
 
   // Memoria: the live head with its counters, the tabs, the Proposals deck with its top card held mid-swipe
   await setSize(app, W, 1240);
-  await page.getByTestId('nav-memoria').click();
+  await goPage(page, 'memoria');
   const mem = page.getByTestId('bm-memory-page');
   await expect(mem).toHaveAttribute('data-tab', 'proposte');
   const top = page.getByTestId('pd-card-top');
@@ -280,16 +266,14 @@ test('README showcase: the Strategist\'s plan to approve on its map', async () =
     ],
     clarified: [{ q: 'Where', a: 'Cart, order and refund' }, { q: 'Offers', a: 'No, full price only' }] } as StrategyPlan;
   await demo('plan', 'tree-plan', plan);
-  await goPage(page, 'collegamenti');
-  await page.getByTestId('bm-map-page').getByRole('button', { name: 'Jobs', exact: true }).click();
+  // the plans' page (G B, ADR 0359): the plan waiting for the user, opened on its steps
+  await goPage(page, 'piani');
   await page.getByTestId('pl-group-wait').locator('.pl-row-main').first().click({ timeout: 15_000 });
-  const map = page.getByTestId('pl-map');
-  await expect(map.getByTestId('pl-do-approve')).toBeVisible({ timeout: 15_000 });
-  await map.getByTestId('pl-box-pick-2').click(); // a step told in the side panel
-  await save('plan', map);
+  await expect(page.getByTestId('pl-steps')).toBeVisible({ timeout: 15_000 });
+  await save('plan', await frameOf(page.getByTestId('plans-page')));
 });
 
-test('README showcase: voice, Log, recordings, quality, learn, news, costs, trends, the maintenance notice', async () => {
+test('README showcase: voice, Log, recordings, quality, news, costs, trends, the maintenance notice', async () => {
   test.setTimeout(180_000);
   // the plan's questions window is done: every request from here on is set aside, as a user busy elsewhere would
   await keepQuestionsAside(page);
@@ -337,19 +321,9 @@ test('README showcase: voice, Log, recordings, quality, learn, news, costs, tren
   await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 });
   await save('quality', await frameOf(page.getByTestId('an-panel-qualita').getByTestId('bx-q-trovati')));
 
-  // Learn: a saved lesson about a PR on the blackboard, its diagram growing piece by piece
-  await goImpara(page);
-  await expect(page.getByTestId('impara-lessons').locator('.ip-card').first()).toBeVisible({ timeout: 30_000 });
-  await page.getByTestId('impara-lessons').locator('.ip-card').first().locator('.ip-card-open').click();
-  await expect(page.getByTestId('impara-player')).toBeVisible({ timeout: 15_000 });
-  await page.waitForTimeout(1500); // the diagram draws in
-  // the player as it is laid out now (the board, the piece and the Studio beside it), not the Log's column
-  const pb = (await page.getByTestId('impara-player').boundingBox())!;
-  await save('learn', { x: Math.round(pb.x), y: Math.round(pb.y), width: Math.round(pb.width), height: Math.round(Math.min(pb.height, H - pb.y)) });
-
   // News: Impara's «Giornale», the AI news in three columns (sections, stories, the open one with why it matters)
-  await page.keyboard.press('Escape');
-  await goImpara(page, 'giornale');
+  // (Impara is the Giornale only since 93eceaf8: its lessons and their tabs are gone)
+  await goPage(page, 'impara');
   await expect(page.getByTestId('news-reader')).toBeVisible({ timeout: 30_000 });
   await save('news');
 
@@ -367,7 +341,7 @@ test('README showcase: voice, Log, recordings, quality, learn, news, costs, tren
   await save('trends', await frameOf(page.getByTestId('use-tab')));
 
   // Maintenance: one click, then the celebrating notice over Memoria when it ends
-  await page.getByTestId('nav-memoria').click();
+  await goPage(page, 'memoria');
   await expect(page.getByTestId('bm-memory-page')).toBeVisible();
   for (const x of await page.getByTestId('toast-close').all()) await x.click();
   await page.getByTestId('settings').click();
@@ -417,11 +391,11 @@ test('README screenshot: Artifacts', async () => {
 
 // Last: its jobs are chats of the demo, which no other picture should show.
 test('README screenshot: the plans', async () => {
-  // Map › Jobs (ADR 0343): one map per Strategist job or idea, by status, what waits for the user on top
+  // the plans' page (ADR 0359): one row per Strategist job or idea, by status, what waits for the user on top
   await keepQuestionsAside(page);
   await demo('plans');
-  await goPage(page, 'collegamenti');
-  await page.getByTestId('bm-map-page').getByRole('button', { name: 'Jobs', exact: true }).click();
-  await expect(page.getByTestId('pl-group-planned')).toBeVisible({ timeout: 30_000 });
-  await save('plans', await frameOf(page.getByTestId('bm-map-page')));
+  await goPage(page, 'piani');
+  if (await page.getByTestId('pl-back').count()) await page.getByTestId('pl-back').click(); // the list, not an open plan
+  await expect(page.getByTestId('pl-list')).toBeVisible({ timeout: 30_000 });
+  await save('plans', await frameOf(page.getByTestId('plans-page')));
 });

@@ -65,7 +65,7 @@ button.mh-pulse:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .mh-tab-icon{display:inline-flex;color:var(--text-4);transition:color 180ms,transform 240ms var(--ease)}
 .mh-tab-icon svg{width:14px;height:14px}
 .mh-tabs>button[aria-selected=true] .mh-tab-icon{color:var(--accent);transform:scale(1.08)}
-.mh-count{min-width:18px;height:17px;padding:0 6px;display:inline-grid;place-items:center;border-radius:99px;font-size:10.5px;font-weight:650;font-variant-numeric:tabular-nums;
+.mh-count{min-width:18px;height:17px;padding:0 6px;display:inline-grid;place-items:center;border-radius:var(--r-s);font-size:10.5px;font-weight:650;font-variant-numeric:tabular-nums;
   color:var(--text-3);background:var(--surface-3);transition:background 180ms,color 180ms}
 .mh-tabs>button[aria-selected=true] .mh-count{color:var(--accent);background:var(--accent-bg)}
 .mh-count[data-hot=true]{color:var(--on-amber);background:var(--amber);animation:mh-hot 2.6s ease-in-out infinite}
@@ -98,7 +98,7 @@ button.mh-pulse:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .mh-ctx-name b{font-size:var(--fs-m);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mh-ctx-name small{font-size:var(--fs-xs);color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mh-ctx-row strong{font-size:var(--fs-s);font-weight:600;font-variant-numeric:tabular-nums;color:var(--text-2);white-space:nowrap}
-.mh-ctx-track{height:6px;border-radius:99px;background:var(--surface-3);overflow:hidden}
+.mh-ctx-track{height:6px;border-radius:var(--r-s);background:var(--surface-3);overflow:hidden}
 .mh-ctx-track i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--accent),var(--violet));transition:width 600ms var(--ease)}
 .mh-ctx-row.warn .mh-ctx-track i{background:linear-gradient(90deg,var(--amber),var(--red))}
 .mh-ctx-row.warn strong{color:var(--amber)}

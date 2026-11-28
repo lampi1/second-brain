@@ -31,8 +31,8 @@ import { OrchestratorTile } from '../../src/renderer/components/OrchestratorTile
 import { PlansButton } from '../../src/renderer/components/PlansButton';
 
 const chat = { id: 'o1', title: 'Orchestrator', harness: 'claude', status: 'idle', agent: { name: 'Orchestrator' }, createdAt: 0, updatedAt: 0 };
-function render() {
-  const state = { chats: { o1: chat }, items: { o1: [] }, pending: [], ready: true, info: { brainRoot: 'C:/brain', engines: [] }, settings: { engineOn: {}, engines: {} } };
+function render(extra: Record<string, unknown> = {}) {
+  const state = { chats: { o1: chat, ...extra }, items: { o1: [] }, pending: [], ready: true, info: { brainRoot: 'C:/brain', engines: [] }, settings: { engineOn: {}, engines: {} } };
   vi.mocked(useApp).mockImplementation(selector => selector(state as unknown as Parameters<typeof selector>[0]));
   return renderToStaticMarkup(createElement(OrchestratorTile, { chatId: 'o1' }));
 }
@@ -45,6 +45,13 @@ describe('the plans button on the Orchestrator', () => {
     expect(menu).toBeGreaterThan(0);
     const head = html.slice(0, menu);
     expect(head).toContain('data-testid="orchestrator-plans"');
+  });
+  it('shows «Stai aspettando» under the topics only for chats the user waits for (ADR 0367)', () => {
+    expect(render()).not.toContain('data-testid="orchestrator-waiting"');
+    const html = render({ w1: { id: 'w1', title: 'Controllo DB di test', state: 'running', pending: 0, userWait: { since: 1 } } });
+    expect(html).toContain('data-testid="orchestrator-waiting"');
+    expect(html).toContain('Controllo DB di test');
+    expect(html.indexOf('data-testid="orchestrator-waiting"')).toBeGreaterThan(html.indexOf('data-testid="orchestrator-menu"'));
   });
   it('opens the maps on click, like the top bar\'s button', () => {
     const el = PlansButton({ testid: 'orchestrator-plans' }) as unknown as { props: { onClick: () => void; testid: string; shortcut: string } };

@@ -9,6 +9,7 @@ const { setInterval, clearInterval } = timersFor('demo-browser');
 import { WebContentsView, type BrowserWindow } from 'electron';
 import type { BrowserEnv, BrowserHandoff, CredentialEntry, BrowserTab, Rect, ViewLayout } from '../shared/contract';
 import type { BrowserService, FeedInput } from './services';
+import type { CardMatch } from './browser/logins';
 import type { DemoAction, DemoBrowserHooks, Emit } from './demo';
 import { pageUrl, type DemoPage } from './demo-pages';
 import { swallowCloseKey } from './keyguard';
@@ -137,7 +138,15 @@ export class DemoBrowser implements BrowserService, DemoBrowserHooks {
 
   /** The "Credenziali" panel in the demo: fictional entries, and Copia never copies anything real. */
   credentials(): CredentialEntry[] { return DEMO_CREDENTIALS; }
-  copyCredential(id: string, field: 'user' | 'password'): boolean { return DEMO_CREDENTIALS.some(e => e.id === id) && (field === 'user' || field === 'password'); }
+  copyCredential(id: string, field: 'user' | 'password' | 'url'): boolean { return DEMO_CREDENTIALS.some(e => e.id === id && (field !== 'url' || !!e.url)); }
+  // the Orchestrator's credentials card (ADR 0367): demo entries only, and a made-up value for «Mostra»
+  credentialCardMatch(ref: string): CardMatch {
+    const want = ref.toLowerCase().replace(/\s+/g, '');
+    const e = DEMO_CREDENTIALS.find(x => `${x.group} ${x.url ?? ''} ${x.user}`.toLowerCase().replace(/\s+/g, '').includes(want));
+    return e ? { id: e.id, group: e.group } : { refusal: `Refused: no demo entry matches "${ref}".` };
+  }
+  credentialCardFields(id: string): { user: string; url?: string } | null { const e = DEMO_CREDENTIALS.find(x => x.id === id); return e ? { user: e.user, ...(e.url ? { url: e.url } : {}) } : null; }
+  credentialReveal(id: string): string | null { return DEMO_CREDENTIALS.some(x => x.id === id) ? 'demo-non-reale' : null; }
 
   // ---- hand-offs (an agent asks the user to act in a tab): the demo can open one to show the banner
   private hand = new Map<string, BrowserHandoff>();

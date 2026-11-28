@@ -11,10 +11,10 @@ const UI = {
   nav: [{ group: '', items: [{ page: 'home', label: 'Grindhouse', key: 'G H' }] }, { group: 'Brain', items: [{ page: 'memoria', label: 'Memoria', key: 'G Y' }] }],
   pages: [{ id: 'memoria', label: 'Memoria', key: 'G Y', aliases: ['dashboard'], about: 'Proposte e conoscenza' }, { id: 'impostazioni', label: 'Impostazioni', key: 'G P' }],
   memoria: [{ tab: 'proposte', label: 'Proposte' }, { tab: 'skill', label: 'Skill' }],
-  settings: [{ id: 'appearance', title: 'Aspetto', description: 'Tema e densità', keywords: 'Tema Lingua Densità' }],
-  actions: [{ group: 'Azioni', title: 'Cambia tema', sub: 'Ora: scuro' }, { group: 'Azioni', title: 'Scorciatoie', shortcut: 'Ctrl+/' }],
+  settings: [{ id: 'appearance', title: 'Aspetto', description: 'Lingua e densità', keywords: 'Lingua Densità' }],
+  actions: [{ group: 'Azioni', title: 'Cambia densità', sub: 'Ora: comoda' }, { group: 'Azioni', title: 'Scorciatoie', shortcut: 'Ctrl+/' }],
   help: [{ id: 'toasts', title: 'Urgenti o normali', text: 'Le notifiche di Windows' }],
-  view: { theme: 'dark' },
+  view: { density: 'comfortable' },
 };
 const win = (answer: unknown) => ({ isDestroyed: () => false, webContents: { executeJavaScript: async (expr: string) => (expr.includes('__sbScreen') ? 'page: memoria · window 1600×900' : answer) } }) as unknown as BrowserWindow;
 const deps = (over: Partial<GuideDeps> = {}): GuideDeps => ({ window: () => win(UI), settings: { schema, get: () => DEFAULTS }, tools: () => [{ name: 'app_config', description: 'Read and change the configuration. More text.' }], ...over });
@@ -49,9 +49,10 @@ describe('app_guide', () => {
   });
 
   it('a topic returns the matching page, setting and help entries with how to reach them', async () => {
-    const out = String(await guideTool(deps()).run({ topic: 'tema' }));
+    const out = String(await guideTool(deps()).run({ topic: 'lingua' }));
     expect(out).toContain('[setting]');
-    expect(out).toMatch(/Tema.*\(theme\)/);
+    expect(out).toMatch(/Lingua.*\(language\)/);
+    expect(out).not.toMatch(/\(theme\)/); // dark only (ADR 0366)
     expect(out).toContain('Impostazioni › Aspetto');
     const page = String(await guideTool(deps()).run({ topic: 'memoria' }));
     expect(page).toContain('app_ui page memoria');
@@ -64,9 +65,9 @@ describe('app_guide', () => {
     expect(String(await guideTool(deps({ window: () => null })).run({ topic: 'chiusura automatica' }))).toContain('autoCloseMin');
   });
 
-  it('the description\'s own example finds the theme setting; question words are not matched', async () => {
-    const out = String(await guideTool(deps({ window: () => null })).run({ topic: 'dove cambio il tema' }));
-    expect(out.split('\n')[0]).toMatch(/\(theme\)/);
+  it('the description\'s own example finds the language setting; question words are not matched', async () => {
+    const out = String(await guideTool(deps({ window: () => null })).run({ topic: 'dove cambio la lingua' }));
+    expect(out.split('\n')[0]).toMatch(/\(language\)/);
     expect(String(await guideTool(deps()).run({ topic: 'come si fa' }))).toMatch(/^Nothing on/);
   });
 

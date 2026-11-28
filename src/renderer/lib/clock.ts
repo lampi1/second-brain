@@ -2,6 +2,7 @@
 // 'clock'), so relative times ("4 min") are identical in every screenshot. `useNow` re-renders a component on a
 // coarse tick (relative labels) without each tile running its own timer. Used by tiles, the lane and the top bar.
 // Paused while the window is hidden (lib/beat.ts has the why: "Lag nell'app", 2026-10-12).
+// `useDayStart` gives the start of the local day, for what keeps only today's work (AgentStrips.tsx).
 import { useSyncExternalStore } from 'react';
 
 let frozen: number | null = null;
@@ -42,4 +43,9 @@ function subscribe(fn: () => void): () => void {
 /** The current time, refreshed every `granularityMs` (rounded down, so components re-render only on change). */
 export function useNow(granularityMs = 15_000): number {
   return useSyncExternalStore(subscribe, () => Math.floor(current / granularityMs) * granularityMs + (frozen !== null ? frozen % granularityMs : 0));
+}
+
+/** The start of the current local day (ms): re-renders only when the day changes (the Grindhouse's «Finite oggi»). */
+export function useDayStart(): number {
+  return useSyncExternalStore(subscribe, () => { const d = new Date(current); d.setHours(0, 0, 0, 0); return d.getTime(); });
 }

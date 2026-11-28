@@ -5,14 +5,14 @@
 // section and its "Copia per lo stand-up" button were removed with the strips + detail redesign (ADR 0181, 0182): the
 // spec checks the copy button is gone. Screenshots dark and light.
 import { expect, test } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { goPage, launchDemo, shot } from './helpers';
 // the demo DevOps data's pull request URL (src/main/tasks/demo.ts)
 const prUrl = (id: number) => `https://dev.azure.com/o/Shop/_git/shop-web/pullrequest/${id}`;
 
 test('Task page: the QA tab shows done/missing, who ran them and QA bugs per PR', async () => {
   const { app, page } = await launchDemo();
   try {
-    await page.getByTestId('nav-task').click();
+    await goPage(page, 'task'); // out of ☰ (ADR 0366): G O
     const dv = page.getByTestId('brain-page-task');
     await dv.getByTestId('task-refresh').click();
     await dv.getByTestId('task-tab-qa').click({ timeout: 30_000 });
@@ -45,7 +45,6 @@ test('Task page: the QA tab shows done/missing, who ran them and QA bugs per PR'
 
     await dv.getByTestId('task-row-qa:812').click();
     await expect(detail.getByTestId('qa-report-812')).toBeVisible();
-    await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
     await page.emulateMedia({ colorScheme: 'light' });
     await page.waitForTimeout(300);
     await shot(page, 'task-qa-light');

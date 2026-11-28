@@ -112,7 +112,7 @@ export function entries(ui: UiMap | null, d: GuideDeps, lang: GuideLang): Entry[
     for (const s of ui.settings) out.push({ kind: 'settings section', title: `Impostazioni › ${s.title}`, text: `${s.description} · open: app_ui page impostazioni/${s.id} · about: ${s.keywords}` });
     for (const a of ui.actions) out.push({ kind: a.group === 'Vai a' ? 'go to' : 'action', title: a.title, text: [a.sub, a.shortcut ? `keys ${a.shortcut}` : 'from the palette (Ctrl+K)'].filter(Boolean).join(' · ') });
     for (const h of ui.help) out.push({ kind: 'help', title: h.title, text: h.text });
-    out.push({ kind: 'view', title: 'Vista (tema, densità, profilo di lavoro)', text: `${d.showValues?.() === false ? '' : `now: ${show(ui.view)} · `}change: app_config area view` });
+    out.push({ kind: 'view', title: 'Vista (densità, profilo di lavoro)', text: `${d.showValues?.() === false ? '' : `now: ${show(ui.view)} · `}change: app_config area view` });
   }
   const s = d.settings.get(), values = d.showValues?.() ?? true;
   for (const x of d.settings.schema()) out.push({ kind: 'setting', title: `${x.label} (${x.key})`,
@@ -186,7 +186,7 @@ export function search(list: Entry[], topic: string, max = 15): Entry[] {
 
 /** The index without a topic: the layout, the pages and where to look next; a few hundred tokens. */
 function index(ui: UiMap | null, d: GuideDeps, lang: GuideLang): string {
-  const lines = ['second-brain: an Electron desktop app. Layout: left rail (pages, and under Grindhouse the open agents as a tree), the page in the middle, the Orchestrator column on the right (collapsible, Ctrl+R), Ctrl+K palette = go anywhere and every action, Ctrl+/ = shortcuts, Ctrl+J = next thing waiting for the user.'];
+  const lines = ['second-brain: an Electron desktop app. Layout: left rail (Grindhouse, the ☰ menu with the other pages, and under Grindhouse the open agents as a tree), the page in the middle, the Orchestrator column on the right (collapsible, Ctrl+R), Ctrl+K palette = go anywhere and every action, Ctrl+/ = shortcuts, Ctrl+J = next thing waiting for the user.'];
   if (ui) {
     lines.push('Left rail now: ' + ui.nav.map(g => `${g.group || 'top'}: ${g.items.map(i => `${i.label} [${i.page}${i.key ? `, ${i.key}` : ''}]`).join(', ')}`).join(' | '));
     lines.push('Memoria tabs: ' + ui.memoria.map(m => m.label).join(', '));
@@ -201,14 +201,14 @@ function index(ui: UiMap | null, d: GuideDeps, lang: GuideLang): string {
   for (const [name, info] of Object.entries(TOOL_CATALOG)) if (!mine.has(name)) for (const w of info.where) { const l = byMount.get(w) ?? []; l.push(name); byMount.set(w, l); }
   if (byMount.size) lines.push('Other tools of the app (not yours; ask app_guide with the name): ' + [...byMount].map(([w, names]) => `${MOUNT_LABEL[w]}: ${names.join(', ')}`).join(' | '));
   lines.push(`Settings: ${d.settings.schema().length} keys, read and change them with app_config (area setting).`);
-  lines.push('Ask app_guide with a topic for details ("tema", "notifiche", "Memoria", "chiusura automatica", "permessi Scout"…); app_ui action "outline" = what is on screen now with positions; app_config = change any configuration.');
+  lines.push('Ask app_guide with a topic for details ("densità", "notifiche", "Memoria", "chiusura automatica", "permessi Scout"…); app_ui action "outline" = what is on screen now with positions; app_config = change any configuration.');
   return lines.join('\n');
 }
 
 export function guideTool(d: GuideDeps): ToolDef {
   return {
     name: 'app_guide',
-    description: 'How this app works and where everything is, read live from the app\'s own code: pages and the left rail with shortcuts, Memoria tabs, Impostazioni sections, every setting with its current value, palette actions and keys, the "?" help texts, the app concepts and your tools. No topic: a short index. An exact tool name returns its complete live description (bounded), including approval rules. topic: words in the user\'s language ("dove cambio il tema", "chiusura automatica") → the matching entries. Use it before answering a question about the app or telling the user where to click; for what is on screen now use app_ui action "outline"; to change a configuration use app_config.',
+    description: 'How this app works and where everything is, read live from the app\'s own code: pages and the left rail with shortcuts, Memoria tabs, Impostazioni sections, every setting with its current value, palette actions and keys, the "?" help texts, the app concepts and your tools. No topic: a short index. An exact tool name returns its complete live description (bounded), including approval rules. topic: words in the user\'s language ("dove cambio la lingua", "chiusura automatica") → the matching entries. Use it before answering a question about the app or telling the user where to click; for what is on screen now use app_ui action "outline"; to change a configuration use app_config.',
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: { type: 'object', additionalProperties: false, properties: { topic: { type: 'string', description: 'optional: what to look up' } } },
     run: async a => {

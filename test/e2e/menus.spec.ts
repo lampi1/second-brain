@@ -1,6 +1,6 @@
 // The app's menus, clear and in one place each (2026-10-15): the gear holds only the look and the way to Settings, "…"
 // in the top bar is always there with the actions used now and then, a chat's ⋯ menu puts the everyday actions first
-// and the hand-off in one labelled group, the sidebar is three groups (Lavoro, Brain, App). Frozen demo; screenshots
+// and the hand-off in one labelled group, the sidebar's ☰ is three groups (Lavoro, Svago, Sistema; ADR 0366). Frozen demo; screenshots
 // of each menu in test-results/shots/menus-*.png.
 import { expect, test } from '@playwright/test';
 import { launchDemo, shot } from './helpers';
@@ -14,7 +14,7 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     await expect(gear).toBeVisible();
     await expect(page.getByTestId('theme-system')).toHaveCount(0);
     await expect(page.getByTestId('settings-all')).toBeVisible();
-    await expect(page.getByTestId('topbar-connectors')).toHaveCount(0);
+    await expect(gear.getByTestId('topbar-connectors')).toHaveCount(0); // the connectors are a chip on the bar (ADR 0349), not in the gear
     await expect(page.getByTestId('nav-map')).toHaveCount(0);
     await expect(gear).not.toContainText('Windows');
     await expect(gear).not.toContainText('DevOps');
@@ -49,27 +49,24 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     await shot(page, 'menus-chat');
     await page.keyboard.press('Escape');
 
-    // the sidebar: three groups, Andamento the last entry of Brain (owner, 2026-10-31; it holds Costi and Qualità, ADR 0101), «Sempre caricato» (the old Regole, #366) a Memoria tab, Task (once DevOps, ADR 0079) in Lavoro
+    // the sidebar (ADR 0366, issue #491): ☰ holds the eight pages in three groups (Lavoro, Svago, Sistema); Task,
+    // Registrazioni, Collegamenti and Log left it (palette, G keys, Orchestrator), Task comes back only with unread items
     const nav = page.getByTestId('sidebar');
     await expect(page.getByTestId('nav-collapse')).toHaveCount(0); // always expanded: no toggle
-    await expect(nav.locator('.nav-title')).toHaveCount(3);
-    await expect(page.getByTestId('nav-miglioramento')).toHaveCount(0);
-    const navOrder = await nav.locator('.nav-title, .nav-item').evaluateAll(els => els.map(e => e.getAttribute('data-testid')));
-    const ix = (id: string) => navOrder.indexOf(id);
-    expect(ix('nav-home')).toBeLessThan(ix('nav-group-work'));
-    expect(ix('nav-workspace')).toBe(-1); // SPEC 19: the agents live in the Grindhouse, no separate entry
-    // Memoria holds Skill, Sempre caricato, Script, Idee and Apprendimento as tabs, and the Dashboard is gone (ADR 0122)
-    expect(ix('nav-group-brain')).toBeLessThan(ix('nav-memoria'));
-    expect(ix('nav-group-trends')).toBe(-1);
-    for (const gone of ['nav-dashboard', 'nav-skill', 'nav-regole', 'nav-script', 'nav-idee', 'nav-apprendimento']) expect(ix(gone)).toBe(-1);
-    // one Andamento entry (ADR 0202), under Brain: Costi, Qualità, Apprendimento and Uso are its tabs
-    expect(ix('nav-andamento')).toBeGreaterThan(ix('nav-memoria'));
-    expect(ix('nav-andamento')).toBeLessThan(ix('nav-group-app'));
-    for (const gone of ['nav-costi', 'nav-qualita', 'nav-classificatori']) expect(ix(gone)).toBe(-1);
-    await expect(page.getByTestId('nav-migliora')).toHaveCount(0);
-    await expect(page.getByTestId('nav-devops')).toHaveCount(0);
+    await expect(page.getByTestId('nav-home')).toBeVisible();
+    await page.getByTestId('nav-menu-btn').click();
+    const menu = page.getByTestId('nav-menu');
+    await expect(menu.locator('.nav-title')).toHaveCount(3);
+    const navOrder = await menu.locator('.nav-title, .nav-item').evaluateAll(els => els.map(e => e.getAttribute('data-testid')));
+    expect(navOrder.filter(id => id !== 'nav-task')).toEqual(['nav-group-work', 'nav-menu-home', 'nav-piani', 'nav-group-leisure', 'nav-impara', 'nav-scacchi',
+      'nav-group-system', 'nav-agenti', 'nav-memoria', 'nav-andamento', 'nav-impostazioni']);
+    if (navOrder.includes('nav-task')) expect(navOrder.indexOf('nav-task')).toBe(navOrder.indexOf('nav-piani') + 1);
+    for (const gone of ['nav-registrazioni', 'nav-collegamenti', 'nav-log', 'nav-workspace', 'nav-dashboard', 'nav-skill', 'nav-regole', 'nav-script', 'nav-idee',
+      'nav-apprendimento', 'nav-costi', 'nav-qualita', 'nav-classificatori', 'nav-miglioramento', 'nav-migliora', 'nav-devops']) expect(navOrder).not.toContain(gone);
     await expect(nav).not.toContainText('DevOps');
     await shot(page, 'menus-sidebar');
+    await page.keyboard.press('Escape');
+    await expect(menu).toHaveCount(0);
   } finally {
     await app.close();
   }

@@ -100,6 +100,7 @@ row and its line here in the same change.
 | `app_news_refresh` | Orchestrator only | Refresh one edition or all now: reads the sources, one AI pass per edition, returns what it brought and its cost. |
 | `plans` | Orchestrator, work chats of a Strategist | The user's plans, one per job or idea (ADR 0361): `list`, `search`, `read` (text with the percentage done), `create`, `edit` (fields, steps, constraints, links: only what is named changes), `replan`, `merge`, `split`, `project`, `approve`, `keep`, `start`, `stop`, `resume`, `archive`, `delete` (to the trash), `restore`, `compare`. The Orchestrator acts on every plan; a Strategist reads them all, edits its own and says to the Orchestrator what it would change on the others. |
 | `app_agents_recap` | Orchestrator only | The recap: one short line per agent that works, waits or finished; with detail, one block per agent with its last steps. |
+| `app_show_credentials` | Orchestrator only | A card only the user sees with URL, user and password of a test account of his credentials file (Copia each, «Mostra»; closes in 10 min). The model never gets the values. |
 | `app_child_output` | Orchestrator only | The latest report of a chat in its tree, delegates included: summary and criteria; full: the output, max 4,000 chars. |
 | `agent_metrics` | Orchestrator only | Success rate, cost, time and corrections per role and version (numbers only). |
 | `task_estimate` | Orchestrator only | Estimate a request: kind of work, size, role, time and cost. |

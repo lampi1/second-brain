@@ -295,9 +295,6 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0306](0306-the-people-of-the-roles-grow-up.md) The people of the roles grow up: adult bodies, faces and characters — accepted
 - [0309](0309-one-review-chat-per-piece-of-work.md) One review chat per piece of work: after a fix it reviews only the delta — accepted, partly superseded by 0352
 - [0310](0310-sign-in-by-credential-name.md) Sign-in by credential name: the app types the password, the agent never holds it — accepted
-- [0311](0311-the-grindhouse-becomes-a-workshop.md) The Grindhouse becomes a workshop: square benches, scenes without screens, a vice at rest — accepted; amended by 0312
-- [0312](0312-benches-of-one-height-helpers-with-name-tags.md) Benches of one height, helpers with name tags, a torch for who works, people who speak only where asked — accepted; amended by 0313, 0353
-- [0313](0313-the-workshop-picture-and-people-in-full.md) The workshop picture behind the people, and every person in full — accepted; amended by 0315
 - [0314](0314-ci-green-on-three-systems.md) CI that tells the truth on Windows, Linux and macOS — accepted
 - [0315](0315-no-dot-over-the-helpers.md) No dot over the helpers' heads — accepted
 - [0317](0317-link-a-site-to-a-credential-with-one-click.md) Link a sign-in page's site to a test account with one click — accepted
@@ -329,7 +326,6 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0350](0350-the-orchestrator-sets-model-lists-per-level.md) The Orchestrator sets a role's model lists per level; its own card has an ordered Base list — accepted
 - [0351](0351-a-child-that-answered-without-agent-report-is-partial.md) Antigravity keeps agent_report small; a child that answered without it goes up as partial — accepted
 - [0352](0352-any-engine-reaches-any-engine.md) Any engine reaches any engine; a changed role card never stops the work — accepted
-- [0353](0353-every-helper-at-the-bench-workers-first.md) Every helper at the bench, the ones at work first, and a limit that says what it means — accepted
 - [0354](0354-engine-limits-follow-real-data.md) Engine limits follow the real data: one rule, short pauses, and a stopped chat moves within its level — accepted
 - [0355](0355-a-contracts-tools-never-limit-what-a-delegated-chat-may-run.md) A contract's tools never limit what a delegated chat may run; three writes wait for the user — accepted
 - [0356](0356-every-chat-has-its-roles-tools-on-every-engine.md) Every chat has its role's app tools on every engine, from the first turn to the last — accepted
@@ -342,6 +338,8 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0363](0363-one-concept-the-plan.md) One concept, the Plan: it replaces the project maps and the work maps — accepted
 - [0364](0364-safe-reads-are-read-whole-lines.md) Safe reads are read as whole lines: loops, functions, chains, PowerShell pipes, a script's own folder — accepted
 - [0365](0365-nested-arguments-as-json-text.md) A nested argument may come as its JSON text; a null where a value was wanted is named in the error — accepted
+- [0366](0366-grindhouse-strips-and-a-quieter-shell.md) The Grindhouse becomes strips grouped by Strategist; a quieter, dark-only shell — accepted
+- [0367](0367-orchestrator-column-thin-rows-and-credential-card.md) The Orchestrator column: thin rows, short cards, «Stai aspettando», the estimate as metadata, and a credentials card the model never reads — accepted
 - [0368](0368-main-process-speed-journal-checkpoint-stop.md) The journal reads only open requests, a clean tree's checkpoint is HEAD, a stop ends within a second — accepted
 - [0369](0369-the-app-gives-each-message-its-topic.md) The app gives each Orchestrator message its topic, and a fresh context starts from that topic — accepted
 - [0370](0370-small-brain-edits-and-broken-connectors.md) The Orchestrator applies small brain edits itself; a connector that keeps failing is held back with one notice — accepted
@@ -374,6 +372,9 @@ Kept for the history only: the record named on each line holds the current decis
 - [0301](0301-maps-button-on-the-orchestrator-head.md) The project maps button is back on the Orchestrator's head — superseded by 0363
 - [0302](0302-maps-show-what-moves-and-the-order.md) The maps show what moves, the order of the steps, and the passage between levels — superseded by 0363
 - [0307](0307-maps-open-full-screen-and-tell-every-passage.md) The maps open full screen, tell every step and every passage, and are redrawn from a button — superseded by 0363
+- [0311](0311-the-grindhouse-becomes-a-workshop.md) The Grindhouse becomes a workshop: square benches, scenes without screens, a vice at rest — superseded by 0366
+- [0312](0312-benches-of-one-height-helpers-with-name-tags.md) Benches of one height, helpers with name tags, a torch for who works, people who speak only where asked — superseded by 0366
+- [0313](0313-the-workshop-picture-and-people-in-full.md) The workshop picture behind the people, and every person in full — superseded by 0366
 - [0316](0316-maps-in-depth-and-a-readable-viewer.md) Maps in depth, key files in the viewer, and code read as in an editor — superseded by 0363
 - [0322](0322-project-maps-told-as-a-line-of-phases.md) Project maps told as a line of phases and steps, with a richer and wider panel — superseded by 0363
 - [0326](0326-maps-tell-how-far-the-project-is.md) The maps tell how far the project is: a percentage, a progress card, the plan in the side panel — superseded by 0363
@@ -381,3 +382,4 @@ Kept for the history only: the record named on each line holds the current decis
 - [0335](0335-project-map-line-top-to-bottom-with-parallel-frames.md) A line of phases and steps is drawn top to bottom, with parallel groups in their own frame — superseded by 0363
 - [0342](0342-a-work-map-per-job.md) A work map per job — superseded by 0363
 - [0343](0343-the-plan-is-its-map.md) The plan is its map, the maps are a list — superseded by 0363
+- [0353](0353-every-helper-at-the-bench-workers-first.md) Every helper at the bench, the ones at work first, and a limit that says what it means — superseded by 0366

@@ -54,6 +54,7 @@ import { treeDe } from './areas/tree.de';
 import { aliveDe } from './areas/alive.de';
 import { modelPickerDe } from './areas/model-picker.de';
 import { awayDe } from './areas/away.de';
+import { grindDe } from './areas/grind.de';
 import { queueSettingsDe } from './areas/queue-settings.de';
 import { engineOrderDe } from './areas/engine-order.de';
 import { remoteDe } from './areas/remote.de';
@@ -84,6 +85,7 @@ export const de: Dict = {
   ...aliveDe,
   ...modelPickerDe,
   ...awayDe,
+  ...grindDe,
   ...queueSettingsDe, ...engineOrderDe,
   ...remoteDe,
   ...learningDe,

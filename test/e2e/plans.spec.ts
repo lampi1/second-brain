@@ -10,8 +10,8 @@ interface Seeded { id: string; title: string; state: string }
 async function works(app: ElectronApplication, page: Page): Promise<(title: string) => string> {
   const all = await app.evaluate(() => (globalThis as unknown as { __sbDemo: { plans(): Promise<Seeded[]> } }).__sbDemo.plans());
   expect(all.length).toBeGreaterThanOrEqual(20);
-  await goPage(page, 'collegamenti');
-  // the Mappa page opens on the jobs
+  await goPage(page, 'piani');
+  // the plans' page (G B, ADR 0359)
   await expect(page.getByTestId('pl-group-wait')).toBeVisible();
   return title => all.find(m => m.title === title)!.id;
 }

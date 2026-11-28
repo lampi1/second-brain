@@ -178,7 +178,6 @@ export const dialogsEn: typeof dialogsIt = {
   // LaunchBanner
   'dialogs.launch.failedPrefix': 'The new version didn\'t start.',
   'dialogs.launch.failedReason': (p: { reason: string }) => `${p.reason}: the app went back to`,
-  'dialogs.launch.startedPrefix': 'New version started',
   'dialogs.launch.updatesButton': 'Updates',
   'dialogs.launch.dismissLabel': 'Close notification',
   'dialogs.launch.dismissTip': 'Close',

@@ -1,8 +1,7 @@
-/* Design tokens: the one place for colors, type, spacing (4/8 px grid), radii, motion. Dark by default; light follows
-   Windows (prefers-color-scheme) unless the user picked a theme (data-theme on <html>); density (data-density) scales
-   paddings. Every component uses these variables (styles/app.css); contrast checked for WCAG 2.2 AA on --surface.
-   The light theme is written twice (media query, data-theme): both blocks define the same tokens, checked with the
-   contrasts by test/unit/tokens-contrast.test.ts. */
+/* Design tokens: the one place for colors, type, spacing (4/8 px grid), radii, motion. The app is dark only (the owner,
+   2026-11-27, ADR 0366: the light theme and its switch are gone; App.tsx always sets data-theme="dark"); density
+   (data-density) scales paddings. Every component uses these variables (styles/app.css); contrast checked for WCAG 2.2
+   AA (4.5:1 text) by test/unit/tokens-contrast.test.ts. */
 :root {
   --bg: #101114;
   --bg-2: #141519;
@@ -52,6 +51,7 @@
   --focus: var(--accent);
   --on-accent: #0b0d14;
   --on-amber: #1b1304; /* text on a solid --amber badge */
+  --on-red: #2a0d10; /* text on a solid --red button (white was 2.75:1) */
   --add-bg: rgba(79, 209, 139, 0.1);
   --add-fg: #92e4b6;
   --del-bg: rgba(255, 107, 122, 0.1);
@@ -81,12 +81,13 @@
   --fs-xl: 16px;
   --fs-2xl: 22px;
 
-  /* three radii for the whole app (ADR 0311): small 4, medium 6, large 8; round only for dots, counters, avatars */
-  --r-xs: 4px;
-  --r-s: 4px;
-  --r-m: 6px;
-  --r-l: 8px;
-  --r-xl: 8px;
+  /* three radii for the whole app (ADR 0311, squarer in ADR 0366): small 3, medium 4, large 6; round only for dots,
+     counters, avatars */
+  --r-xs: 3px;
+  --r-s: 3px;
+  --r-m: 4px;
+  --r-l: 6px;
+  --r-xl: 6px;
 
   /* density-dependent spacing */
   --topbar-h: 52px;
@@ -114,123 +115,4 @@
   --fs-m: 12.5px;
 }
 
-/* light: when Windows is light (and the user did not force dark), or when the user picked light */
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-    --bg: #f3f4f7;
-    --bg-2: #eceef2;
-    --surface: #ffffff;
-    --surface-2: #f6f7f9;
-    --surface-3: #eceef2;
-    --surface-4: #e2e5eb;
-    --border: #e2e5eb;
-    --border-2: #d5d9e1;
-    --border-3: #c2c8d2;
-    --border-control: #80889a;
-    --text: #13161d;
-    --text-2: #3a4050;
-    --text-3: #596173;
-    --text-4: var(--text-3);
-    --md-text: #252a35;
-    --accent: #3a5ce0;
-    --accent-strong: #2c4cc8;
-    --accent-bg: rgba(58, 92, 224, 0.09);
-    --accent-line: rgba(58, 92, 224, 0.45);
-    --amber: #93580a;
-    --amber-bg: rgba(214, 140, 22, 0.08);
-    --amber-line: rgba(196, 126, 14, 0.5);
-    --green: #157a45;
-    --green-bg: rgba(21, 122, 69, 0.09);
-    --red: #cc3343;
-    --red-bg: rgba(204, 51, 67, 0.08);
-    --violet: #7246d0;
-    --violet-bg: rgba(114, 70, 208, 0.09);
-    --orchestrator-bg: #faf7ff;
-    --orchestrator-surface: #f2ebff;
-    --orchestrator-input: #ffffff;
-    --orchestrator-line: #e6dcfa;
-    --orchestrator-line-2: #cfbcf4;
-    --cursor-bg: #1d2027;
-    --cursor-fg: #ffffff;
-    --focus: var(--accent);
-    --on-accent: #ffffff;
-    --on-amber: #ffffff;
-    --add-bg: rgba(21, 122, 69, 0.08);
-    --add-fg: #0f6136;
-    --del-bg: rgba(204, 51, 67, 0.08);
-    --del-fg: #a3202f;
-    --tooltip-bg: #1d2129;
-    --backdrop: rgba(20, 24, 33, 0.32);
-    --scroll: rgba(0, 0, 0, 0.12);
-    --scroll-hover: rgba(0, 0, 0, 0.22);
-    --pair-0: #0e8f96;
-    --pair-1: #c2357a;
-    --pair-2: #7a7a00;
-    --pair-3: #4d7c0f;
-    --pair-4: #0a74b8;
-    --pair-5: #b0279e;
-    --pair-6: #0b8a6e;
-    --pair-7: #8a6a2f;
-    --shadow-pop: 0 18px 44px -12px rgba(20, 24, 33, 0.28), 0 2px 8px rgba(20, 24, 33, 0.08);
-    color-scheme: light;
-  }
-}
-:root[data-theme="light"] {
-  --bg: #f3f4f7;
-  --bg-2: #eceef2;
-  --surface: #ffffff;
-  --surface-2: #f6f7f9;
-  --surface-3: #eceef2;
-  --surface-4: #e2e5eb;
-  --border: #e2e5eb;
-  --border-2: #d5d9e1;
-  --border-3: #c2c8d2;
-  --border-control: #80889a;
-  --text: #13161d;
-  --text-2: #3a4050;
-  --text-3: #596173;
-  --text-4: var(--text-3);
-  --md-text: #252a35;
-  --accent: #3a5ce0;
-  --accent-strong: #2c4cc8;
-  --accent-bg: rgba(58, 92, 224, 0.09);
-  --accent-line: rgba(58, 92, 224, 0.45);
-  --amber: #93580a;
-  --amber-bg: rgba(214, 140, 22, 0.08);
-  --amber-line: rgba(196, 126, 14, 0.5);
-  --green: #157a45;
-  --green-bg: rgba(21, 122, 69, 0.09);
-  --red: #cc3343;
-  --red-bg: rgba(204, 51, 67, 0.08);
-  --violet: #7246d0;
-  --violet-bg: rgba(114, 70, 208, 0.09);
-  --orchestrator-bg: #faf7ff;
-  --orchestrator-surface: #f2ebff;
-  --orchestrator-input: #ffffff;
-  --orchestrator-line: #e6dcfa;
-  --orchestrator-line-2: #cfbcf4;
-  --cursor-bg: #1d2027;
-  --cursor-fg: #ffffff;
-  --focus: var(--accent);
-  --on-accent: #ffffff;
-  --on-amber: #ffffff;
-  --add-bg: rgba(21, 122, 69, 0.08);
-  --add-fg: #0f6136;
-  --del-bg: rgba(204, 51, 67, 0.08);
-  --del-fg: #a3202f;
-  --tooltip-bg: #1d2129;
-  --backdrop: rgba(20, 24, 33, 0.32);
-  --scroll: rgba(0, 0, 0, 0.12);
-  --scroll-hover: rgba(0, 0, 0, 0.22);
-  --pair-0: #0e8f96;
-  --pair-1: #c2357a;
-  --pair-2: #7a7a00;
-  --pair-3: #4d7c0f;
-  --pair-4: #0a74b8;
-  --pair-5: #b0279e;
-  --pair-6: #0b8a6e;
-  --pair-7: #8a6a2f;
-  --shadow-pop: 0 18px 44px -12px rgba(20, 24, 33, 0.28), 0 2px 8px rgba(20, 24, 33, 0.08);
-  color-scheme: light;
-}
 :root[data-theme="dark"] { color-scheme: dark; }

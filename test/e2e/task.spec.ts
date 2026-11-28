@@ -8,7 +8,7 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { launch, setSize, shot } from './helpers';
+import { goPage, launch, setSize, shot } from './helpers';
 
 const FIX = path.resolve(import.meta.dirname, '..', 'fixtures');
 function fixtureBrain(): string {
@@ -26,9 +26,13 @@ test('Task page: read on demand, unread news with links, badge and feed, mark re
   try {
     await setSize(app, 1600, 1000);
     await page.emulateMedia({ colorScheme: 'dark' });
-    await expect(page.getByTestId('nav-task')).toHaveAccessibleName(/^Task/);
+    // Task is out of ☰ (ADR 0366) until it has unread items: G O, the palette or the Orchestrator open it
+    await page.getByTestId('nav-menu-btn').click();
+    await expect(page.getByTestId('nav-menu')).toBeVisible();
+    await expect(page.getByTestId('nav-task')).toHaveCount(0);
+    await page.keyboard.press('Escape');
     await expect(page.getByTestId('sidebar')).not.toContainText('DevOps');
-    await page.getByTestId('nav-task').click();
+    await goPage(page, 'task');
     const dv = page.getByTestId('brain-page-task');
     await expect(dv.getByRole('heading', { level: 2, name: 'Task' })).toBeVisible();
     await expect(dv.locator('.catalog-head')).toBeVisible();     // the head of Agenti
@@ -76,7 +80,13 @@ test('Task page: read on demand, unread news with links, badge and feed, mark re
     await expect(item).toContainText('Riesci a guardarlo oggi?');
     await shot(page, 'task-item-open');
     await dv.getByTestId('task-tab-mine').click();
-    await expect(page.getByTestId('nav-badge-task')).toHaveText('1'); // the mention: shown first on its own, not opened yet
+    // the mention, shown first on its own, not opened yet: the dot on ☰, and Task back in it with its count
+    await expect(page.getByTestId('nav-menu-dot')).toBeVisible();
+    await page.getByTestId('nav-menu-btn').click();
+    await expect(page.getByTestId('nav-task')).toHaveAccessibleName(/^Task/);
+    await expect(page.getByTestId('nav-badge-task')).toHaveText('1');
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('nav-menu')).toHaveCount(0);
     // the feed (the Orchestrator's Novità and the notification center) got the news, once
     await page.keyboard.press('Control+Shift+N');
     await expect(page.getByTestId('center')).toContainText('2 novità su DevOps'); // a first read: one summary line
@@ -84,11 +94,9 @@ test('Task page: read on demand, unread news with links, badge and feed, mark re
     await page.getByTestId('brain-page-task').evaluate(el => { el.scrollTop = 0; });
     await shot(page, 'task-dark');
 
-    await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
     await page.emulateMedia({ colorScheme: 'light' });
     await page.waitForTimeout(300);
     await shot(page, 'task-light');
-    await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'dark' }));
 
     // the lead counts the news apart from the followed ticket (already read above); clicking the mention's strip reads
     // it; the strips stay in place, marked read, until the next read
@@ -97,7 +105,10 @@ test('Task page: read on demand, unread news with links, badge and feed, mark re
     await expect(dv.getByTestId('bx-lead')).not.toContainText('sui ticket che segui');
     await expect(dv.getByTestId('task-mark-all')).toBeVisible();
     await dv.getByTestId('task-row-news:mention:1').click();
-    await expect(page.getByTestId('nav-badge-task')).toHaveText('');
+    await page.getByTestId('nav-menu-btn').click();
+    await expect(page.getByTestId('nav-menu')).toBeVisible();
+    await expect(page.getByTestId('nav-task')).toHaveCount(0); // nothing unread: Task leaves ☰ again
+    await page.keyboard.press('Escape');
     await expect(dv.getByTestId('task-mark-all')).toHaveCount(0);
     await expect(dv.getByTestId('task-row-news:mention:1')).toHaveAttribute('data-unread', '0');
     await expect(detail.getByTestId('task-news-mention:1')).toHaveAttribute('data-unread', '0');

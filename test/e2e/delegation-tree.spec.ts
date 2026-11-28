@@ -1,11 +1,12 @@
 // Direct parent-to-child delegation in the real app (ADR 0083), with the fake Claude CLI calling the chat's own MCP
 // endpoint (agent_delegate, agent_report) as the real CLI would: a Strategist launches a Scout and a Sentinel, both show
-// as thread cards under it in the Grindhouse (expanding in place into their chat, "Vai alla chat" opening focus mode)
+// as indented strips under it in the Grindhouse (ADR 0366: a finished team folds its helpers behind «N aiutanti»;
+// a title opens the chat in the column, "Vai alla chat" opens focus mode)
 // and in the sidebar tree (a row brings its card on screen), their results come back to it as messages,
 // and the fold of the tree survives a restart; a child's question shows in the questions window (its card points to it) and the child goes on
 // after the answer; a child's permission above its parent's (a Strategist the user narrowed) is refused visibly; three Scouts run at once, each one
 // writable; the parallel limit refuses a call over it and shows on the parent. Hidden window (SB_HIDDEN).
-// Screenshots: test-results/shots/delegation-*.png (dark and light).
+// Screenshots: test-results/shots/delegation-*.png (dark only, ADR 0366).
 import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -34,10 +35,14 @@ async function start(userData?: string, env: Record<string, string> = {}) {
   await l.page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
   return { ...l, home };
 }
-async function theme(page: Page, scheme: 'dark' | 'light') {
-  await page.evaluate(t => window.sb.invoke('settings:set', { theme: t }), scheme);
-  await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
-  await page.waitForTimeout(250);
+/** A delegated chat's strip under its lead (AgentStrips.tsx): a finished team keeps its helpers folded until asked. */
+async function kidStrip(page: Page, lead: string, kid: string) {
+  const strip = page.getByTestId(`grind-kid-${kid}`);
+  const fold = page.getByTestId(`grind-fold-${lead}`);
+  await expect(strip.or(fold).first()).toBeVisible({ timeout: 20000 });
+  if (await fold.count() && (await fold.getAttribute('aria-expanded')) === 'false') await fold.click();
+  await expect(strip).toBeVisible();
+  return strip;
 }
 /** The first-run setup comes back until it is done or skipped for good: closed when it shows. */
 async function skipSetup(page: Page) {
@@ -75,44 +80,33 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     expect(back).toContain('[risultato · Sentinel «Controllo test»] La suite passa: 42 su 42');
     await expect.poll(async () => (await childrenOf(page, parent.id)).map(c => c.delegation?.result?.outcome).sort()).toEqual(['done', 'done']);
 
-    // the Grindhouse: the children stand at the parent's bench, its foot counts them (ADR 0311, 0312)
+    // the Grindhouse (ADR 0366): the finished team is in «Finite oggi», its helpers folded behind «2 aiutanti»; unfolded,
+    // they are indented strips under the lead
     await page.getByTestId('nav-home').click();
-    const helper = page.getByTestId(`bench-helper-${scout.id}`);
+    const team = page.getByTestId(`grind-team-${parent.id}`);
+    await expect(team).toHaveAttribute('data-sec', 'done', { timeout: 20000 });
+    const fold = page.getByTestId(`grind-fold-${parent.id}`);
+    await expect(fold).toHaveText('2 aiutanti');
+    await expect(fold).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByTestId(`grind-kid-${scout.id}`)).toBeHidden();
+    await fold.click();
+    const helper = page.getByTestId(`grind-kid-${scout.id}`);
     await expect(helper).toBeVisible();
-    await expect(helper).toHaveAttribute('data-child-state', 'done');
-    await expect(page.getByTestId(`bench-helper-${sentinelChat.id}`)).toHaveAttribute('data-child-state', 'done');
-    await expect(page.getByTestId(`bench-kids-sum-${parent.id}`)).toContainText('2 figli');
-    await expect(page.getByTestId(`bench-kids-sum-${parent.id}`)).toContainText('2 finiti');
+    await expect(page.getByTestId(`grind-kid-${sentinelChat.id}`)).toBeVisible();
     const pBox = (await page.getByTestId(`tile-chat-${parent.id}`).boundingBox())!, hBox = (await helper.boundingBox())!;
-    expect(hBox.y).toBeGreaterThan(pBox.y);
-    expect(hBox.y + hBox.height).toBeLessThanOrEqual(pBox.y + pBox.height + 1);
-    // every bench is as tall as the others, the one with helpers too (ADR 0312)
-    const heights = await page.locator('.bench-grid .chat-tile.is-strip').evaluateAll(els => els.map(e => Math.round(e.getBoundingClientRect().height)));
-    expect(new Set(heights).size).toBe(1);
-    // its name tag shows under the pointer, and opens it
-    const tag = page.getByTestId(`bench-helper-open-${scout.id}`);
-    await expect(tag).toHaveCount(0);
-    await helper.hover();
-    await expect(tag).toBeVisible();
-    // the tag stays inside the bench, never cut at an edge (ADR 0353)
-    const tBox = (await tag.boundingBox())!;
-    expect(tBox.x).toBeGreaterThanOrEqual(pBox.x);
-    expect(tBox.x + tBox.width).toBeLessThanOrEqual(pBox.x + pBox.width + 1);
-    await expect(tag).toContainText('Scout');
-    const row = tag;
+    expect(hBox.y).toBeGreaterThan(pBox.y + pBox.height - 1); // under the lead
+    const face = async (id: string) => (await page.getByTestId(`tile-chat-${id}`).locator('.strip-face').boundingBox())!.x;
+    expect(await face(scout.id)).toBeGreaterThan(await face(parent.id)); // and indented
+    await expect(helper).toContainText('Scout');
+    const row = page.getByTestId(`chat-expand-${scout.id}`);
     // the sidebar tree: the same shape, the children one level in
     await expect(page.getByTestId(`nav-tree-${parent.id}`)).toHaveAttribute('data-depth', '0');
     await expect(page.getByTestId(`nav-tree-${scout.id}`)).toHaveAttribute('data-depth', '1');
     await expect(page.getByTestId(`nav-tree-${sentinelChat.id}`)).toHaveAttribute('data-depth', '1');
     await page.mouse.move(2, 2);
     await shot(page, 'delegation-tree-dark');
-    await theme(page, 'light');
-    await shot(page, 'delegation-tree-light');
-    await theme(page, 'dark');
 
-    // a click on the tag opens the child's chat, writable, with the whole result and the team as tabs
-    await helper.hover();
-    await helper.hover();
+    // a click on its title opens the child's chat, writable, with the whole result and the team as tabs
     await row.click();
     await expect(page.getByTestId(`chat-input-${scout.id}`)).toBeVisible();
     await expect(page.getByTestId(`delegation-res-${scout.id}`)).toContainText('Trovati 3 errori nel servizio ordini');
@@ -121,7 +115,7 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     await page.getByTestId(`bench-tab-${sentinelChat.id}`).click();
     await expect(page.getByTestId(`chat-input-${sentinelChat.id}`)).toBeVisible();
     await page.getByTestId('bench-back').click();
-    await expect(helper).toBeVisible();
+    await expect(team).toBeVisible();
     // a row of the sidebar tree opens that chat too
     await page.getByTestId(`nav-tree-${sentinelChat.id}`).locator('.tn-main').click();
     await expect(page.getByTestId(`chat-input-${sentinelChat.id}`)).toBeVisible();
@@ -132,7 +126,7 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     await page.getByTestId('focus-exit').click();
     await page.getByTestId('bench-back').click(); // back to the benches
 
-    // folding the parent in the sidebar hides its children there; the bench keeps its helpers
+    // folding the parent in the sidebar hides its children there; the Grindhouse keeps its helpers
     await page.getByTestId(`nav-tree-fold-${parent.id}`).click();
     await expect(page.getByTestId(`nav-tree-${scout.id}`)).toHaveCount(0);
     await page.waitForTimeout(600); // the fold is saved a moment later
@@ -147,7 +141,7 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     await expect(page.getByTestId(`nav-tree-${scout.id}`)).toHaveCount(0);
     await page.getByTestId(`nav-tree-fold-${parent.id}`).click();
     await expect(page.getByTestId(`nav-tree-${scout.id}`)).toHaveAttribute('data-depth', '1');
-    await expect(page.getByTestId(`bench-helper-${sentinelChat.id}`)).toBeVisible();
+    await kidStrip(page, parent.id, sentinelChat.id);
   } finally {
     await app.close();
     for (const h of homes) fs.rmSync(h, { recursive: true, force: true });
@@ -192,11 +186,11 @@ test('a child\'s question waits as a row in the Orchestrator; a permission above
     await expect(page.locator(`[data-request-key="${key}"]`)).toHaveCount(1);
     await page.getByTestId('qwin-later').click(); // set aside: one folded line in the Orchestrator's column
     await page.getByTestId('nav-home').click();
-    // the child's card says it waits for the user and hosts no second answer surface (lib/child-requests.ts requestHost)
-    const kid = page.getByTestId(`bench-helper-${asker.id}`); // it stands at the parent's bench (ADR 0311, 0312)
-    await expect(kid).toHaveAttribute('data-child-state', 'wait', { timeout: 20000 });
-    await kid.hover(); // its name tag shows under the pointer, kept inside the row (ADR 0353)
-    await expect(page.getByTestId(`bench-helper-open-${asker.id}`)).toContainText('Ti aspetta');
+    // the child's strip says it waits for the user and hosts no second answer surface (lib/child-requests.ts requestHost);
+    // its team is in «Ti aspetta» (ADR 0366)
+    await expect(page.getByTestId(`grind-team-${parent.id}`)).toHaveAttribute('data-sec', 'wait', { timeout: 20000 });
+    const kid = await kidStrip(page, parent.id, asker.id);
+    await expect(kid).toContainText('Ti aspetta');
     await page.mouse.move(2, 2);
     await expect(page.getByTestId(`delegation-ask-${asker.id}`)).toHaveCount(0);
     await expect(page.locator(`[data-request-key="${key}"]`)).toHaveCount(0);
@@ -211,8 +205,8 @@ test('a child\'s question waits as a row in the Orchestrator; a permission above
     await expect.poll(async () => (await items(page, parent.id)).some(i => i.kind === 'user' && textOf(i).includes('[risultato · Sentinel «Scelta ambiente»] Ambiente scelto e verificato')), { timeout: 20000 }).toBe(true);
     expect(JSON.stringify((await items(page, asker.id)).filter(i => i.kind === 'tool'))).toContain('Blu');
     // the refusal is in the Scout's own chat, in words
-    await page.getByTestId(`bench-helper-${shell.id}`).hover(); // its name tag shows under the pointer
-    await page.getByTestId(`bench-helper-open-${shell.id}`).click();
+    await kidStrip(page, parent.id, shell.id);
+    await page.getByTestId(`chat-expand-${shell.id}`).click();
     await expect(page.getByTestId(`tile-chat-${shell.id}`)).toContainText('va oltre i permessi di «Piano rilascio»');
     await page.getByTestId(`tile-chat-${shell.id}`).getByText('va oltre i permessi', { exact: false }).scrollIntoViewIfNeeded();
     await page.mouse.move(2, 2);
@@ -238,14 +232,13 @@ test('three Scouts run at once, each one writable; more in a second call start t
     const kids = await childrenOf(page, parent.id);
     await expect.poll(async () => (await childrenOf(page, parent.id)).map(c => c.background), { timeout: 20000 }).toEqual([1, 1, 1]);
     await page.getByTestId('nav-home').click();
-    // each one at the parent's bench, its foot counts them (ADR 0311, 0312)
-    for (const k of kids) await expect(page.getByTestId(`bench-helper-${k.id}`)).toBeVisible();
-    await expect(page.getByTestId(`bench-kids-sum-${parent.id}`)).toContainText('3 figli');
-    await expect(page.getByTestId(`bench-kids-sum-${parent.id}`)).toContainText('3 in corso');
+    // each one an indented strip under the parent, the team «Al lavoro» (ADR 0366)
+    await expect(page.getByTestId(`grind-team-${parent.id}`)).toHaveAttribute('data-sec', 'work');
+    for (const k of kids) await expect(page.getByTestId(`grind-kid-${k.id}`)).toBeVisible();
+    await expect(page.getByTestId(`grind-team-${parent.id}`).locator('[data-testid^="grind-kid-"]')).toHaveCount(3);
     // each one is a chat of its own: open it and write to it
     const first = kids[0]!;
-    await page.getByTestId(`bench-helper-${first.id}`).hover();
-    await page.getByTestId(`bench-helper-open-${first.id}`).click();
+    await page.getByTestId(`chat-expand-${first.id}`).click();
     const input = page.getByTestId(`chat-input-${first.id}`);
     await input.fill('Aggiungi anche gli ordini di marzo');
     await input.press('Enter');

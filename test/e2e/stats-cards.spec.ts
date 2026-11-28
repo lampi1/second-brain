@@ -36,11 +36,10 @@ async function errors(page: Page, scheme: string): Promise<void> {
   await shot(page, `stats-costs-${scheme}`);
 }
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`grouped errors and costs (${scheme})`, async () => {
     const { app, page } = await launchDemo({ scheme, env: { SB_BRAIN: fixtureBrain() } });
     try {
-      await page.evaluate(th => window.sb.invoke('settings:set', { theme: th }), scheme);
       await expect(page.locator(`html[data-theme="${scheme}"]`)).toHaveCount(1);
       await errors(page, scheme);
     } finally { await app.close(); }

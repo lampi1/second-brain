@@ -1,6 +1,6 @@
 # ADR 0313 · The workshop picture behind the people, and every person in full
 
-Date: 2026-11-15 · Status: accepted (owner, thread «Proporre nuova Grindhouse e Orchestrator», 2026-11-15: «qui non li
+Date: 2026-11-15 · Status: superseded by ADR 0366 (thin strips grouped by Strategist replace the benches); before that accepted (owner, thread «Proporre nuova Grindhouse e Orchestrator», 2026-11-15: «qui non li
 voglio in trasparenza li voglio visibili bene tutti, lo sfondo mi fa un po' cagare mi sembra cheap e poi a volte mi
 sembra allineato male. Fammi proposte di sfondo fighe»; of four proposals drawn in the app he picked «la bottega ma
 mettici un barile e qualche elemento in più tienilo bello e funzionale occhio agli z index») · Amends: ADR 0312 (points

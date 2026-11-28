@@ -6,7 +6,8 @@
 // the keyboard by itself. Ctrl+J, the top bar's counter, a strip's «aspetta te» and the Orchestrator's recap
 // (app_unblock) open the row they name here (store/ui.ts callQuestions → qwin.first / call). «Ci penso dopo» moves a
 // row into one folded line «N da rispondere dopo» (lib/later.ts). A chat's own tile never shows its requests: one line says they went to the Orchestrator
-// (InWindowLine). A command the chat left before its question comes first (ADR 0259). Mounted by OrchestratorTile.tsx.
+// (InWindowLine). A command the chat left before its question comes first (ADR 0259). A closed command or yes/no
+// question is a short card with its buttons instead of a row (OrchAskCard.tsx, ADR 0367). Mounted by OrchestratorTile.tsx.
 import { WriteViaOrchestrator } from '../lib/write-via-orchestrator';
 import { answeredInField } from '../lib/field-answer';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -31,6 +32,7 @@ import { t } from '../i18n';
 import { durableAsks, withDurableAsks, type DurableAsk } from '../lib/work-ask';
 import { useWorkflows } from '../store/workflows';
 import { WorkApproval } from './WorkApproval';
+import { CommandCard, QuestionCard } from './OrchAskCard';
 import { AskItemsProvider, useFrozenItems } from '../lib/askItems';
 
 /** A command a chat left right before the question it stopped on comes first (ADR 0259): run it, and its result
@@ -169,6 +171,14 @@ function AskRow({ ask, open, later, onToggle, onClose }: { ask: Ask; open: boole
     setSent(true);
     void answer(ask, yes ? { kind: 'permission', allow: true } : { kind: 'permission', allow: false }).then(ok => { if (!ok) setSent(false); });
   };
+  // a command and a yes/no question are short cards while closed (ADR 0367): their buttons on the card itself
+  const isCmd = !isDurable(ask) && ask.type === 'command';
+  if (!open && (isCmd || yn)) return (
+    <div className={`oask oask-card-row k-${kind} ${later ? 'later' : ''}`} data-ask-row={k} data-ask-kind={kind} data-testid="orchestrator-ask">
+      {isCmd ? <CommandCard req={ask} who={name} onOpen={onToggle} />
+        : <QuestionCard who={name} topic={isOrchestrator ? '' : job} question={yn!.question} sent={sent} onYes={() => quick(yn!.yes)} onNo={() => quick(yn!.no)} onExplain={canExplain ? onExplain : undefined} onOpen={onToggle} />}
+    </div>
+  );
   return (
     <div className={`oask k-${kind} ${open ? 'open' : ''} ${later ? 'later' : ''}`} data-ask-row={k} data-ask-kind={kind} data-testid="orchestrator-ask">
       <div className="oask-row">

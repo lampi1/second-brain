@@ -111,12 +111,11 @@ try {
   await capture('mcp-form-editing');
   await questions.locator('[data-testid$="-form-refuse"]').click();
   await form.waitFor({ state: 'hidden' });
-  await page.getByTestId('plan-map-tree-plan').waitFor();
+  await page.getByTestId('tile-chat-tree-plan').getByTestId('plan-tree-plan').waitFor(); // the plan's dots on its strip (ADR 0366)
   await page.getByTestId('tile-chat-tree-plan').scrollIntoViewIfNeeded();
   await capture('plan-compact');
-  const ready = page.getByTestId('tile-orchestrator').getByTestId('result-ready').filter({
-    has: page.locator('[data-testid="chatref-open"][data-chat-id="tree-plan"]'),
-  });
+  // the thin result row (ResultRow.tsx, ADR 0367) names its source chat on the row itself
+  const ready = page.getByTestId('tile-orchestrator').locator('[data-testid="result-ready"][data-chat-id="tree-plan"]');
   await ready.getByTestId('result-ready-toggle').click();
   const result = ready.getByTestId('canonical-result');
   await result.waitFor();
@@ -127,7 +126,15 @@ try {
     const w = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:') && !w.webContents.getURL().includes('#overlay'));
     w.setSize(1000, 700); w.webContents.setZoomFactor(1.1);
   });
-  await page.waitForTimeout(300);
+  // the bar fits itself a frame after each resize and zoom (TopBar.tsx useFit); a hidden window may produce no frame on
+  // its own, so frames are asked for (as a shown window paints) until the bar fits, bounded, before judging it
+  await page.evaluate(() => new Promise(resolve => {
+    const t0 = performance.now();
+    const fits = () => { const bar = document.querySelector('.topbar-main').getBoundingClientRect();
+      return [...document.querySelectorAll('.topbar-main button')].every(b => !b.getBoundingClientRect().width || b.getBoundingClientRect().right <= bar.right + .5); };
+    const frame = () => (fits() && performance.now() - t0 > 200) || performance.now() - t0 > 3000 ? resolve() : requestAnimationFrame(frame);
+    requestAnimationFrame(frame);
+  }));
   manifest.compactTopbar = await page.evaluate(() => {
     const bar = document.querySelector('.topbar-main').getBoundingClientRect();
     return { fit: document.querySelector('.topbar').dataset.fit, width: innerWidth,
@@ -139,6 +146,7 @@ try {
     const w = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:') && !w.webContents.getURL().includes('#overlay'));
     w.webContents.setZoomFactor(1); w.setSize(1600, 1100);
   });
+  await page.getByTestId('nav-menu-btn').click(); // the pages live in the ☰ menu (ADR 0366)
   await page.getByTestId('nav-memoria').click();
   await page.getByTestId('bm-memory-page').waitFor();
   await page.getByTestId('mh-tab-file').click();
@@ -227,6 +235,7 @@ try {
   const records = await page.evaluate(() => window.sb.invoke('memory:reviewList', undefined));
   if (!records.some(record => record.memoryId === 'synthetic-visual-memory' && record.sourceRunId === 'synthetic-run')) throw new Error('Synthetic memory provenance missing');
   // The learning view is a tab of Andamento (once a Memoria tab); captured without running an evaluation.
+  await page.getByTestId('nav-menu-btn').click(); // the pages live in the ☰ menu (ADR 0366)
   await page.getByTestId('nav-andamento').click();
   await page.getByTestId('an-tab-apprendimento').click();
   const learning = page.getByTestId('learning-page');

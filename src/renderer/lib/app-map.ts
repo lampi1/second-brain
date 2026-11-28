@@ -1,8 +1,8 @@
 // The app as the Orchestrator learns it (app_guide and app_ui "outline", main/appctl/guide.ts): what the UI holds, read
 // at the moment it is asked from the same sources the user's screen is drawn from, never a hand-kept list: the left
-// rail as it is rendered now (groups, pages, shortcuts), every page with its shortcut and subtitle, Memoria's tabs, the
+// rail as it is rendered now (groups, pages, shortcuts) with the ☰ menu's groups, every page with its shortcut and subtitle, Memoria's tabs, the
 // Settings sections (lib/settings-sections.ts), the palette's actions with their keys, the "?" help texts (explain.*),
-// and the view preferences (theme, density, work profile). screenOutline() is the live screen: headings, tabs and
+// and the view preferences (density, work profile). screenOutline() is the live screen: headings, tabs and
 // controls with their state and where they sit, never what a chat or a question says (ADR 0083: the
 // Orchestrator sees a chat's state, not its content). Main
 // calls them with executeJavaScript on window.__sbAppMap / __sbScreen / __sbView (installAppMap, from main.tsx); the
@@ -13,6 +13,8 @@ import { settingsSections } from './settings-sections';
 import { paletteActions } from '../components/CommandPalette';
 import { lang, t, textsWhere, type Key } from '../i18n';
 import { app } from '../store/store';
+import { tasks } from '../store/tasks';
+import { menuGroups, menuLabelKey, menuTasksUnread } from './nav-menu';
 import { pageLabel, ui } from '../store/ui';
 import { setViewPrefs, viewPrefs, type ViewPrefs } from './view-prefs';
 
@@ -33,19 +35,32 @@ const clean = (s: string | null | undefined, n = 70): string => {
   return v.length > n ? `${v.slice(0, n - 1)}…` : v;
 };
 
-/** The left rail as drawn now: its group titles and page entries in order (a page the work profile hides is absent). */
+/** The ☰ menu's groups as it lists them now (closed or open: the same groups the Sidebar draws, lib/nav-menu.ts), each
+ *  title marked ☰ so the Orchestrator knows the user opens the menu first (ADR 0366). */
+export function menuNav(tasksUnread: number): AppMapNav[] {
+  return menuGroups(tasksUnread).map(g => ({ group: `☰ ${t(`dialogs.sidebar.${g.id}` as Key)}`, items: g.pages.flatMap(id => {
+    const p = BRAIN_PAGES.find(x => x.id === id);
+    if (!p) return [];
+    const k = menuLabelKey(id);
+    return [{ page: p.id, label: clean(k ? t(k) : p.label), ...(p.key ? { key: p.key } : {}) }];
+  }) })).filter(g => g.items.length);
+}
+
+/** The left rail as drawn now: its group titles and page entries in order (a page the work profile hides is absent),
+ *  then the ☰ menu's groups. */
 function navNow(): AppMapNav[] {
   const rail = document.querySelector('[data-testid="sidebar"]');
   if (!rail) return [];
   const out: AppMapNav[] = [{ group: '', items: [] }];
   for (const el of Array.from(rail.querySelectorAll<HTMLElement>('.nav-title, .nav-item'))) {
+    if (el.closest('[data-testid="nav-menu"]')) continue; // the open menu: read below, the same either way
     if (el.classList.contains('nav-title')) { out.push({ group: clean(el.textContent), items: [] }); continue; }
     const page = (el.dataset.testid ?? '').replace(/^nav-/, '');
     if (!BRAIN_PAGES.some(p => p.id === page)) continue; // the agents' tree under the Grindhouse is not a place
     const [label, key] = (el.dataset.tip ?? '').split('|');
     out[out.length - 1]!.items.push({ page, label: clean(label || el.getAttribute('aria-label')), ...(key ? { key } : {}) });
   }
-  return out.filter(g => g.items.length);
+  return [...out.filter(g => g.items.length), ...menuNav(menuTasksUnread(tasks.get()))];
 }
 
 /** A page's subtitle or lead, when the dictionary has one for it. */

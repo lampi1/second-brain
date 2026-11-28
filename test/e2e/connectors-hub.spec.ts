@@ -3,7 +3,7 @@
 // untried server into a working one; the missing token is said with its fix and typed write-only (only its mask comes
 // back); the tool catalog sits on top (ToolCatalog.tsx, ADR 0119) and a server is added from the technical form, which
 // lives in Settings → Avanzate; the herald card's MCP section narrows a server once the card's «Server MCP» tool class
-// is on (the demo's Herald reads only, so its section starts disabled). Dark and light screenshots of
+// is on (the demo's Herald reads only, so its section starts disabled). Dark screenshots (dark only, ADR 0366) of
 // the section. Hidden window (SB_HIDDEN, set by the helpers).
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import fs from 'node:fs';
@@ -23,7 +23,7 @@ async function openConnectors(page: Page): Promise<Locator> {
   return group;
 }
 
-test('Connettori: accounts and MCP servers as cards, Prova, write-only token, add a server, dark and light', async () => {
+test('Connettori: accounts and MCP servers as cards, Prova, write-only token, add a server', async () => {
   const { app, page } = await launchDemo({ width: 1500, height: 2300 });
   try {
     const group = await openConnectors(page);
@@ -78,17 +78,5 @@ test('Connettori: accounts and MCP servers as cards, Prova, write-only token, ad
     await expect(editor.getByRole('alert')).toContainText('campo Token');
     await editor.getByRole('button', { name: 'Annulla', exact: true }).click();
 
-  } finally { await app.close(); }
-});
-
-test('Connettori in the light theme', async () => {
-  const { app, page } = await launchDemo({ width: 1500, height: 2300, scheme: 'light' });
-  try {
-    await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-    const group = await openConnectors(page);
-    await expect(group.getByTestId('hub-server-github').getByRole('status')).toHaveText('Funziona');
-    await page.mouse.move(2, 2);
-    await shotOf(group.getByTestId('connectors-hub'), 'connectors-hub-light');
   } finally { await app.close(); }
 });

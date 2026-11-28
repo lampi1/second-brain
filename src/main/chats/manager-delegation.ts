@@ -664,7 +664,8 @@ export abstract class ManagerDelegation extends ManagerTopics {
     const previous = orchestrator.items.find(item => item.kind === 'system' && item.code === 'resultReady' && item.result?.runId === canonical?.runId);
     const id = previous?.id ?? `result-${canonical?.runId ?? r.s.id}`;
     if (!previous || previous.kind === 'system' && previous.result?.at !== canonical?.at) {
-      const notice = { ...sysItem('resultReady', { role: held.note.role, title: held.note.title, summary: held.note.summary, chatId: r.s.id }, 'info'), id, ...(canonical ? { result: canonical } : {}) };
+      // waited: the user waits for this answer («Finito quello che aspettavi», ADR 0367)
+      const notice = { ...sysItem('resultReady', { role: held.note.role, title: held.note.title, summary: held.note.summary, chatId: r.s.id, ...(!held.local && (r.userWaits || held.userWaits) ? { waited: 1 } : {}) }, 'info'), id, ...(canonical ? { result: canonical } : {}) };
       this.addItem(orchestrator, notice, !!previous);
       this.updated(orchestrator);
     }
@@ -673,8 +674,11 @@ export abstract class ManagerDelegation extends ManagerTopics {
     if (!held.local && held.quiet) this.cleanReportListeners.some(fn => { try { return fn(held.note); } catch { return false; } });
     // what the user asked about is told in one line (agents/watched-asks.ts, ADR 0371 point 4)
     if (!held.local) for (const fn of this.resultReleasedListeners) this.hook('onResultReleased', () => fn({ ...held.note, quiet: held.quiet }));
+    const waited = !!r.userWaits || held.userWaits;
     delete r.heldResult; delete r.userWaits;
-    this.persist(true); this.updated(orchestrator);
+    // «Stai aspettando» (ADR 0367): the wait is over, its chip turns into a green ✓ for a while
+    if (waited && !held.local) r.s.userWait = { since: r.s.userWait?.since ?? held.note.at, doneAt: Date.now() };
+    this.persist(true); this.updated(orchestrator); if (waited && !held.local) this.updated(r);
     if (!r.s.parentId && r.s.run?.delivery?.policy === 'synthesize') this.resumeRootSyntheses();
   }
 

@@ -3,7 +3,7 @@
 // role-specific section badges (count, cleared on visit); back/forward; Ctrl+1 back to the chats; the persistent Orchestrator on a brain page;
 // G-letter keys; copying an internal link and pasting it in Ctrl+K.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { launchDemo, layerPage, shot, windowShot, openNotesMap, setQuestionsAside } from './helpers';
+import { launchDemo, layerPage, navMenu, shot, windowShot, openNotesMap, setQuestionsAside } from './helpers';
 
 const event = (app: ElectronApplication, e: { kind: string; title: string; detail?: string; chatId?: string }) =>
   app.evaluate((_e, ev) => (globalThis as unknown as { __sbDemo: { event(x: object): void } }).__sbDemo.event(ev), e);
@@ -81,18 +81,21 @@ test('section badges count new events and clear when the section is visited', as
   const { app, page } = await launchDemo({ freeze: false });
   await expect(page.getByTestId('nav-idee')).toHaveCount(0); // a Memoria tab now (ADR 0122), never a rail entry
   // Andamento's badge (Costi and Qualità are its tabs, ADR 0202) is a warning mark, not a number (WARN_SECTIONS): it
-  // shows with a new budget event
+  // shows with a new budget event; it sits on the entry in the rail's ☰ menu (ADR 0366)
   const badge = page.getByTestId('nav-badge-andamento');
-  await page.getByTestId('nav-andamento').click();
+  await navMenu(page, 'andamento');
+  await page.getByTestId('nav-menu-btn').click();
   await expect(badge).toHaveText('');
   await page.getByTestId('nav-home').click();
   // logged-only kinds never badge (policy 2026-10-13): an idea adds nothing; the budget event after it shows the mark,
   // so the idea was handled by then
   await event(app, { kind: 'idea', title: 'Una idea in più' });
   await event(app, { kind: 'budget', title: 'Claude al 80 % del limite di oggi' });
+  await page.getByTestId('nav-menu-btn').click();
   await expect(badge).toHaveText('!');
   await page.getByTestId('nav-andamento').click();
   await expect(page.getByTestId('an-panel-costi')).toBeVisible();
+  await page.getByTestId('nav-menu-btn').click();
   await expect(badge).toHaveText('');
   await app.close();
 });

@@ -5,7 +5,8 @@
 // of the norm comes back on the bar by itself: an engine signed out, chats queued for the machine's load, a work queue
 // that failed to load, the brain sync when it is on, a recording, a maintenance at work. Used by App.tsx; fit steps
 // keep the actions reachable in a narrow window. Always on it too (ADR 0349): the PC's CPU and free RAM (SystemLoad.tsx)
-// and the connectors and MCP servers as one chip with their panel (ConnectorsChip.tsx).
+// and the connectors and MCP servers as one chip with their panel (ConnectorsChip.tsx); a new version as a small
+// neutral chip (VersionChip.tsx, ADR 0366).
 import { useWorkflows, reloadWorkflows, reloadLessons } from '../store/workflows';
 import { durableAsks } from '../lib/work-ask';
 import { planAskKeys } from '../lib/plan-ask';
@@ -26,6 +27,7 @@ import { openQueue } from '../lib/later';
 import { HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconLogin, IconRefresh, IconSearch, IconSettings, IconStop } from './Icons';
 import { UsageBar } from './UsageBar';
 import { SystemLoad } from './SystemLoad';
+import { VersionChip } from './VersionChip';
 import { ConnectorsChip } from './ConnectorsChip';
 import { SyncStatus } from './SyncStatus';
 import { PlansButton } from './PlansButton';
@@ -219,6 +221,8 @@ export function TopBar() {
         <IconSearch size={14} /><span className="search-text">{auditText('audit.TopBar.searchChatsIdeasOrACommand')}</span><Keys combo="Ctrl+K" />
       </button>
       <span className="sp" />
+      {/* a new version, said small and neutral (ADR 0366): no full-width banner */}
+      <VersionChip />
       <SystemLoad />
       <UsageBar />
       <ConnectorsChip />

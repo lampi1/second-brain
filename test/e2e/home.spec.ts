@@ -20,9 +20,11 @@ for (const lang of ['it', 'en']) test(`Home is the default Grindhouse and keeps 
     await expect(page.getByTestId('nav-workspace')).toHaveCount(0);
     // Agenti is in the Brain group (ADR 0077), Andamento (Costi, Qualità… as tabs, ADR 0202) in its group; Confronto
     // (ADR 0201) and Idee (ADR 0340) are gone
+    await page.getByTestId('nav-menu-btn').click(); // the pages sit in the rail's ☰ menu (ADR 0366)
     for (const id of ['agenti', 'andamento']) await expect(page.getByTestId(`nav-${id}`)).toBeVisible();
     for (const id of ['costi', 'qualita', 'classificatori']) await expect(page.getByTestId(`nav-${id}`)).toHaveCount(0);
     for (const id of ['confronto', 'idee']) await expect(page.getByTestId(`nav-${id}`)).toHaveCount(0);
+    await page.keyboard.press('Escape');
     await expect(page.getByRole('button', { name: it ? 'Nuovo agente' : 'New agent', exact: true })).toHaveCount(0);
     // work starts only from the Orchestrator's column (ADR 0083): Ctrl+N gives its input the keyboard, no dialog
     await page.keyboard.press('Control+N');

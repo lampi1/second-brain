@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import os from 'node:os';
-import { choose, closeSetup, launch, launchDemo, setSize, shot, goPage } from './helpers';
+import { closeSetup, launch, launchDemo, setSize, shot, goPage } from './helpers';
 
 const SHOTS = path.resolve(import.meta.dirname, '..', '..', 'test-results', 'shots');
 async function clip(page: Page, name: string, testid: string): Promise<void> {
@@ -16,16 +16,9 @@ async function clip(page: Page, name: string, testid: string): Promise<void> {
   await page.getByTestId(testid).screenshot({ path: path.join(SHOTS, `${name}.png`), animations: 'disabled' });
 }
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`usage strip always shows today, Claude week (5 h from 70%) and Cursor (${scheme})`, async () => {
     const { app, page } = await launchDemo({ scheme });
-    if (scheme === 'light') { // the app's own theme setting (default dark), in Settings → Aspetto e lingua
-      await page.keyboard.press('Control+Comma');
-      await choose(page.getByTestId('st-theme-select'), 'light');
-      await expect(page.locator('html[data-theme="light"]')).toHaveCount(1);
-      await page.getByTestId('page-back').click();
-      await expect(page.getByTestId('settings-page')).toHaveCount(0);
-    }
     const bar = page.getByTestId('usage');
     await expect(bar).toBeVisible();
     await expect(page.getByTestId('usage-today')).toHaveText(/\d+,\d\d \$/);

@@ -23,7 +23,7 @@ it('keeps a tall layer below the top coordinator even with setup banners',()=>{
  expect(mock.loadURL).toHaveBeenCalledExactlyOnceWith(expected.href);
  expect(expected.href).toContain('percent%2523');
  const shellTop=120,coordinatorHeight=300,occupiedBottom=shellTop+coordinatorHeight+16;
- layer.setModel({theme:'system',density:'comfortable',toasts:[{id:'t',kind:'error',label:'',title:'',detail:'',count:1,action:'',tone:'err'}],avoid:{right:0,bottom:0,top:occupiedBottom}}satisfies OverlayModel);
+ layer.setModel({density:'comfortable',toasts:[{id:'t',kind:'error',label:'',title:'',detail:'',count:1,action:'',tone:'err'}],avoid:{right:0,bottom:0,top:occupiedBottom}}satisfies OverlayModel);
  expect(mock.bounds?.y).toBeGreaterThanOrEqual(occupiedBottom);expect(mock.bounds!.y+mock.bounds!.height).toBeLessThanOrEqual(800);
  layer.stop();
 });

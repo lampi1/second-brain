@@ -152,6 +152,8 @@ describe('old saved plans and the flow text', () => {
     expect(readPlan(JSON.parse(JSON.stringify(p)))).toEqual(p);
     expect(readPlan({ ...p, phase: 'other' })).toBeNull();
     expect(readPlan({ ...p, steps: [{ id: 's1', title: 'x', state: 'now', role: 'wizard' }] })).toBeNull();
+    // a retired role (judge) reads as its successor since eca2b5d: a saved plan with it stays readable
+    expect(readPlan({ ...p, steps: [{ id: 's1', title: 'x', state: 'now', role: 'judge' }] })?.steps[0]?.role).toBe('sentinel');
     expect(readPlan({ ...p, steps: [{ id: 's1', title: 'x', state: 'now', chatIds: ['../x'] }] })).toBeNull();
     expect(readPlan(null)).toBeNull();
   });

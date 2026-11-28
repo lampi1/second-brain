@@ -15,7 +15,7 @@ import { createStore } from './createStore';
 import { t, locale } from '../i18n';
 import { connectAutoClose } from './auto-close';
 import { initialState, isBusy, reduce, toFlush, type Action, type AppState, type QueuedMsg } from './state';
-import { announce, hideChat, hideTab, setPrefs, toast,toastKey, ui } from './ui';
+import { announce, hideChat, hideTab, toast,toastKey, ui } from './ui';
 import { dismissedLine, noteLine, runningLine, UNDO_MS, type NoteKind } from '../lib/sendable';
 import { runningRuns } from '../lib/runs';
 import { setMark, type Mark } from '../lib/marks';
@@ -168,37 +168,11 @@ export function startStore(): void {
   });
 }
 
-/** The theme lives in the app settings too (config.json, ADR 0005/0008): read it at start, follow changes made
- *  elsewhere (an agent, another window) and save the user's own switches. localStorage keeps working without them. */
-let settingsPending=false;
+/** The app settings (config.json, ADR 0005/0008): read at start, then every change made anywhere (the user, an agent,
+ *  another window). The theme is no setting any more: the app is dark only (ADR 0366). */
 function syncSettings(): void {
-  let known: string | null = null;
-  void sb.invoke('settings:get', undefined).then(s => {
-    known = s.theme;
-    dispatch({ type: 'settings', settings: s });
-    setPrefs({ theme: s.theme });
-  }).catch(() => {});
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  sb.on('settings:changed', c => {
-    dispatch({ type: 'settings', settings: c.settings });
-    // a newer local choice is waiting to be saved: an older echo (light, then dark at once) must not undo it
-    if (timer) return;
-    known = c.settings.theme;
-    if (c.key === 'theme') setPrefs({ theme: c.settings.theme });
-  });
-  ui.subscribe(() => {
-    const p = ui.get().prefs;
-    if (known === null) return;
-    // back to the saved value before the pending save (light, then dark at once): that save must not happen
-    if (known === p.theme) { if (timer) { clearTimeout(timer); timer = null; settingsPending=false; } return; }
-    if (timer) clearTimeout(timer);
-    settingsPending=true;
-    timer = setTimeout(() => {
-      timer = null;settingsPending=false;
-      known = p.theme;
-      void sb.invoke('settings:set', { theme: p.theme }).catch(() => {});
-    }, 300);
-  });
+  void sb.invoke('settings:get', undefined).then(s => dispatch({ type: 'settings', settings: s })).catch(() => {});
+  sb.on('settings:changed', c => dispatch({ type: 'settings', settings: c.settings }));
 }
 
 export async function loadItems(chatId: string): Promise<void> {
@@ -770,7 +744,7 @@ export function updateStoreProblem():string|null{
   const state=app.get();
   if(!state.ready)return t('appText.store.updateWaitLoad');
   if(Object.values(state.queued).some(queue=>queue.length))return t('appText.store.updateQueued');
-  if(settingsPending||localActions||pendingCloses.size||queuedActions||inFlight.size||undos.size||notes.size)return t('appText.store.updateBusy');
+  if(localActions||pendingCloses.size||queuedActions||inFlight.size||undos.size||notes.size)return t('appText.store.updateBusy');
   if(state.pending.length)return t('appText.store.updatePending');
   return null;
 }

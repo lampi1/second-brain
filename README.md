@@ -78,7 +78,7 @@ Each character has a vice for the quiet moments (all six also play in **Chess**)
 - **Voice, phone and Remote Mode.** Local dictation, voice conversation, call **Recordings**, and **Remote Mode** on both Claude (`claude.ai/code`) and Antigravity/ACP engines through the **Telegram** phone bridge.
 - **Also on board.** **Tasks**, **Trends**, **Log**, the 2D brain **Map**, searchable **Settings**, and **Leisure** with a curated multi-edition **News** reader and **Chess** against your animated crew.
 
-<p align="center"><img src="docs/screenshots/plan.webp" alt="A Strategist's plan on its own map: a box per step with role and model, Approve and start above the drawing" width="720"></p>
+<p align="center"><img src="docs/screenshots/plan.webp" alt="A Strategist's plan on the Plans page: its steps in turns with role and preset, Approve and start above them" width="720"></p>
 
 ## Quick start
 

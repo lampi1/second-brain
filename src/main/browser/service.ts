@@ -15,6 +15,8 @@ import { recordMcpPort } from '../health';
 import { McpServer, listenWithRetry, type CallCtx, type McpTool } from '../mcp/server';
 import { EndpointTokens } from '../mcp/tokens';
 import { BrowserTabs } from './tabs';
+import { passwordClip } from './password-clip';
+import { cardGate } from './card-gate';
 import { BrowserActions, normalizeUrl } from './actions';
 import { browserTools, type Scope } from './tools';
 import { SHOW_UI_HINT } from '../genui/artifacts';
@@ -142,25 +144,13 @@ ${SCREENSHOT_HINT}`;
   }
 
   let wake: (chatId: string, text: string) => void = () => {};
-  let clearTimer: NodeJS.Timeout | null = null;
-  let copied: string | null = null;            // the password on the clipboard, until it is cleared
   const clip = clipFor();
-  const clearCopied = async () => {
-    if (clearTimer) { clearTimeout(clearTimer); clearTimer = null; }
-    const pw = copied;
-    copied = null;
-    tabs.credentials.cleared();
-    if (pw !== null && (await Promise.resolve(clip.readText())) === pw) clip.clear();
-  };
-  /** A password to the clipboard: cleared after CLIPBOARD_CLEAR_MS if still there; agents may not paste meanwhile. */
-  const copyPassword = (pw: string) => {
-    clip.writeText(pw);
-    copied = pw;
-    tabs.credentials.markCopied(CLIPBOARD_CLEAR_MS);
-    if (clearTimer) clearTimeout(clearTimer);
-    clearTimer = setTimeout(() => { void clearCopied(); }, CLIPBOARD_CLEAR_MS);
-    clearTimer.unref?.();
-  };
+  /** a copied password goes back off the clipboard after CLIPBOARD_CLEAR_MS (what was there before comes back, ADR 0367) */
+  const pwClip = passwordClip(clip, tabs.credentials, CLIPBOARD_CLEAR_MS);
+  const clearCopied = () => pwClip.restore();
+  const copyPassword = (pw: string) => pwClip.copy(pw);
+  /** the Orchestrator's credentials cards shown now (ADR 0367): the renderer reads an entry only while it is live */
+  const cards = cardGate(tabs.credentials);
   /** The agent ended its turn instead of waiting: tell its chat, a few seconds later (a call may be on its way). */
   const wakeIfNobodyWaits = (id: string) => {
     // an agent that just got "still waiting" is probably calling again after its turn: give it that time first
@@ -237,12 +227,24 @@ ${SCREENSHOT_HINT}`;
     },
     credentials: () => tabs.credentials.list(),
     copyCredential: (id, field) => {
+      if (field === 'url') { const f = tabs.credentials.cardFields(id); if (!f?.url) return false; clip.writeText(f.url); return true; }
       const e = tabs.credentials.byId(id);
       if (!e) return false;
       if (field === 'user') { clip.writeText(e.user); return true; }
       copyPassword(e.password);
       log.info('browser', 'password copied from the Credenziali panel', { data: { id } });   // never the value
       return true;
+    },
+    credentialCardMatch: ref => {
+      const m = cards.match(ref);
+      if ('id' in m) log.info('browser', 'credentials card shown', { data: { id: m.id } });   // never a value
+      return m;
+    },
+    credentialCardFields: id => cards.fields(id),
+    credentialReveal: id => {
+      const pw = cards.reveal(id);
+      if (pw !== null) log.info('browser', 'password shown on the credentials card', { data: { id } });   // never the value
+      return pw;
     },
     setWake: fn => { wake = fn; },
     envs: () => tabs.envList(),

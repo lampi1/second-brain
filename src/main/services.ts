@@ -6,6 +6,7 @@ import type {
 } from '../shared/contract';
 import type { AgentMetrics, AgentRunOutcome, UserTaskEvents } from '../shared/agents';
 import type { AgentPolicy } from './agents/tool-policy';
+import type { CardMatch } from './browser/logins';
 import type { TaskAssignmentOptions, TaskSource } from '../shared/delegation';
 import type { KnownOutcome, RouteRequest, RouteResult, RoutingActual, RoutingPrediction } from './brain/routing';
 
@@ -22,6 +23,8 @@ export interface ChatService {
   /** «Annulla» on the automatic move of a chat out of credits (ADR 0348) */
   creditStay?(chatId: string): boolean;
   items(chatId: string): ChatItem[];
+  /** an app notice in a chat's transcript, no turn (the Orchestrator's credentials card, ADR 0367); absent in old fakes */
+  appNotice?(chatId: string, item: Extract<ChatItem, { kind: 'system' }>): void;
   pending(): PendingRequest[];
   /** the "/" commands the chat's engine reported; null = none yet (ADR 0018) */
   commands(chatId: string): ChatCommand[] | null;
@@ -140,7 +143,12 @@ export interface BrowserService {
   copyFromHandoff(id: string, field: 'user' | 'password'): boolean;
   /** The "Credenziali" panel: entries of the credentials file without passwords, and Copia (password read at the click). */
   credentials(): CredentialEntry[];
-  copyCredential(id: string, field: 'user' | 'password'): boolean;
+  copyCredential(id: string, field: 'user' | 'password' | 'url'): boolean;
+  /** The Orchestrator's credentials card (ADR 0367): the entry a reference names (id and group only) and, on a hit, the
+   *  card goes live for CREDENTIAL_CARD_MS; its URL and user name, and on «Mostra» its password, only while live. */
+  credentialCardMatch(ref: string): CardMatch;
+  credentialCardFields(id: string): { user: string; url?: string } | null;
+  credentialReveal(id: string): string | null;
   /** How a chat is woken when the user answers a hand-off its agent no longer waits for (set by wiring). */
   setWake(fn: (chatId: string, text: string) => void): void;
   /** Known environments with session status and last sign-in (no cookies, no secrets). */

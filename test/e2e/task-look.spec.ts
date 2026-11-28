@@ -3,7 +3,7 @@
 // Task's detail pane wears Agenti's card surface (same radius, border and background). Screenshots for the side-by-side review:
 // test-results/shots/look-{task,agenti}-{dark,light}.png.
 import { expect, test, type Page } from '@playwright/test';
-import { launchDemo, openAgentOverview, shot } from './helpers';
+import { goPage, launchDemo, openAgentOverview, shot } from './helpers';
 
 /** The computed style of the page's title and subtitle, and of its first card. */
 async function look(page: Page, title: string, sub: string, card: string) {
@@ -13,13 +13,12 @@ async function look(page: Page, title: string, sub: string, card: string) {
   }, [title, sub, card]);
 }
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`Task and Agenti share one look (${scheme})`, async () => {
     const { app, page } = await launchDemo({ scheme });
     try {
-      await page.evaluate(theme => window.sb.invoke('settings:set', { theme }), scheme);
       await expect(page.locator('html')).toHaveAttribute('data-theme', scheme);
-      await page.getByTestId('nav-task').click();
+      await goPage(page, 'task'); // out of ☰ (ADR 0366): G O
       const dv = page.getByTestId('brain-page-task');
       await dv.getByTestId('task-refresh').click();
       await expect(dv.getByTestId('task-detail')).toBeVisible({ timeout: 30_000 });

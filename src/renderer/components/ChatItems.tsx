@@ -10,15 +10,20 @@
 // elapsed time; in an Orchestrator, an "Apri" chip under the chats she opened, wrote to or named (ChatRefChips.tsx, ADR 0034)
 // and a "Strategist" badge (or an older "Nuova chat") on a message sent with that mode (shared/newchat.ts); its thinking and tool rows fold
 // behind one "Ragionamento" row, and an emoji-only reply sticks to the user's bubble as a reaction (lib/chat-view.ts); a "sta scrivendo… / sta pensando…" line follows the turn; the list follows the bottom ONLY when the
-// user is already there (scrolled up to read, it never jumps: a "nuove righe" pill appears instead). Used by ChatTile
-// and OrchestratorTile.
+// user is already there (scrolled up to read, it never jumps: a "nuove righe" pill appears instead). ADR 0367: a result
+// from another agent is one thin row (ResultRow.tsx), a credentials card draws CredentialCard.tsx, and the app's routing
+// estimate is a closed chip under the user's bubble, never in his words. Used by ChatTile and OrchestratorTile.
 import { readToolOutput, toolOutputLoader } from '../lib/tool-output';
 import { sb } from '../sb';
 import { t as auditText } from '../i18n';
 import {useFollowBottom} from '../lib/use-follow-bottom';
 import '../styles/follow-bottom.css';
 import { createContext, memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { ChatItem, FileDiff } from '@shared/contract';
+import type { ChatItem, EstimateMeta, FileDiff } from '@shared/contract';
+import { splitEstimate } from '@shared/task-estimate';
+import { ResultRow } from './ResultRow';
+import { CredentialCard } from './CredentialCard';
+import '../styles/orch-chat.css';
 import { diffTotals, duration, formatCost, toolLabel } from '../lib/format';
 import { markdownParts, renderMarkdown, splitBlocks, type MdPart } from '../lib/markdown';
 import { CodeBlock } from './CodeBlock';
@@ -26,7 +31,7 @@ import { VisualBlock, isVisualLang } from './VisualBlock';
 import { explainTool } from '@shared/explain';
 import { useNow } from '../lib/clock';
 import { liveLine } from '../lib/typing-line';
-import { IconAlert, IconArrowDown, IconArrowRight, IconBell, IconBolt, IconBranch, IconCheck, IconChevronDown, IconChevronRight, IconInfo, IconLink, IconPlus, IconRefresh, IconSend, IconSparkle, IconSpinner, IconTerminal, IconX } from './Icons';
+import { IconAlert, IconArrowDown, IconBell, IconBolt, IconBranch, IconCheck, IconChevronRight, IconInfo, IconLink, IconPlus, IconRefresh, IconSend, IconSparkle, IconSpinner, IconTerminal, IconX } from './Icons';
 import { splitNotes } from '../lib/sendable';
 import { getForeignLabel, foreignOf, showsSender, type Foreign, type ForeignKind } from '../lib/foreign';
 import { ImageStrip } from './ImageStrip';
@@ -36,15 +41,12 @@ import { useApp } from '../store/store';
 import { chatRefsOf, reportOutput, toolChatRef } from '../lib/chatrefs';
 import { titlesKeyOf } from '../lib/chat-derived';
 import { splitMode } from '@shared/newchat';
-import { isRoleId, ROLE_DEFAULTS, ROLE_IDS } from '@shared/roles';
 import { isReaction } from '@shared/reaction';
-import { chatView, TAIL_ITEMS, tailStart, resultLine } from '../lib/chat-view';
-import { AgentAvatar } from './AgentAvatar';
+import { chatView, TAIL_ITEMS, tailStart } from '../lib/chat-view';
 import { AgentSprite, SpriteCtx } from './AgentSprite';
 import { isThinking } from './StripFace';
 import { NamedChatRefs, ToolChatRef } from './ChatRefChips';
 import { openHandoff } from '../store/ui';
-import { openChatRef } from '../actions';
 import { ArtifactCard } from './GenUi';
 import { useLinkPeek } from './LinkPeek';
 import { sysText, t } from '../i18n';
@@ -57,42 +59,6 @@ import { TopicChip } from './TopicChip';
 import { matchesSearch } from '@shared/orchestrator-topics';
 
 type Tool = Extract<ChatItem, { kind: 'tool' }>;
-
-/** One compact row: who has the result, its first line, «Agente →» to its chat, and a tab under the row that unfolds the
- *  exact result here (owner, 2026-10-21: «una linguetta per espanderla e il pulsante "Vai ad agente"»). Folded by default
- *  (#351: «l'Orchestrator lo voglio pulito ed essenziale»): output, questions and criteria are one click away. */
-function ResultReady({ item }: { item: Extract<ChatItem, { kind: 'system' }> }) {
-  const sourceId = typeof item.params?.chatId === 'string' ? item.params.chatId : undefined;
-  const source = useApp(s => sourceId ? s.chats[sourceId] : undefined);
-  const [open, setOpen] = useState(false);
-  const name = source?.title ?? String(item.params?.title ?? item.params?.role ?? 'Chat');
-  const role = source?.agent?.name ?? String(item.params?.role ?? '');
-  const recordedRole = String(item.params?.role ?? '').trim().toLowerCase();
-  const roleId = isRoleId(source?.agent?.id) ? source.agent.id
-    : ROLE_IDS.find(id => id === recordedRole || ROLE_DEFAULTS[id].name.toLowerCase() === recordedRole);
-  const avatar = source?.agent?.avatar ?? (roleId ? { kind: 'character' as const, value: roleId } : undefined);
-  const legacyOutput = typeof item.params?.summary === 'string' && item.params.summary.trim() ? item.params.summary : sysText(item);
-  const line = resultLine(item.result?.output ?? legacyOutput);
-  return <div className={`notice result-ready${open ? ' is-open' : ''}`} data-testid="result-ready">
-    <AgentAvatar avatar={avatar} name={role} size={24} />
-    <span className="result-ready-text" role="status"><span className="result-ready-name" title={name}>{name}</span><small>{role ? t('chat.resultFrom', { role }) : t('chat.resultReady')}</small>
-      {!open && line && <span className="result-ready-line" data-testid="result-ready-line" title={line}>{line}</span>}</span>
-    <span className="result-ready-actions">
-    {sourceId && <button type="button" className="result-ready-go" data-testid="chatref-open" data-chat-id={sourceId}
-      aria-label={t('chat.chatref.ariaOpen', { verb: t('chat.resultGoAgent'), name })} title={t('chat.resultGoAgentTip')} onClick={() => openChatRef(sourceId)}>
-      <IconArrowRight size={13} />
-    </button>}</span>
-    {open && !item.result && <div className="result-ready-full"><Markdown text={legacyOutput} /></div>}
-    {open && item.result && <div className="result-ready-full" data-testid="canonical-result">
-      <Markdown text={item.result.output} />
-      {!!item.result.questions?.length && <ul>{item.result.questions.map((question, i) => <li key={i}>{question}</li>)}</ul>}
-      {!!item.result.doneWhen.length && <ul className="result-criteria">{item.result.doneWhen.map((criterion, i) => <li key={i} className={criterion.met ? 'met' : ''}><span aria-hidden="true">{criterion.met ? '✓' : '—'}</span><span className="sr-only">{t(criterion.met ? 'chat.criterionMet' : 'chat.criterionNotMet')}</span> <b>{criterion.criterion}</b> {criterion.evidence}</li>)}</ul>}
-    </div>}
-    <button type="button" className="result-ready-tab" aria-expanded={open} data-testid="result-ready-toggle" onClick={() => setOpen(!open)}>
-      <IconChevronDown size={12} />{t(open ? 'chat.resultHide' : 'chat.resultShow')}
-    </button>
-  </div>;
-}
 
 /** One block of a streaming message: a finished block is parsed once and its DOM is never touched again. */
 const MdBlock = memo(function MdBlock({ text, tail }: { text: string; tail: boolean }) {
@@ -354,6 +320,18 @@ function CorrectionBubble({ quote, fix }: { quote: string; fix: string }) {
   );
 }
 
+/** The app's routing estimate under the user's bubble: a small closed chip; a click shows its line (ADR 0367). */
+function EstimateChip({ estimate }: { estimate: EstimateMeta }) {
+  const [open, setOpen] = useState(false);
+  const known = (['self', 'one-agent', 'tree'] as const).find(p => p === estimate.path);
+  const what = known ? t(`chat.estimate.path.${known}`) : estimate.path;
+  return (
+    <button type="button" className={`oc-est${open ? ' oc-open' : ''}`} onClick={() => setOpen(o => !o)} aria-expanded={open} title={t('chat.estimate.tip')} data-testid="msg-estimate">
+      {t('chat.estimate.chip', { what })}{open && estimate.why ? <span className="oc-est-why"> · {estimate.why}</span> : null}
+    </button>
+  );
+}
+
 function ReplyButton({ text }: { text: string }) {
   const chatId = useContext(ChatIdCtx);
   const readOnly = useContext(ReadOnlyCtx);
@@ -377,9 +355,11 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
       if (f && !item.thumbs?.length && !item.images) return <ForeignMsg item={item} f={f} />;
       // "Strategist" (or an older "Nuova chat"): the line for the Orchestrator is hidden, a badge says it; an older
       // "Veloce" line is only hidden (ADR 0201)
-      const nc = item.from ? null : splitMode(item.text);
+      // the app's estimate is metadata, never the user's words (ADR 0367): an older or echoed item still has the line
+      const est = item.from ? { text: item.text } : item.estimate ? { text: item.text, estimate: item.estimate } : splitEstimate(item.text);
+      const nc = item.from ? null : splitMode(est.text);
       // notes riding on the user's message (Mandato / Copiato / Non serve): a muted line under the bubble
-      const own = item.from ? { text: withoutLabel(item.text), notes: [] } : splitNotes(nc?.text ?? item.text);
+      const own = item.from ? { text: withoutLabel(item.text), notes: [] } : splitNotes(nc?.text ?? est.text);
       const text = own.text;
       const fix = item.from ? null : parseCorrection(text);
       const tagged = !fix ? topicOfText(text) : null;
@@ -394,6 +374,7 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
         {nc?.mode && <div className="msg-newchat" data-testid={`item-${item.id}-mode`} data-tip={t(`chat.items.modeTip.${nc.mode}`)}>{nc.mode === 'plan' ? <IconBranch size={11} /> : nc.mode === 'fast' ? <IconBolt size={11} /> : <IconPlus size={11} />}{t(`chat.mode.${nc.mode}`)}</div>}
         {(item.topic || tagged) && <TopicChip chatId={chipChat} itemId={item.id} topic={item.topic ?? tagged!.topic} testid={`item-${item.id}-topic`} />}
         {fix ? <CorrectionBubble quote={fix.quote} fix={fix.fix} /> : bodyText && <div className="bubble">{bodyText}</div>}
+        {est.estimate && <EstimateChip estimate={est.estimate} />}
         {!fix && bodyText && <ReplyButton text={text} />}
         {reaction && <div className="msg-react" data-testid={`item-${item.id}-reaction`} data-reaction="">{reaction}</div>}
         {own.notes.length > 0 && <div className="msg-notes" data-testid={`item-${item.id}-notes`} title={own.notes.join('\n')}><IconCheck size={11} /> {own.notes.join(' · ')}</div>}
@@ -417,7 +398,9 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
     case 'tool': return <ToolItem item={item} />;
     case 'system': {
       if (item.continued) return <ColdDivider session={item.continued.session} />;
-      if (item.code === 'resultReady') return <ResultReady item={item} />;
+      // a result another agent sent: one thin row like «Evento app» (ResultRow.tsx, ADR 0367)
+      if (item.code === 'resultReady') return <ResultRow item={item} body={text => <Markdown text={text} />} />;
+      if (item.code === 'credentialCard') return <CredentialCard item={item} />;
       if (item.code === 'creditSwitchSoon') return <CreditSwitch item={item} />;
       // a step only the user can do (ADR 0269): a plain message, its command with Esegui, never a question
       if (item.code === 'userStep') return <div className="msg-assistant user-step" data-testid={`item-${item.id}`}><Message id={item.id} text={sysText(item)} /></div>;

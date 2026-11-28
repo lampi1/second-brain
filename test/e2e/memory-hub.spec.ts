@@ -6,7 +6,7 @@ import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { goPage, launchDemo, shot } from './helpers';
+import { goPage, launchDemo, navMenu, shot } from './helpers';
 
 // the synthetic brain of test/fixtures/brain-ui answers the brain pages
 const FIX = path.resolve(import.meta.dirname, '..', 'fixtures', 'brain-ui');
@@ -21,7 +21,6 @@ function fixtureBrain(): string {
 const TABS = ['file', 'artifact', 'skill', 'proposte'] as const;
 
 async function theme(page: Page, scheme: 'dark' | 'light') {
-  await page.evaluate(t => window.sb.invoke('settings:set', { theme: t }), scheme);
   await page.emulateMedia({ colorScheme: scheme });
   await page.waitForTimeout(250);
 }
@@ -49,7 +48,7 @@ test('Memoria hub: live top, tabs with keys and deep links, old G-keys, every ta
   try {
     // the rail: Memoria only, with no Dashboard nor the pages that became tabs
     for (const id of ['dashboard', 'skill', 'regole', 'script', 'idee', 'apprendimento']) await expect(page.getByTestId(`nav-${id}`)).toHaveCount(0);
-    await page.getByTestId('nav-memoria').click();
+    await navMenu(page, 'memoria');
     const mem = page.getByTestId('bm-memory-page');
     await expect(mem).toHaveAttribute('data-tab', 'proposte');
 
@@ -85,7 +84,9 @@ test('Memoria hub: live top, tabs with keys and deep links, old G-keys, every ta
       await expect(mem).toHaveAttribute('data-tab', tab);
       await expect(page.getByTestId(`mh-tab-${tab}`)).toHaveAttribute('aria-selected', 'true');
     }
+    await page.getByTestId('nav-menu-btn').click();
     await expect(page.getByTestId('nav-memoria')).toHaveAttribute('aria-current', 'page');
+    await page.keyboard.press('Escape');
 
     // a deep link memoria/<tab>
     await visit(page, 'sb://memoria/file');
@@ -109,7 +110,7 @@ test('Memoria hub: live top, tabs with keys and deep links, old G-keys, every ta
 test('Memoria keeps all tabs readable in a narrow pane', async () => {
   const { app, page } = await launchDemo({ height: 900, width: 1200, env: { SB_BRAIN: fixtureBrain() } });
   try {
-    await page.getByTestId('nav-memoria').click();
+    await navMenu(page, 'memoria');
     const mem = page.getByTestId('bm-memory-page');
     await mem.evaluate(el => { el.style.width = '580px'; el.style.maxWidth = '100%'; });
     await page.getByTestId('mh-tab-skill').click();

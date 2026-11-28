@@ -4,7 +4,7 @@
 // points at it) and Esc closes it without leaving the page; a click pins it until a press elsewhere.
 // Screenshots: test-results/shots/helptip-*.png.
 import { expect, test, type Page } from '@playwright/test';
-import { choose, launchDemo, shot } from './helpers';
+import { launchDemo, shot } from './helpers';
 
 async function openSettings(page: Page) {
   await page.getByTestId('settings').click();
@@ -12,14 +12,10 @@ async function openSettings(page: Page) {
   await expect(page.getByTestId('settings-page')).toBeVisible();
 }
 
-for (const scheme of ['dark', 'light'] as const) {
+for (const scheme of ['dark'] as const) { // dark only (ADR 0366)
   test(`a setting's "?" opens a styled explanation on hover (${scheme})`, async () => {
     const { page } = await launchDemo({ scheme });
     await openSettings(page);
-    if (scheme === 'light') {
-      await choose(page.getByTestId('st-theme-select'), 'light');
-      await expect(page.locator('html[data-theme="light"]')).toHaveCount(1);
-    }
     const mark = page.getByTestId('hub-total-tools-help');
     await mark.scrollIntoViewIfNeeded();
     const bubble = page.getByTestId('hub-total-tools-help-bubble');
@@ -39,7 +35,7 @@ for (const scheme of ['dark', 'light'] as const) {
     expect(box.width).toBeGreaterThan(200);
     expect(box.width).toBeLessThanOrEqual(321);
     const bg = await bubble.evaluate(el => getComputedStyle(el).backgroundColor);
-    expect(bg).toBe(scheme === 'dark' ? 'rgb(30, 32, 38)' : 'rgb(246, 247, 249)'); // --surface-2 (styles/tokens.css)
+    expect(bg).toBe('rgb(30, 32, 38)'); // --surface-2 (styles/tokens.css)
     await shot(page, `helptip-hover-${scheme}`);
     // the pointer leaves: it closes
     await page.mouse.move(5, 5);

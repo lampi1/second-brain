@@ -44,26 +44,51 @@ describe('chat tile input', () => {
   it('the first-run guide without a task run can receive an answer', () => {
     expect(render()).toContain('data-testid="chat-input-guide"');
   });
-  it('a user-started chat keeps its input and Continue action', () => {
-    const html = render('user');
-    expect(html).toContain('data-testid="chat-input-guide"');
-    expect(html).toContain('>Continue here</button>');
-  });
-  it.each(['orchestrator', 'parent', 'app'] as const)('a %s worker keeps its input and Continue action', startedBy => {
+  // «Incarico corrente» is gone from the open chat (ADR 0367, the owner: useless); the input stays
+  it.each(['user', 'orchestrator', 'parent', 'app'] as const)('a %s-started chat keeps its input, with no «current assignment» box', startedBy => {
     const html = render(startedBy);
     expect(html).toContain('data-testid="chat-input-guide"');
-    expect(html).toContain('>Continue here</button>');
+    expect(html).not.toContain('task-context');
+    expect(html).not.toContain('Current assignment');
   });
 });
 
-describe('chat bench head', () => {
-  it('a closed chat is a bench: what it is about as its title, the role under it, and its ✕ in sight (ADR 0311)', () => {
+describe('chat strip head (ADR 0366)', () => {
+  const strip = (row?: 'lead' | 'kid' | 'done', over: Partial<ChatSummary> = {}, still?: boolean) => {
     const chat = { id: 'w', title: 'AI-DLC · U5 verifica', cwd: '', state: 'idle', harness: 'claude', lastText: '',
-      agent: { id: 'artisan', name: 'Artisan' } } as unknown as ChatSummary;
+      agent: { id: 'artisan', name: 'Artisan' }, ...over } as unknown as ChatSummary;
     vi.mocked(useApp).mockImplementation(selector => selector({ chats: { w: chat }, pending: [], tabs: [] } as unknown as Parameters<typeof selector>[0]));
-    const html = renderToStaticMarkup(createElement(ChatTile, { chatId: 'w' }));
-    expect(html).toMatch(/data-testid="chat-expand-w">AI-DLC · U5 verifica<\/button><\/h3><span class="bench-now"><span class="bench-role"[^>]*>Artisan<\/span>/);
-    // stop and close stay in sight on every bench (the owner, 2026-11-14); no help mark
+    return renderToStaticMarkup(createElement(ChatTile, { chatId: 'w', row, still }));
+  };
+  it('a closed chat is one row: the title, «Role · what it does now», the state word, the ⓘ and the actions', () => {
+    const html = strip();
+    expect(html).toContain('<header class="tile-head gs-row">');
+    expect(html).toMatch(/data-testid="chat-expand-w">AI-DLC · U5 verifica<\/button><\/h3><span class="gs-now"><span class="gs-role"[^>]*>Artisan<\/span>/);
+    expect(html).toMatch(/<span class="gs-state">.*data-testid="chat-status-w"[^>]*>finito<\/span><\/span>/);
+    expect(html).toContain('data-testid="strip-info-w"');
+    // stop and close stay on every strip (the owner, 2026-11-14); no help mark, no skill chips, no bench
     expect(html).toContain('chat-x-w'); expect(html).not.toContain('chat-help-w');
+    expect(html).not.toContain('skill-chips'); expect(html).not.toContain('bench-');
+  });
+  it('draws the lead at 56 px, a helper at 44 px and a finished line at 32 px, still', () => {
+    expect(strip('lead')).toMatch(/<svg[^>]* height="56"/);
+    expect(strip('kid')).toMatch(/<svg[^>]* height="44"/);
+    const done = strip('done');
+    expect(done).toMatch(/<svg[^>]* height="32"/);
+    expect(done).toContain('class="agent-sprite is-still"');
+    expect(strip('lead')).not.toContain('is-still');
+  });
+  it('stands still when told (waiting, stalled, idle): only a working strip moves', () => {
+    expect(strip('lead', {}, true)).toContain('class="agent-sprite is-still"');
+    expect(strip('kid', {}, true)).toContain('class="agent-sprite is-still"');
+    expect(strip('kid', {}, false)).not.toContain('is-still');
+  });
+  it('wears the permission badge only off the default mode, and the sub-agents as «↳ n»', () => {
+    expect(strip('lead', { permissionMode: 'default' })).not.toContain('strip-perm-w');
+    expect(strip('lead')).not.toContain('strip-perm-w');
+    expect(strip('lead', { permissionMode: 'bypassPermissions' })).toMatch(/data-testid="strip-perm-w">[^<]+</);
+    const kids = { active: 1, observedActive: 1, children: [{ key: 'a', kind: 'agent', state: 'running', task: 'x', startedAt: 1, observedAt: 1 }] };
+    expect(strip('lead', { agentChildren: kids } as unknown as Partial<ChatSummary>)).toContain('data-testid="strip-subs-w"');
+    expect(strip('lead')).not.toContain('strip-subs-w');
   });
 });

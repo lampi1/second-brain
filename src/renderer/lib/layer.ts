@@ -29,7 +29,7 @@ const toneOf = (kind: string): OverlayToast['tone'] => (kind === 'error' || kind
 
 const keyOf = (r: { chatId: string; id: string }) => `${r.chatId}/${r.id}`;
 let last = '';
-let current: OverlayModel = { theme: 'system', density: 'comfortable' };
+let current: OverlayModel = { density: 'comfortable' };
 let timer: ReturnType<typeof setTimeout> | null = null;
 
 export function computeModel(): OverlayModel {
@@ -50,7 +50,7 @@ export function computeModel(): OverlayModel {
   const reserve = { right: size.w, bottom: 0, top: 0 };
   // Workspace padding is relative to the shell. Native bounds need the absolute occupied bottom, including banners.
   const avoid = {...reserve,...(reserve.top?{top:v.top+reserve.top}:{})};
-  return { avoid, theme: u.prefs.theme, lang: lang(), density: u.prefs.density, now: Math.floor(at / 15_000) * 15_000, toasts };
+  return { avoid, lang: lang(), density: u.prefs.density, now: Math.floor(at / 15_000) * 15_000, toasts };
 }
 
 function push(): void {

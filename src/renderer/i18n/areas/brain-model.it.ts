@@ -53,7 +53,6 @@ export const brainModelIt = {
   'bm.map.agentSkills': (p: N) => (p.n === 1 ? '1 skill' : `${p.n} skill`),
   
   // Mappa → Progetti (ADR 0271)
-  'skills.untracked': 'uso non tracciato', 'skills.untrackedTip': 'Questo motore non dice quali skill usa: ne vedi solo quelle che apre leggendo un SKILL.md.',
   // ADR 0326 · how far the project is: the percentage, the progress card and the plan card of the side panel
   // #443 · phases and steps in a line, the arrow to the following step, proofs and links, the panel's width
 

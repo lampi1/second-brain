@@ -1,4 +1,5 @@
-// One agent's window (ADR 0287): a chat as a one-line strip in the Grindhouse (AgentStrips.tsx), open in the column, or in
+// One agent's window (ADR 0287): a chat as a one-line strip in the Grindhouse (AgentStrips.tsx; grouped by Strategist,
+// ADR 0366: a lead strip, a delegated chat's indented strip, a still line among the finished ones), open in the column, or in
 // full screen (FullScreen.tsx). The strip is one row (ADR 0292, 0293, 0295): the role's little person doing what the chat does
 // (StripFace.tsx), who it is, the title · current step, then on the right its work time and cost so far, each next to its estimate («22 min /
 // ~19 min · 1,84 $ / ~0,60 $», amber once past it), «In attività» in plain words while it works, and a pill only when
@@ -25,16 +26,13 @@ import { isBusy, sameList, showsWork } from '../store/state';
 import { closeChat, send, stop, useApp } from '../store/store';
 import { DEFAULT_SPLIT, setAgentSplit, setAgentView, setFocused, setChatExpanded, ui, type AgentView } from '../store/ui';
 import {t}from'../i18n';
-import {SkillChips}from'./SkillChips';
 import {schedule,suspendViews}from'../lib/viewports';
 import { openQueue, requestPostponed } from '../lib/later';
 import { admitNow, reqKey, toggleMaximize } from '../actions';
 import { useHandoffTabs } from '../store/handoffs';
 import { StripMeta } from './StripMeta';
 import { StripFace } from './StripFace';
-import { BenchHelpers, BenchKidsSum } from './BenchKids';
-import { spriteIdOf } from './AgentSprite';
-import { areaOf } from '../lib/agent-order';
+import { GrindInfo, PlanDots, planOutcome, SubCount } from './GrindStrip';
 import { BrowserTile } from './BrowserTile';
 import { FullTools } from './FullTools';
 import { selectedHere } from '../lib/strip-click';
@@ -54,11 +52,10 @@ import { ChatMenu, TitleInput } from './ChatMenu';
 import { planQuestion } from '../lib/plan-ask';
 import { StrategyPanel } from './StrategyPanel';
 import { ChildStrips } from './ChildStrips';
-import { TaskContext } from './TaskContext';
 import { InWindowLine } from './QuestionsWindow';
 import { RunHereCtx } from './CodeBlock';
 import { childRequestsFor, requestHost, type ChildRequest } from '../lib/child-requests';
-import { HarnessMark, IconAlert, IconArrowLeft, IconChat, IconColumns, IconGlobe, IconInfo, IconMaximize, IconMore, IconStop, IconX } from './Icons';
+import { IconAlert, IconArrowLeft, IconChat, IconColumns, IconGlobe, IconInfo, IconMaximize, IconMore, IconStop, IconX } from './Icons';
 import { IconButton, Kbd, StatePill, useSize } from './ui';
 import { rolePurpose } from '../lib/role-text';
 import { useSteady } from '../lib/steady';
@@ -95,7 +92,11 @@ const VIEWS: readonly AgentView[] = ['chat', 'split', 'browser'];
 
 /** The focus request each chat already handled (ChatTile's focus effect). */
 const handledFocus = new Map<string, number>();
-export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded }: { chatId: string; index?: number; focus?: boolean; embedded?: boolean }) {
+/** How a closed chat sits in the Grindhouse (ADR 0366): a Strategist's or a plain chat's lead strip, a delegated chat's
+ *  indented strip under it, or one still line in «Finite oggi». `still`: its little person stands in its rest pose (only
+ *  the chats at work move, AgentStrips.tsx). */
+export type StripRow = 'lead' | 'kid' | 'done';
+export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded, row = 'lead', still }: { chatId: string; index?: number; focus?: boolean; embedded?: boolean; row?: StripRow; still?: boolean }) {
   const chat = useApp(s => s.chats[chatId]);
   const reqs = useApp(s => pendingOf(s.pending, chatId), sameList);
   // its one status (#359): what main says it waits for, from real state, in place of the state
@@ -172,10 +173,11 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
   const work = workTime(chat, now);
   const strip = !focus && !embedded;
   const bench = strip && !expanded;
+  const face = row === 'kid' ? 44 : row === 'done' ? 32 : 56; // the little person's height on the strip
   // a click on the strip itself (not on one of its controls, nor inside a portalled menu) opens or closes it
   const onStripClick = (e: React.MouseEvent<HTMLElement>) => {
     const el = e.target as Element;
-    if (!strip || !e.currentTarget.contains(el) || el.closest('button, a, input, textarea, select, summary, label, [role="menu"], [role="separator"], [contenteditable="true"], .chat-topic, .sp-card, .aw-browser')) return;
+    if (!strip || !e.currentTarget.contains(el) || el.closest('button, a, input, textarea, select, summary, label, [role="menu"], [role="separator"], [contenteditable="true"], .chat-topic, .sp-card, .aw-browser, .gs-info')) return;
     if (selectedHere(window.getSelection(), e.currentTarget, downSelection.current)) return; // selecting text is not a click
     if (!expanded) setChatExpanded(chatId, true);
     else if (el.closest('.tile-head')) setChatExpanded(chatId, false);
@@ -190,7 +192,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
   const stateText = waitText && st.tone !== 'err' && st.label !== t('ui.state.queued') ? waitText : st.label;
   // an end is the little person alone (its word stays for screen readers); work is said in plain coloured words, the
   // same as on the rows of what it started («In attività», the owner, 2026-11-13); anything else is a pill
-  const plainState = !focus && stateText === st.label && st.tone === 'done';
+  const plainState = !focus && !bench && stateText === st.label && st.tone === 'done';
   const working = stateText === st.label && st.tone === 'run';
   const drag = (e: React.PointerEvent<HTMLDivElement>) => {
     const el = e.currentTarget, box = body.current?.getBoundingClientRect();
@@ -245,36 +247,26 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
     <section ref={ref} className={`tile chat-tile ${expanded?'is-expanded':'is-strip'} tone-${st.tone} ${isFocused ? 'focused' : ''} ${flash ? 'flash' : ''} ${compact ? 'compact' : ''} ${closing ? 'closing' : ''}${embedded ? ' is-embedded' : ''}${focus ? ' is-full' : ''}`} role="region"
       aria-label={auditText('auditExpression.ChatTile.text20', { v0: chat.title, v1: st.label })} data-testid={`tile-chat-${chatId}`} data-chat-id={chatId} data-sb-id={`chat-${chatId}`} data-chat-index={index} data-state={chat.state}
       onClick={onStripClick} onFocus={() => setFocused(key)} onPointerDown={() => { downSelection.current = window.getSelection()?.toString() ?? ''; setFocused(key); }}>
-      {strip && !expanded ? <header className="tile-head bench-head">
-        <div className={`bench-stage t-${spriteIdOf(chat.agent?.avatar)}`}>
-          <span className="bench-state">{stateEl}</span>
-          {chat.agent?.id === 'strategist' && (busyShown || chat.plan?.phase === 'proposed') && (
-            <div className="bench-bubble" data-testid={`bench-bubble-${chatId}`}>
-              {busyShown ? <StripActivity chatId={chatId} /> : t('tree.plan.ready')}
-            </div>
-          )}
-          <StripFace chatId={chatId} avatar={chat.agent?.avatar} name={name} size={64} height={134} tone={first ? 'wait' : st.tone}
-            waitsUser={!!first || userWait || st.tone === 'wait'} error={st.tone === 'err'} busy={busyShown} done={st.tone === 'done'} pending={st.tone === 'run'} />
-          <BenchHelpers chatId={chatId} />
-          {actions}
-        </div>
-        <div className="bench-plate">
-          <div className="bench-prow">
-            <span className="bench-area">{areaOf(chat) || folder || t('product.noArea')}</span>
-            {folder && areaOf(chat) && folder.toLowerCase() !== areaOf(chat)!.toLowerCase() && (
-              <span className="bench-folder" title={chat.cwd}>{folder}</span>
-            )}
-            {perm && <span className="th-badge bench-perm">{perm}</span>}
-            <SkillChips chat={chat} />
-            {longContext && <ContextMeter chat={chat} warn={warn} />}
-          </div>
+      {bench ? <header className="tile-head gs-row">
+        <StripFace chatId={chatId} avatar={chat.agent?.avatar} name={name} size={face} height={face} tone={first ? 'wait' : st.tone} still={!!still || row === 'done'}
+          waitsUser={!!first || userWait || st.tone === 'wait'} error={st.tone === 'err'} busy={busyShown} done={st.tone === 'done'} pending={st.tone === 'run'} />
+        <div className="gs-txt">
           <h3 className="th-title" title={(chat.agent?.purpose&&rolePurpose(chat.agent.id,chat.agent.purpose))||chat.title}>
-            {renaming ? <TitleInput chat={chat} onDone={()=>setRenaming(false)}/> : <button ref={expansionButton} type="button" className="strip-name" aria-expanded={false} aria-controls={`chat-work-${chatId}`} data-tip={t('product.expand')} onClick={()=>setChatExpanded(chatId,true)} data-testid={`chat-expand-${chatId}`}>{topic || name}</button>}
+            {renaming ? <TitleInput chat={chat} onDone={()=>setRenaming(false)}/> : <button ref={expansionButton} type="button" className="strip-name" aria-expanded={false} aria-controls={`chat-work-${chatId}`} onClick={()=>setChatExpanded(chatId,true)} data-testid={`chat-expand-${chatId}`}>{topic || name}</button>}
           </h3>
-          <span className="bench-now">{topic && <span className="bench-role" data-testid={`chat-topic-${chatId}`}>{name}</span>}<span className="chat-strip-line">{busyShown?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.plan?.phase==='proposed'?t('tree.plan.ready'):chat.lastText.slice(0,140)}</span></span>
-          {chat.run && <div className="bench-est"><StripEstimate chat={chat} busy={busy || chat.state === 'waiting'} workMs={work} compact /></div>}
-          <div className="bench-meta"><HarnessMark harness={chat.harness} size={12} /><StripMeta chat={chat} workMs={work} /></div>
+          {/* «Role · what it does now» (ADR 0366) */}
+          <span className="gs-now">{topic && <span className="gs-role" data-testid={`chat-topic-${chatId}`}>{name}</span>}<span className="chat-strip-line">{busyShown?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.plan?.phase==='proposed'?t('tree.plan.ready'):chat.lastText.slice(0,140)}</span></span>
         </div>
+        {/* a finished plan stays on its row only when its result is not the planned one (blocked or partial) */}
+        {(row !== 'done' || planOutcome(chat.plan)) && <PlanDots id={chatId} plan={chat.plan} />}
+        {/* the engine's own sub-agents as a count (their details in the ⓘ), a permission mode other than the default */}
+        <SubCount id={chatId} agents={chat.agentChildren} />
+        {perm && <span className="th-badge gs-perm" data-testid={`strip-perm-${chatId}`}>{perm}</span>}
+        {longContext && row !== 'done' && <ContextMeter chat={chat} warn={warn} />}
+        <span className="gs-state">{stateEl}</span>
+        <span className="gs-meta"><StripMeta chat={chat} workMs={work} figures /></span>
+        <GrindInfo chat={chat} />
+        {actions}
       </header> : !embedded && <header className="tile-head">
         <div className="th-row">
           {focus && <button type="button" className="btn btn-ghost btn-s aw-back" onClick={() => toggleMaximize(key)} data-testid="focus-exit" aria-label={t('aw.fullExit')}><IconArrowLeft size={13} /><Kbd>Esc</Kbd></button>}
@@ -307,13 +299,10 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
         </div>}
         {!compact && facts && <ChatLinkChips chatId={chatId} />}
       </header>}
-      {bench ? <div className="bench-foot" data-testid={`bench-foot-${chatId}`}>
-        {/* a closed bench is always as tall as the others (ADR 0312): what would grow it is one line here, by importance */}
+      {bench ? <div className="gs-foot" data-testid={`strip-foot-${chatId}`}>
+        {/* only what needs words under the row: the machine's queue, an error with its one action, the auto close */}
         {queuedBar}{errorBar}
         {!holding && <AutoCloseNotice chatId={chatId} said={first ? userWait : stateText === waitText} />}
-        {chat.plan && !['asking', 'revising'].includes(chat.plan.phase) && <StrategyPanel chat={chat} question={planAsk} compact />}
-        <BenchKidsSum chatId={chatId} />
-        <ChildStrips chatId={chatId} compact />
       </div> : <>
       {/* the wait is said once (#411): by the head (its button for a wait of the user's, else its state words) or here; an embedded tile has no head */}
       {!holding && <AutoCloseNotice chatId={chatId} said={!embedded && (first ? userWait : stateText === waitText)} />}
@@ -326,7 +315,6 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
       <div className={`chat-work${expanded?' expanded':''}`} id={`chat-work-${chatId}`} inert={!expanded} aria-hidden={!expanded} style={expanded && shownView === 'split' ? { flexGrow: share } : undefined}><div className="chat-work-inner">
       {expanded && <>
         {!compact && <ChatLinks chat={chat} />}
-        <TaskContext chat={chat} onContinue={() => reveal(true)} />
         {!compact && chat.handoffBusy && <ContextNotice chat={chat} />}
         {/* no Esegui in a work chat: its commands wait in the Orchestrator (ADR 0269) */}
         <RunHereCtx.Provider value={false}><ChatTranscript key={chatId} chatId={chatId} busy={showsWork(chat)} expanded={expanded} /></RunHereCtx.Provider>

@@ -10,13 +10,13 @@
 .pl-group[data-closed] h3 { color: var(--text-3); }
 .pl-danger { background: var(--red-bg); color: var(--red); border: 1px solid var(--red); }
 .pl-ready { color: var(--pl-par); font-weight: 600; }
-.pl-time { padding: 0 7px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-2); font-size: 11.5px; font-variant-numeric: tabular-nums; line-height: 18px; white-space: nowrap; }
+.pl-time { padding: 0 7px; border-radius: var(--r-s); background: var(--surface-2); border: 1px solid var(--border); color: var(--text-2); font-size: 11.5px; font-variant-numeric: tabular-nums; line-height: 18px; white-space: nowrap; }
 .pl-orch-btn { color: var(--violet); border-color: color-mix(in srgb, var(--violet) 32%, var(--border)); background: var(--violet-bg); }
 .pl-orch-btn:hover:not(:disabled) { border-color: var(--violet); background: color-mix(in srgb, var(--violet) 18%, var(--surface)); color: var(--text); }
 
 /* the progress bar: segments for done, done in part, under way and blocked, the percentage beside it */
 .pl-progress { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
-.pl-bar-track { display: inline-flex; width: 150px; max-width: 40vw; height: 7px; border-radius: 99px; background: var(--surface-3); overflow: hidden; border: 1px solid var(--border); }
+.pl-bar-track { display: inline-flex; width: 150px; max-width: 40vw; height: 7px; border-radius: var(--r-s); background: var(--surface-3); overflow: hidden; border: 1px solid var(--border); }
 .pl-bar-track i { display: block; height: 100%; }
 .pl-bar-track i[data-s=done] { background: var(--green); }
 .pl-bar-track i[data-s=partial] { background: repeating-linear-gradient(45deg, var(--green), var(--green) 3px, var(--surface-3) 3px, var(--surface-3) 6px); }
@@ -46,7 +46,7 @@
 /* the steps: a clean list, turn by turn */
 .pl-steps { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .pl-turn2 h4 { margin: 0 0 6px; font-size: 12px; font-weight: 700; color: var(--text-3); }
-.pl-turn2[data-together] { padding: 10px 12px; border: 1.8px dashed var(--pl-par); border-radius: 12px; background: var(--pl-par-bg); }
+.pl-turn2[data-together] { padding: 10px 12px; border: 1.8px dashed var(--pl-par); border-radius: var(--r-l); background: var(--pl-par-bg); }
 .pl-turn2[data-together] h4 { color: var(--pl-par); }
 .pl-turn2[data-drop] { opacity: .75; border-style: dashed; }
 .pl-turn2 ol { display: flex; flex-direction: column; gap: 6px; }
@@ -63,7 +63,7 @@
 .pl-step[data-added] { border-style: dashed; }
 .pl-step[data-drop] { opacity: .65; border-style: dashed; }
 .pl-step[data-drop] .pl-step-top b { text-decoration: line-through; }
-.pl-step-n { flex: none; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 99px; background: var(--surface-3); color: var(--text-2); font-weight: 700; font-style: normal; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; }
+.pl-step-n { flex: none; min-width: 22px; height: 22px; padding: 0 5px; border-radius: var(--r-s); background: var(--surface-3); color: var(--text-2); font-weight: 700; font-style: normal; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; }
 .pl-step[data-s=ok] .pl-step-n { background: var(--green-bg); color: var(--green); }
 .pl-step[data-s=now] .pl-step-n { background: var(--accent-bg); color: var(--accent); }
 .pl-step[data-s=bad] .pl-step-n { background: var(--red-bg); color: var(--red); }
@@ -71,7 +71,7 @@
 .pl-step-top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .pl-step-top b { font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
 .pl-step-input { flex: 1 1 200px; min-width: 0; height: 28px; }
-.pl-step-state { font-size: 11.5px; font-weight: 600; padding: 0 8px; line-height: 18px; border-radius: 99px; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
+.pl-step-state { font-size: 11.5px; font-weight: 600; padding: 0 8px; line-height: 18px; border-radius: var(--r-s); background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
 .pl-step-state[data-s=ok] { background: var(--green-bg); color: var(--green); }
 .pl-step-state[data-s=now] { background: var(--accent-bg); color: var(--accent); }
 .pl-step-state[data-s=bad] { background: var(--red-bg); color: var(--red); }
@@ -87,7 +87,7 @@
 .pl-step-tools { display: flex; flex-wrap: wrap; gap: 4px; }
 .pl-step-add { display: flex; gap: 8px; align-items: center; }
 .pl-step-add input { flex: 1; min-width: 0; height: 30px; }
-.pl-boxchat { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 2px 8px; border: 1px solid var(--border-2); border-radius: 99px; background: var(--surface-2); color: var(--text-2); font: inherit; font-size: 12px; cursor: pointer; }
+.pl-boxchat { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 2px 8px; border: 1px solid var(--border-2); border-radius: var(--r-s); background: var(--surface-2); color: var(--text-2); font: inherit; font-size: 12px; cursor: pointer; }
 .pl-boxchat span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pl-boxchat:hover { color: var(--text); background: var(--surface-3); }
 .pl-boxchat:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
@@ -99,8 +99,7 @@
 /* The plans' page: the list, a plan's words, its steps by turn (the dashed frame of parallel steps, arrows) and the side panel. Used by components/plans/*; .pl-dots and .pl-chip
    also by plans/PlanSteps.tsx. */
 .pl { display: flex; flex-direction: column; gap: 12px; min-height: 0; min-width: 0; container-type: inline-size; --pl-par: #e58ad6; --pl-par-bg: rgba(229, 138, 214, .06); }
-:root[data-theme=light] .pl { --pl-par: #b03d98; --pl-par-bg: rgba(176, 61, 152, .06); }
-@media (prefers-color-scheme: light) { :root:not([data-theme=dark]) .pl { --pl-par: #b03d98; --pl-par-bg: rgba(176, 61, 152, .06); } }
+
 .pl ul, .pl ol { list-style: none; margin: 0; padding: 0; }
 .pl-muted { color: var(--text-3); font-size: 12px; margin: 0; }
 .pl-empty { padding: 22px 12px; text-align: center; color: var(--text-3); font-size: 13px; }
@@ -135,12 +134,12 @@
 .pl-new { font-style: normal; font-size: 11px; font-weight: 700; color: var(--green); }
 .pl-stuck { color: var(--red); font-weight: 600; }
 .pl-at { color: var(--text-4); }
-.pl-project { padding: 0 7px; border-radius: 99px; background: var(--surface-3); color: var(--text-2); font-size: 11.5px; line-height: 18px; }
-.pl-chip { padding: 0 8px; border-radius: 99px; font-size: 11.5px; line-height: 18px; font-weight: 600; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
+.pl-project { padding: 0 7px; border-radius: var(--r-s); background: var(--surface-3); color: var(--text-2); font-size: 11.5px; line-height: 18px; }
+.pl-chip { padding: 0 8px; border-radius: var(--r-s); font-size: 11.5px; line-height: 18px; font-weight: 600; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
 .pl-chip[data-s=toApprove], .pl-chip[data-s=stopped] { background: var(--amber-bg); color: var(--amber); }
 .pl-chip[data-s=running] { background: var(--accent-bg); color: var(--accent); }
 .pl-chip[data-s=finished], .pl-chip[data-s=archived] { background: var(--green-bg); color: var(--green); }
-.pl-live { padding: 0 8px; border-radius: 99px; font-size: 11.5px; line-height: 18px; font-weight: 600; background: var(--surface-3); color: var(--text-2); }
+.pl-live { padding: 0 8px; border-radius: var(--r-s); font-size: 11.5px; line-height: 18px; font-weight: 600; background: var(--surface-3); color: var(--text-2); }
 .pl-live[data-k=you] { background: var(--amber-bg); color: var(--amber); }
 .pl-live[data-k=work] { background: var(--accent-bg); color: var(--accent); }
 .pl-live[data-k=bad] { background: var(--red-bg); color: var(--red); }

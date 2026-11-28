@@ -3,19 +3,7 @@
 // and the palette, the old Orchestrator staying as a normal chat, and the new agent dialog never offering a second
 // Orchestrator. Screenshots, dark and light, in test-results/shots/.
 import { expect, test, type Page } from '@playwright/test';
-import { choose, launchDemo, shot } from './helpers';
-
-async function lightTheme(page: Page): Promise<void> {
-  // the theme lives on the Settings page (gear menu → all settings), a custom Select (Select.tsx)
-  await page.getByTestId('settings').click();
-  await page.getByTestId('settings-all').click();
-  const theme = page.getByTestId('settings-page').getByTestId('st-theme-select');
-  await theme.scrollIntoViewIfNeeded();
-  await choose(theme, 'light');
-  await expect(page.locator('html[data-theme="light"]')).toHaveCount(1);
-  await page.keyboard.press('Escape');
-  await page.mouse.move(2, 2);
-}
+import { launchDemo, shot } from './helpers';
 
 const orchestratorIdOf = (page: Page) => page.getByTestId('tile-orchestrator').getAttribute('data-chat-id');
 
@@ -128,15 +116,14 @@ test('Ctrl+N and the palette give the Orchestrator\'s input the keyboard for a n
   await app.close();
 });
 
-test('light theme: the Orchestrator menu and the Nuovo Orchestrator confirm', async () => {
-  const { app, page } = await launchDemo({ scheme: 'light', orchestrator: true });
-  await lightTheme(page);
+test('the Orchestrator menu and the Nuovo Orchestrator confirm (dark only, ADR 0366)', async () => {
+  const { app, page } = await launchDemo({ orchestrator: true });
   await page.getByTestId('orchestrator-menu').click();
   await expect(page.getByTestId('chat-menu-pop-orchestrator')).toBeVisible();
-  await shot(page, 'orchestrator-menu-light');
+  await shot(page, 'orchestrator-menu');
   await page.getByTestId('chat-engine-orchestrator').click();
   await expect(page.getByTestId('orchestrator-renew-go')).toBeFocused();
-  await shot(page, 'orchestrator-renew-engine-light');
+  await shot(page, 'orchestrator-renew-engine');
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('orchestrator-renew')).toHaveCount(0);
   await app.close();

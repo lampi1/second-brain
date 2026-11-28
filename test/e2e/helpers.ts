@@ -205,11 +205,19 @@ export async function demoLayout(app: ElectronApplication): Promise<Layout> {
 }
 
 /** Opens detail pages whose sidebar entries depend on the user's role (ADR 0068). */
-const GO_KEY = { home: 'h', agenti: 'a', task: 'o', dashboard: 'd', andamento: 'c', costi: 'c', qualita: 'q', memoria: 'y', collegamenti: 'b', script: 't', log: 'n', skill: 's', impostazioni: 'p', registrazioni: 'v', impara: 'x', scacchi: 'k' } as const;
+const GO_KEY = { home: 'h', agenti: 'a', task: 'o', dashboard: 'd', andamento: 'c', costi: 'c', qualita: 'q', memoria: 'y', collegamenti: 'l', piani: 'b', script: 't', log: 'n', skill: 's', impostazioni: 'p', registrazioni: 'v', impara: 'x', scacchi: 'k' } as const;
 export async function goPage(page: Page, id: keyof typeof GO_KEY): Promise<void> {
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press('g');
   await page.keyboard.press(GO_KEY[id]);
+}
+
+/** Opens a page from the rail's ☰ menu (ADR 0366: the rail holds Grindhouse; the other pages sit in the menu), opening
+ *  the menu first unless it already is. */
+export async function navMenu(page: Page, id: string): Promise<void> {
+  const item = page.getByTestId(id === 'home' ? 'nav-menu-home' : `nav-${id}`);
+  if (!(await page.getByTestId('nav-menu').isVisible())) await page.getByTestId('nav-menu-btn').click();
+  await item.click();
 }
 
 /** Opens Impara (G I) on one of its tabs (ADR 0265: «Giornale», «Pull Request», «Lezioni»; plain Impara opens the one used

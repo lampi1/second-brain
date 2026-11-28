@@ -24,9 +24,11 @@ const ask = (app: ElectronApplication) => demo(app, 'ask', LEAD, { type: 'questi
   questions: [{ header: 'Offerte', question: QUESTION, multiSelect: false, options: [{ label: 'No, solo a prezzo pieno (consigliato)', description: 'niente doppio sconto' }, { label: 'Sì, si sommano' }] }] } satisfies Omit<PendingRequest, 'id' | 'chatId' | 'at'>);
 const items = (page: Page): Promise<ChatItem[]> => page.evaluate(id => window.sb.invoke('chat:items', { chatId: id }), LEAD);
 const userTexts = async (page: Page) => (await items(page)).flatMap(i => (i.kind === 'user' && 'text' in i ? [i.text as string] : []));
-/** The plan's map, from the strip's «apri mappa». */
+/** The plan's map, from «apri mappa» on the open chat's plan card (a closed strip shows only the dots, ADR 0366). */
 async function openPlan(page: Page) {
-  await page.getByTestId(`plan-map-${LEAD}`).click();
+  const map = page.getByTestId(`plan-map-${LEAD}`);
+  if (!(await map.count())) await page.getByTestId(`chat-expand-${LEAD}`).click();
+  await map.click();
   await expect(page.getByTestId('pl-map')).toBeVisible();
 }
 /** Back to the Grindhouse from the map. */
@@ -131,7 +133,6 @@ test('a Strategist asks, proposes a plan approved on its map and shows one line 
     await openAsk(page, `${LEAD}/plan@`);
     await page.getByTestId('qwin-plan-map').click();
     await expect(page.getByTestId('pl-do-approve')).toBeVisible();
-    await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
     await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
     await shot(page, 'strategist-plan-proposed-light');
   } finally { await app.close(); }
