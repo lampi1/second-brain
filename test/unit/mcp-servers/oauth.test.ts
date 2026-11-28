@@ -23,16 +23,17 @@ const json = (status: number, body: unknown, headers: Record<string, string> = {
 const MCP = 'https://mcp.example.com/mcp', KC = 'https://kc.example.com/realms/team';
 const AS = { issuer: KC, authorization_endpoint: `${KC}/protocol/openid-connect/auth`, token_endpoint: `${KC}/protocol/openid-connect/token`, code_challenge_methods_supported: ['S256'] };
 
-function world(o: { registration?: boolean; token?: (form: URLSearchParams) => Response; resource?: string; issuer?: string } = {}) {
+function world(o: { registration?: boolean; token?: (form: URLSearchParams) => Response; resource?: string; issuer?: string; tokenEndpoint?: string } = {}) {
   const calls: { url: string; body?: string }[] = [];
+  const tokenUrl = o.tokenEndpoint ?? AS.token_endpoint;
   const fetchFn = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input), body = typeof init?.body === 'string' ? init.body : undefined;
     calls.push({ url, ...(body ? { body } : {}) });
     if (url === MCP) return new Response('', { status: 401, headers: { 'WWW-Authenticate': 'Bearer resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource/mcp", scope="mcp:tools"' } });
     if (url === 'https://mcp.example.com/.well-known/oauth-protected-resource/mcp') return json(200, { resource: o.resource ?? MCP, authorization_servers: [KC] });
-    if (url === `${KC}/.well-known/openid-configuration`) return json(200, { ...AS, ...(o.issuer ? { issuer: o.issuer } : {}), ...(o.registration ? { registration_endpoint: `${KC}/clients-registrations/openid-connect` } : {}) });
+    if (url === `${KC}/.well-known/openid-configuration`) return json(200, { ...AS, token_endpoint: tokenUrl, ...(o.issuer ? { issuer: o.issuer } : {}), ...(o.registration ? { registration_endpoint: `${KC}/clients-registrations/openid-connect` } : {}) });
     if (url.endsWith('/clients-registrations/openid-connect')) return json(201, { client_id: 'dyn-1' });
-    if (url === AS.token_endpoint) return (o.token ?? (() => json(200, { access_token: jwt({ preferred_username: 'davide' }), refresh_token: 'r1', expires_in: 300 })))(new URLSearchParams(body));
+    if (url === tokenUrl) return (o.token ?? (() => json(200, { access_token: jwt({ preferred_username: 'davide' }), refresh_token: 'r1', expires_in: 300 })))(new URLSearchParams(body));
     return json(404, {});
   }) as typeof fetch;
   const saved = new Map<string, OAuthSession>();
@@ -218,10 +219,12 @@ describe('MCP OAuth: the service', () => {
 const SECRET = ['GOCSPX', 'made', 'up', 'client', 'value', '1234'].join('-');   // built at run time: a guard-safe fake
 describe('MCP OAuth: a client secret and a pinned scope', () => {
   const form = (w: ReturnType<typeof world>) => w.calls.filter(c => c.url === AS.token_endpoint).map(c => new URLSearchParams(c.body));
+  /** where the secret may go: the token endpoint origin it was first sent to (what the service reads from the store) */
+  const pin = (origin?: string) => { const p: { origin?: string; set(o: string): void } = { ...(origin ? { origin } : {}), set(o: string) { p.origin = o; } }; return p; };
 
   it('sends client_secret at the code exchange and at the refresh when set, keeps it in the session', async () => {
     const w = world({ token: f => json(200, { access_token: `a-${f.get('grant_type')}`, refresh_token: 'r1', expires_in: 300 }) });
-    const s = await w.oauth.login('g', MCP, { clientId: 'cid.apps.googleusercontent.com', clientSecret: SECRET });
+    const s = await w.oauth.login('g', MCP, { clientId: 'cid.apps.googleusercontent.com', clientSecret: SECRET, secretPin: pin() });
     expect(form(w)[0]!.get('client_secret')).toBe(SECRET);
     expect(form(w)[0]!.get('client_id')).toBe('cid.apps.googleusercontent.com');
     expect(s.clientSecret).toBe(SECRET);
@@ -241,7 +244,7 @@ describe('MCP OAuth: a client secret and a pinned scope', () => {
     expect(form(w).every(f => !f.has('client_secret'))).toBe(true);
     expect(s.clientSecret).toBeUndefined();
     const dyn = world({ registration: true });
-    await dyn.oauth.login('d', MCP, { clientSecret: SECRET });
+    await dyn.oauth.login('d', MCP, { clientSecret: SECRET, secretPin: pin() });
     expect(form(dyn).every(f => f.get('client_secret') !== SECRET)).toBe(true);
     expect(dyn.opened()).not.toContain(SECRET);
   });
@@ -268,12 +271,44 @@ describe('MCP OAuth: a client secret and a pinned scope', () => {
     }) as typeof fetch;
     let opened = '';
     const oauth = new McpOAuth({ load: () => null, save: () => true, drop: () => {}, fetch: fetchFn, listen: async () => ({ port: 50123, redirect: 'http://127.0.0.1:50123/callback', code: Promise.resolve('c'), close: () => {} }), openExternal: u => { opened = u; } });
-    await oauth.login('g', GMCP, { clientId: 'cid', clientSecret: SECRET, scope: 'https://www.googleapis.com/auth/gmail.readonly' });
+    await oauth.login('g', GMCP, { clientId: 'cid', clientSecret: SECRET, secretPin: pin(), scope: 'https://www.googleapis.com/auth/gmail.readonly' });
     const q = new URL(opened).searchParams;
     expect(q.get('access_type')).toBe('offline');
     expect(q.get('prompt')).toBe('consent');
     expect(q.get('resource')).toBe(GMCP);
     expect(q.get('scope')).toBe('https://www.googleapis.com/auth/gmail.readonly');
+  });
+
+  // The login server comes from discovery, which the MCP server steers: the secret may go only to the token endpoint's
+  // origin it was first sent to (a review finding).
+  it('first use pins the secret to the token endpoint origin; the same origin keeps working', async () => {
+    const p = pin();
+    await world().oauth.login('g', MCP, { clientId: 'cid', clientSecret: SECRET, secretPin: p });
+    expect(p.origin).toBe('https://kc.example.com');
+    const again = world();
+    await again.oauth.login('g', MCP, { clientId: 'cid', clientSecret: SECRET, secretPin: p });
+    expect(form(again)[0]!.get('client_secret')).toBe(SECRET);
+  });
+
+  it('a login server on another origin than the pinned one never gets the secret: refused before the browser opens', async () => {
+    const evil = 'https://evil.example.net/token';
+    const w = world({ tokenEndpoint: evil });
+    const p = pin('https://kc.example.com');
+    await expect(w.oauth.login('g', MCP, { clientId: 'cid', clientSecret: SECRET, secretPin: p })).rejects.toThrow(/Client secret/);
+    expect(w.opened()).toBe('');
+    expect(w.calls.some(c => c.url === evil)).toBe(false);
+    expect(w.calls.some(c => (c.body ?? '').includes(SECRET))).toBe(false);
+    expect(p.origin).toBe('https://kc.example.com');
+    // a first use is the pin itself: nothing pinned yet, so it pins what discovery names (the user typed the server)
+    const first = pin();
+    await world({ tokenEndpoint: evil }).oauth.login('g', MCP, { clientId: 'cid', clientSecret: SECRET, secretPin: first });
+    expect(first.origin).toBe('https://evil.example.net');
+  });
+
+  it('a secret handed over without its pin is refused, and no token request carries it', async () => {
+    const w = world();
+    await expect(w.oauth.login('g', MCP, { clientId: 'cid', clientSecret: SECRET })).rejects.toThrow(/Client secret/);
+    expect(w.calls.some(c => (c.body ?? '').includes(SECRET))).toBe(false);
   });
 });
 
@@ -335,10 +370,51 @@ describe('MCP OAuth: the client secret in the store and the service', () => {
     expect(JSON.stringify(svc.views())).not.toContain(SECRET);
     const login = vi.spyOn(svc.oauth, 'login').mockResolvedValue({} as OAuthSession);
     await svc.login('gm');
-    expect(login.mock.calls[0]![2]).toEqual({ clientId: 'cid', scope: 'https://www.googleapis.com/auth/gmail.readonly', clientSecret: SECRET });
+    expect(login.mock.calls[0]![2]).toMatchObject({ clientId: 'cid', scope: 'https://www.googleapis.com/auth/gmail.readonly', clientSecret: SECRET });
+    // the pin the login gets reads and writes the stored one
+    const pinArg = (login.mock.calls[0]![2] as { secretPin: { origin?: string; set(o: string): void } }).secretPin;
+    expect(pinArg.origin).toBeUndefined();
+    pinArg.set('https://kc.example.com');
+    expect(pinArg.origin).toBe('https://kc.example.com');
     expect(JSON.stringify(svc.state())).not.toContain(SECRET);
     expect(svc.deleteSecret({ id: 'gm', slot: OAUTH_SECRET_SLOT }).servers[0]!.oauthSecretSet).toBe(false);
     await svc.login('gm');
     expect(login.mock.calls[1]![2]).not.toHaveProperty('clientSecret', SECRET);
+    expect(login.mock.calls[1]![2]).not.toHaveProperty('secretPin');
+  });
+
+  it('the pin is set once, dies with the secret, survives a same-origin edit and is reset by typing the secret again', () => {
+    const dir = tmp('mcp-oauth-pin');
+    const st = new McpServerStore(dir, cipher);
+    st.upsert(def);
+    st.pinOAuthSecret('gm', 'https://kc.example.com'); // no secret yet: nothing to pin
+    expect(st.oauthSecretPin('gm')).toBeNull();
+    st.setSecret('gm', OAUTH_SECRET_SLOT, SECRET);
+    expect(st.oauthSecretPin('gm')).toBeNull();
+    st.pinOAuthSecret('gm', 'https://kc.example.com');
+    st.pinOAuthSecret('gm', 'https://evil.example.net'); // the first one stays
+    expect(st.oauthSecretPin('gm')).toBe('https://kc.example.com');
+    expect(new McpServerStore(dir, cipher).oauthSecretPin('gm')).toBe('https://kc.example.com');
+    expect(fs.readFileSync(`${dir}/mcp-secrets.json`, 'utf8')).not.toContain(SECRET);
+    st.upsert({ ...def, label: 'Gmail 2' }, 'gm');
+    expect(st.oauthSecretPin('gm')).toBe('https://kc.example.com');
+    st.setSecret('gm', OAUTH_SECRET_SLOT, `${SECRET}x`);
+    expect(st.oauthSecretPin('gm')).toBeNull();
+    st.pinOAuthSecret('gm', 'https://kc.example.com');
+    st.deleteSecret('gm', OAUTH_SECRET_SLOT);
+    expect(st.oauthSecretPin('gm')).toBeNull();
+  });
+
+  it('a session saved before a restart has its client secret redacted again at start', () => {
+    const dir = tmp('mcp-oauth-redact');
+    const st = new McpServerStore(dir, cipher);
+    st.upsert(def);
+    const fake = ['SESSIONONLY', 'made', 'up', '5678'].join('-');
+    st.setOAuthSession('gm', JSON.stringify({ access: 'x', clientSecret: fake }), { at: 1 });
+    expect(redact(`leak ${fake}`)).toContain(fake); // not registered yet
+    const svc = new McpServersService({ userData: dir, cipher, mcp: new McpServer({ name: 't', version: '1' }), context: () => null,
+      connect: () => ({ serverInfo: undefined, tools: async () => [], call: async () => ({ content: [] }), close() {} }) });
+    void svc.oauth.access('gm'); // the first read of a stored session goes through the load dep
+    expect(redact(`leak ${fake}`)).not.toContain(fake);
   });
 });

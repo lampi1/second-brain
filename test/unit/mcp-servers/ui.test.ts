@@ -4,7 +4,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { defOf, emptyForm, formOf, hubTotals, monogram, rolesWith, runsAs, serverStatus } from '../../../src/renderer/lib/mcp-servers';
+import { defOf, emptyForm, formOf, hubTotals, monogram, rolesWith, runsAs, saveServer, serverStatus } from '../../../src/renderer/lib/mcp-servers';
 import { HubTotalsRow, ServerCard, ServerEditor } from '../../../src/renderer/components/ConnectorsHub';
 import type { McpServerView, McpServersState } from '../../../src/shared/mcp-servers';
 import { setLang } from '../../../src/renderer/i18n';
@@ -35,6 +35,40 @@ describe('readings', () => {
     expect(d).toMatchObject({ id: 'azure-devops', transport: 'stdio', args: ['-y', '@azure-devops/mcp'], env: { ORG: 'contoso' }, secrets: [{ where: 'env', name: 'AZURE_DEVOPS_PAT' }] });
     expect(formOf(d)).toMatchObject({ args: '-y\n@azure-devops/mcp', env: 'ORG=contoso', tokenName: 'AZURE_DEVOPS_PAT' });
     expect(defOf({ ...formOf(broken), headers: 'X-Team: web' }, broken)).toMatchObject({ id: 'gh', headers: { 'X-Team': 'web' }, secrets: [{ where: 'header', name: 'Authorization', prefix: 'Bearer ' }] });
+  });
+});
+
+// The editor's Salva (ADR 0373): the secret box is cleared only after the secret is stored; a refusal keeps the text.
+describe('saveServer', () => {
+  const def = defOf({ ...formOf(broken), label: 'Gmail' }, broken);
+  const fake = (calls: string[], o: { saveFails?: boolean; secretFails?: boolean } = {}) => ({
+    save: async (a: { def: { id: string }; previousId?: string }) => { calls.push(`save:${a.def.id}:${a.previousId ?? ''}`); if (o.saveFails) throw new Error('def refused'); return state; },
+    setSecret: async (a: { id: string; slot: string; value: string }) => { calls.push(`secret:${a.id}:${a.slot}`); if (o.secretFails) throw new Error('secret refused'); return state; },
+  });
+
+  it('saves the definition, then the secret, and reports no error', async () => {
+    const calls: string[] = [];
+    const r = await saveServer(fake(calls), def, 'gh', 'typed');
+    expect(calls).toEqual(['save:gh:gh', 'secret:gh:oauth:client-secret']);
+    expect(r.secretError).toBeUndefined();
+    expect(r.savedId).toBe('gh');
+  });
+
+  it('a refused secret does not throw and is returned, so the editor keeps the text and shows the error', async () => {
+    const calls: string[] = [];
+    const r = await saveServer(fake(calls, { secretFails: true }), def, undefined, 'typed');
+    expect((r.secretError as Error).message).toBe('secret refused');
+    expect(r.savedId).toBe('gh');
+    expect(calls).toEqual(['save:gh:', 'secret:gh:oauth:client-secret']);
+  });
+
+  it('a refused definition throws and the secret is never sent; no secret typed means no secret call', async () => {
+    const calls: string[] = [];
+    await expect(saveServer(fake(calls, { saveFails: true }), def, 'gh', 'typed')).rejects.toThrow('def refused');
+    expect(calls).toEqual(['save:gh:gh']);
+    const none: string[] = [];
+    await saveServer(fake(none), def, 'gh', '');
+    expect(none).toEqual(['save:gh:gh']);
   });
 });
 

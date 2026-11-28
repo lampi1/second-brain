@@ -20,7 +20,7 @@ import { IconPlus, IconRefresh } from './Icons';
 import { locale, t } from '../i18n';
 import { toast } from '../store/ui';
 import { holdUpdate } from '../lib/update-barrier';
-import { defOf, emptyForm, formOf, hubTotals, monogram, onMcpDraft, rolesWith, runsAs, serverStatus, takeMcpDraft, useMcpServers, type ServerForm } from '../lib/mcp-servers';
+import { defOf, emptyForm, formOf, hubTotals, monogram, onMcpDraft, rolesWith, runsAs, saveServer, serverStatus, takeMcpDraft, useMcpServers, type ServerForm } from '../lib/mcp-servers';
 import { MCP_ACCESS_ROLES, type McpServerDef } from '@shared/mcp-servers';
 import { McpAddPanel, ServerRoles } from './McpAddPanel';
 import '../styles/connectors-hub.css';
@@ -133,12 +133,15 @@ export function ServerEditor({ server, onDone }: { server: McpServerView | null;
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   // the OAuth client secret: write-only (the card never gets it back, only whether one is saved)
   const [secretText, setSecretText] = useState('');
+  // the id the definition was saved under when only its secret was refused: the next Salva renames from it
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const errorText = (e: unknown): string => e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : t('hub.error');
   const removeSecret = async () => {
     if (!server) return;
     setBusy(true); setError('');
     // the editor stays open: the app's «mcpservers:changed» brings the card's new «not set»
     try { await window.sb.invoke('mcpservers:deleteSecret', { id: server.id, slot: OAUTH_SECRET_SLOT }); }
-    catch (e) { setError(e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : t('hub.error')); }
+    catch (e) { setError(errorText(e)); }
     finally { setBusy(false); }
   };
   const set = <K extends keyof ServerForm>(k: K, v: ServerForm[K]) => setF(x => ({ ...x, [k]: v }));
@@ -146,11 +149,14 @@ export function ServerEditor({ server, onDone }: { server: McpServerView | null;
     setBusy(true); setError('');
     try {
       const def = defOf(f, server ?? undefined);
-      let st = await window.sb.invoke('mcpservers:save', { def, ...(server ? { previousId: server.id } : {}) });
-      // the OAuth client secret goes alone to the secret store, after the definition is saved (never inside it)
-      const secret = f.transport === 'http' ? secretText.trim() : '';
-      if (secret) { setSecretText(''); st = await window.sb.invoke('mcpservers:setSecret', { id: def.id, slot: OAUTH_SECRET_SLOT, value: secret }); }
-      onDone(st);
+      // the OAuth client secret goes alone to the secret store, after the definition is saved (never inside it); the
+      // typed text is cleared only once it is saved: a refusal keeps it, with the error, and the editor stays open
+      const r = await saveServer({ save: a => window.sb.invoke('mcpservers:save', a), setSecret: a => window.sb.invoke('mcpservers:setSecret', a) },
+        def, savedId ?? server?.id, f.transport === 'http' ? secretText.trim() : '');
+      setSavedId(r.savedId);
+      if (r.secretError !== undefined) { setError(errorText(r.secretError)); return; }
+      setSecretText('');
+      onDone(r.state);
     }
     catch (e) { setError(e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : t('hub.error')); }
     finally { setBusy(false); }

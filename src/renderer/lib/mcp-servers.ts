@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'react';
 import type { ConnectorState } from '@shared/connectors';
 import type { McpServerDef, McpServerView, McpServersState, McpToolAccess } from '@shared/mcp-servers';
-import { MCP_ACCESS_ROLES, accessOn, idFrom, toolAllowed } from '@shared/mcp-servers';
+import { MCP_ACCESS_ROLES, OAUTH_SECRET_SLOT, accessOn, idFrom, toolAllowed } from '@shared/mcp-servers';
 import { shellWords, type McpDraft } from '@shared/mcp-paste';
 
 export type ServerStatus = 'ok' | 'untested' | 'missing' | 'failed' | 'off';
@@ -99,6 +99,19 @@ export function defOf(f: ServerForm, base?: McpServerDef): McpServerDef {
   const scope = f.oauthScope.trim();
   const oauth = clientId || port !== undefined || scope ? { ...(clientId ? { clientId } : {}), ...(port !== undefined ? { port } : {}), ...(scope ? { scope } : {}) } : undefined;
   return { ...common, url: f.url.trim(), ...(Object.keys(headers).length ? { headers } : {}), ...(oauth ? { oauth } : {}) };
+}
+
+/** The editor's Salva: the definition first, then (an http server's) OAuth client secret alone to the secret store,
+ *  never inside the definition (ADR 0373). A refused definition throws and nothing is saved. A refused secret does not
+ *  throw: the definition is saved (`savedId` is its id, the next save renames from it) and `secretError` says why, so
+ *  the editor keeps what was typed and shows the error instead of losing the secret. */
+export async function saveServer(api: { save(args: { def: McpServerDef; previousId?: string }): Promise<McpServersState>; setSecret(args: { id: string; slot: string; value: string }): Promise<McpServersState> },
+  def: McpServerDef, previousId: string | undefined, secret: string): Promise<{ state: McpServersState; savedId: string; secretError?: unknown }> {
+  let state = await api.save({ def, ...(previousId ? { previousId } : {}) });
+  if (!secret) return { state, savedId: def.id };
+  try { state = await api.setSecret({ id: def.id, slot: OAUTH_SECRET_SLOT, value: secret }); }
+  catch (secretError) { return { state, savedId: def.id, secretError }; }
+  return { state, savedId: def.id };
 }
 
 /** "npx -y @azure-devops/mcp" or "api.githubcopilot.com": how the server starts, short. */

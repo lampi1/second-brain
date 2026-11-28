@@ -129,7 +129,8 @@ export function fingerprint(def: McpServerDef, slot: McpSecretSlot): string {
   return crypto.createHash('sha256').update(`${where}|${slotKey(slot)}`).digest('hex').slice(0, 32);
 }
 
-interface Saved { cipher: string; mask: string; bound: string }
+/** `pin`: only the OAuth client secret's slot has it, the origin of the token endpoint it was first sent to (ADR 0373) */
+interface Saved { cipher: string; mask: string; bound: string; pin?: string }
 /** A server as it was, to put it back (ADR 0207: «Annulla» of a removal or a change): its definition, each role's
  *  access, its last test and its tokens still encrypted (never decrypted to be kept). Its tokens wait in the secret
  *  file's `undo` section (park / unpark), never in the undo journal (service.ts, mcp-undo.json). */
@@ -380,6 +381,19 @@ export class McpServerStore {
   oauthSecretSet(id: string): boolean {
     const def = this.def(id), s = this.secrets[id]?.[OAUTH_SECRET_KEY];
     return !!def && !!s && s.bound === oauthBound(def);
+  }
+  /** The origin of the token endpoint the client secret was first sent to, or null (not used yet, or no secret). The
+   *  secret goes only there: a login server that appears elsewhere later is refused until the secret is typed again. */
+  oauthSecretPin(id: string): string | null {
+    const def = this.def(id), s = this.secrets[id]?.[OAUTH_SECRET_KEY];
+    return def && s && s.bound === oauthBound(def) && typeof s.pin === 'string' ? s.pin : null;
+  }
+  /** Remembers where the client secret is about to go (first use only; a pin already there stays). */
+  pinOAuthSecret(id: string, origin: string): void {
+    const def = this.def(id), s = this.secrets[id]?.[OAUTH_SECRET_KEY];
+    if (!def || !s || s.bound !== oauthBound(def) || typeof s.pin === 'string') return;
+    this.secrets[id] = { ...this.secrets[id], [OAUTH_SECRET_KEY]: { ...s, pin: origin } };
+    this.saveSecrets();
   }
   /** Main only, right before «Accedi»: the client secret, or null (none, moved, or not decryptable). */
   oauthClientSecret(id: string): string | null {

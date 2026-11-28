@@ -30,7 +30,17 @@ as authorization server and `resource` = the server's URL; the token endpoint is
    `offline_access` scope): when the authorization endpoint is `accounts.google.com` the login adds
    `access_type=offline` and `prompt=consent`. No other server gets them.
 5. **The form.** «Modifica» of a remote server has «Client secret OAuth» (a password box: empty = keep, «Salvato» and
-   «Rimuovi» when one is saved) and «Scope OAuth».
+   «Rimuovi» when one is saved) and «Scope OAuth». The box is cleared only after the secret is stored; if the store
+   refuses it, the error shows and the typed text stays (`saveServer`, a pure function so it is tested).
+6. **Where the secret may go.** The login server comes from discovery, which the MCP server steers (its
+   `resource_metadata` can name any https origin, and without `resource` in it the origin check is skipped), so the
+   secret is bound to the origin of the token endpoint it is first sent to (trust on first use). The pin lives on the
+   secret's slot (encrypted file, `pin`); a later login whose token endpoint is on another origin is refused before the
+   browser opens, nothing is sent, and the message says to type the secret again if the change is right. Typing the
+   secret again resets the pin; an edit of the same origin keeps it; deleting the secret drops it. A login handed a
+   secret without its pin handle is refused.
+7. **Redaction at start.** The stored session's `clientSecret` is added to the logs' redaction when the session is
+   read, not only when it is written, so a restart does not leave it unredacted.
 
 ## Consequences
 
