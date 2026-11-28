@@ -38,8 +38,8 @@ no scheduled requests, no routines in the app)
    connectors; `ActivitiesState.gmailConnector` says which), a Gmail run reads through the model: the cheapest model, the same
    cap, the same measured cost on the run, `usedModel` true. The reader is a separate module so that the connector replaces it
    without touching the engine (`ActivitySourceReader`).
-7. **The Orchestrator's tool** `app_activity`: `list`, `create`, `update`, `enable`, `disable`, `delete`, `run`, `history`
-   (`ActivityToolArgs`). No approval: the Orchestrator counts as the user (ADR 0275). `create` and `update` go through the same
+7. **The Orchestrator's tool** `app_activity`: `list`, `create`, `update`, `enable`, `disable`, `delete`, `run`, `history`, `pause`
+   (`ActivityToolArgs`; `pause` takes `paused: boolean`, the global pause). No approval: the Orchestrator counts as the user (ADR 0275). `create` and `update` go through the same
    `validateActivityInput` as the page: a wrong field is an error, never fixed silently.
 8. **The page «Attività pianificate»** replaces «Task» in the menu: a row per activity (switch, schedule in words, last run
    with read · kept · proposals · cost, «Esegui ora», edit, delete), the detail with the last 20 runs, a global pause, and
@@ -55,7 +55,9 @@ no scheduled requests, no routines in the app)
 - The standing rules «never automatic loops or crons» and «mail/Teams tours stay off» are overridden for these activities
   only, by the owner's words above; they stay for everything else. A brain change that states this follows the owner's ok.
 - A quiet inbox costs nothing; a busy one costs at most `dailyCap` cheap passes a day per activity, shown on the page.
-- The Task page, `tasks:*` channels and `tasks.enabled` / `tasks.everyMin` go when the page part lands (the DevOps reader stays);
-  until then nothing is removed.
+- The Task page, its QA tab, its reading settings (`TaskReadSettings`) and the «Discuti» button went with the integration. The DevOps
+  reader (`TaskService`), the `tasks:*` channels, `tasks.enabled` / `tasks.everyMin` / `tasks.sound`, the morning brief and the feed
+  kinds `task` / `task-alert` stay: the DevOps activity runs its own read through the same runner, and the other readers still use
+  this data.
 - Tests: `test/unit/activities.test.ts` (validation, schedule, filter, cursor, clip); the engine, tool and page parts add
   their own (`docs/tasks/scheduled-activities.md`).

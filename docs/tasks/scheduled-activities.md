@@ -43,3 +43,13 @@ different shape asks; it never edits another part's files).
   page's route once it exists.
 - The `activities` concept card (`src/shared/concept-guide.ts`) describes the page's behaviour in words; the page part should extend
   its points and sources with the page's files and screenshot.
+
+## Integration status
+
+All four parts are merged on `feat/scheduled-activities` and wired in `src/main/wiring-builders.ts` (`buildActivities`): the
+engine's timer starts and stops with the app; readers are DevOps (`devops-me.mjs`, the same runner as `TaskService`), Outlook and
+Teams (`mcpReader` through `McpGateway.callServer`, the app's own caller `#app-activities`) and Gmail (`createGmailReader` over the
+first MCP server whose id contains «gmail»; none = the visible error «connettore Gmail non collegato»). The triage pass is a hidden
+no-tool `haiku` run; a proposal reaches the Orchestrator as one grouped news (`OrchestratorWake.activityNews`, a «stalled» line
+tagged `activity`). `app_activity` has the global `pause` action. The Task page is removed; old links (task, oggi, adesso, dafare,
+devops) open «Attività pianificate» (`PAGE_ALIAS`).

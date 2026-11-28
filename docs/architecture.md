@@ -13,7 +13,7 @@
 │   mcp-servers/ store (+ tokens) · gateway · client · import (ADR 0086)        │
 │   brain/   brain folder config · Live feed (fs.watch + chats.mjs) · notify    │
 │            usage · costs · budget · estimates · quality · model defaults      │
-│   tasks/   Task page (DevOps reader, read only) · run/ "Esegui" shell blocks  │
+│   tasks/   DevOps reader (read only; feeds the activities) · run/ "Esegui" shell blocks  │
 │   search/  Ctrl+K index · skills/ Skill tab · update/ Aggiorna (Settings)     │
 │   brainmodel/ Brain section: skills, rules, memory, jobs + undo (0077, 0082)  │
 │   overlay.ts  request layer: a top-most view for questions over browser tabs  │
