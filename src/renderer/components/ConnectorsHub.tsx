@@ -178,16 +178,14 @@ export function ServerEditor({ server, onDone }: { server: McpServerView | null;
           {field('oauthClientId', t('hub.f.clientId'), { mono: true, placeholder: 'second-brain', tip: t('hub.f.clientIdTip') })}
           {field('oauthPort', t('hub.f.port'), { mono: true, placeholder: '8765', tip: t('hub.f.portTip') })}
         </div>
-        <div className="hub-form-row">
-          <Field label={t('hub.f.clientSecret')} tip={t('hub.f.clientSecretTip')}>
-            {id => <div className="hub-secret" data-testid="hub-oauth-secret">
-              <input id={id} className="st-input mono" type="password" autoComplete="new-password" spellCheck={false} value={secretText} disabled={busy}
-                placeholder={server?.oauthSecretSet ? t('hub.f.clientSecretSet') : t('hub.f.clientSecretNone')} onChange={e => setSecretText(e.target.value)} />
-              {server?.oauthSecretSet && <small className="hub-muted" data-testid="hub-oauth-secret-state">{t('hub.f.clientSecretSaved')} <button type="button" className="btn btn-ghost btn-s" disabled={busy} onClick={() => void removeSecret()}>{t('hub.f.clientSecretRemove')}</button></small>}
-            </div>}
-          </Field>
-          {field('oauthScope', t('hub.f.scope'), { mono: true, placeholder: 'https://www.googleapis.com/auth/gmail.readonly', tip: t('hub.f.scopeTip') })}
-        </div>
+        <Field label={t('hub.f.clientSecret')} tip={t('hub.f.clientSecretTip')}>
+          {id => <div className="hub-secret" data-testid="hub-oauth-secret">
+            <input id={id} className="st-input mono" type="password" autoComplete="new-password" spellCheck={false} value={secretText} disabled={busy}
+              placeholder={server?.oauthSecretSet ? t('hub.f.clientSecretSet') : t('hub.f.clientSecretNone')} onChange={e => setSecretText(e.target.value)} />
+            {server?.oauthSecretSet && <small className="hub-muted" data-testid="hub-oauth-secret-state">{t('hub.f.clientSecretSaved')} <button type="button" className="btn btn-ghost btn-s" disabled={busy} onClick={() => void removeSecret()}>{t('hub.f.clientSecretRemove')}</button></small>}
+          </div>}
+        </Field>
+        {field('oauthScope', t('hub.f.scope'), { mono: true, placeholder: 'https://www.googleapis.com/auth/gmail.readonly', tip: t('hub.f.scopeTip') })}
       </>}
       <div className="hub-form-row">
         {field('tokenName', t(f.transport === 'stdio' ? 'hub.f.tokenEnv' : 'hub.f.tokenHeader'), { mono: true, placeholder: f.transport === 'stdio' ? 'AZURE_DEVOPS_PAT' : 'Authorization', tip: t('hub.f.tokenTip') })}
