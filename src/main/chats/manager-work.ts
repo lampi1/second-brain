@@ -14,7 +14,7 @@ import { ToolRefusal } from '../mcp/refusal';
 import type { UserTaskEvents, AgentRun, AgentRunOutcome } from '../../shared/agents';
 import { goalText } from '../../shared/agent-label';
 import { ownerSource, type TaskAssignmentOptions } from '../../shared/delegation';
-import { PLAN_APPROVED, PLAN_PUT_AWAY, PLAN_REPLAN, PLAN_REPROPOSE, PLAN_RESUMED, planChange, askingPlan, strategyPrompt, withAdded, withDelegated, withoutDropped, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
+import { PLAN_APPROVED, PLAN_PUT_AWAY, PLAN_HANDED, PLAN_REPLAN, PLAN_REPROPOSE, PLAN_RESUMED, planChange, askingPlan, strategyPrompt, withAdded, withDelegated, withoutDropped, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
 import { approvalGate, type DoubtEvidence, type PlanDoubt } from '../../shared/plan-doubts';
 import { runMetrics } from '../agents/run-metrics';
 import { standings, withStandings, type TokenPrice } from '../agents/standing';
@@ -91,6 +91,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
    *  also once approved or finished; the user approves it as any plan. */
   planPropose(chatId: string, steps: PlanStep[], doneWhen?: string, revise = false, doubts: PlanDoubt[] | undefined = this.chats.get(chatId)?.s.plan?.doubts): StrategyPlan {
     const r = this.need(chatId), plan = r.s.plan;
+    if (plan?.handed) throw new Error(`plan_propose refused: ${PLAN_HANDED}`);
     if (!plan) throw new Error('plan_propose: only a Strategist the Orchestrator or the user started has a plan with the user.');
     if (!revise && (plan.phase === 'running' || plan.phase === 'done')) throw new Error('plan_propose: the plan is approved and under way; update its steps with plan_update, or bring it to the current standard with plan_propose revise: true.');
     if (!revise && plan.steps.some(s => s.state !== 'todo')) throw new Error('plan_propose: some steps of this plan already started; propose it again with revise: true, keeping them with { keep: <number> }.');
@@ -149,6 +150,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
   /** plan_update: a step the Strategist does itself (or corrects) moves on. */
   planUpdate(chatId: string, i: number, state: StepState, proof?: string): StrategyPlan {
     const r = this.need(chatId), plan = r.s.plan;
+    if (plan?.handed) throw new Error(`plan_update refused: ${PLAN_HANDED}`);
     const step = plan?.steps[i];
     // a revision waits for the user: the steps already started go on (ADR 0342), no other one moves
     const going = !!step && step.state !== 'todo' && state !== 'todo';
@@ -177,6 +179,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
   planAdd(chatId: string, step: PlanStep): StrategyPlan {
     const r = this.need(chatId), plan = r.s.plan;
     if (!plan) throw new Error('plan_update add: only a Strategist with a plan approved by the user has steps.');
+    if (plan.handed) throw new Error(`plan_update add refused: ${PLAN_HANDED}`);
     if (plan.stopped) throw new Error('plan_update add: the user stopped this job; wait for the user to resume it.');
     r.s.plan = withAdded(plan, step, Date.now());
     this.persist();
@@ -301,10 +304,62 @@ export abstract class ManagerWork extends ManagerLifecycle {
     log.info('chats', 'job stopped', { chat: chatId, data: { chats: tree.length } });
   }
 
+  /** The plan leaves this chat for another Strategist (ADR 0372): a card that waited is answered, its copy is marked handed over
+   *  (it moves and delegates nothing any more), and what it has at work is interrupted. Nothing is closed. Returns the chats stopped. */
+  async planRelease(chatId: string): Promise<number> {
+    this.planPutAway(chatId);
+    const r = this.need(chatId), { news: _n, ...plan } = r.s.plan ?? { phase: 'asking' as const, clarified: [], steps: [], at: Date.now() };
+    r.s.plan = { ...plan, stopped: true, handed: true };
+    this.persist(true);
+    this.updated(r);
+    const busy = [r, ...this.descendantsOf(chatId)].filter(x => !x.s.closedAt && (x.s.state === 'running' || x.s.state === 'starting' || x.s.state === 'waiting' || !!x.s.queued));
+    // work still waiting for its start never starts
+    for (const x of busy) this.admission?.drop(x.s.id);
+    const failed = (await Promise.allSettled(busy.map(x => this.stop(x.s.id)))).filter(x => x.status === 'rejected') as PromiseRejectedResult[];
+    if (failed.length) log.warn('chats', 'a chat of a handed plan did not stop', { chat: chatId, cause: errText(failed[0]!.reason), hint: 'stop it from its strip', data: { failed: failed.length } });
+    log.info('chats', 'plan handed over', { chat: chatId, data: { stopped: busy.length } });
+    return busy.length;
+  }
+
+  /** A Strategist chat that is already open takes a plan over (ADR 0372): its steps as they are, the answers and doubts, and the
+   *  request as the user's message. It proposes again before anything starts. A message that does not go out changes nothing. */
+  async planTake(chatId: string, from: StrategyPlan, text: string): Promise<void> {
+    const r = this.need(chatId), was = r.s.plan, base = askingPlan(Date.now());
+    // a removal the user never approved removes nothing: every step goes along
+    const taken: StrategyPlan = { ...base, clarified: structuredClone(from.clarified), steps: from.steps.map(({ drop: _d, ...x }) => structuredClone(x)), ...(from.doubts ? { doubts: structuredClone(from.doubts) } : {}), ...(from.doneWhen ? { doneWhen: from.doneWhen } : {}),
+      ...(from.pcOnly ? { pcOnly: true as const } : {}), ...(from.asked ? { asked: from.asked } : {}), ...(from.enough ? { enough: true } : {}) };
+    r.s.plan = taken;
+    this.persist(true);
+    this.updated(r);
+    try { await this.send(chatId, `${text}\n\n${strategyPrompt(taken)}`, undefined, false, undefined, false, { kind: 'user' }); }
+    catch (e) { if (r.s.plan === taken) { r.s.plan = was; this.persist(true); this.updated(r); } throw e; }
+    log.info('chats', 'plan taken over', { chat: chatId, data: { steps: taken.steps.length } });
+  }
+
+  /** What changed in a chat's plan by another hand: told with its next message, no turn of its own. */
+  planNote(chatId: string, line: string): void {
+    const r = this.chats.get(chatId), plan = r?.s.plan;
+    if (!r || !plan || plan.handed) return;
+    r.s.plan = { ...plan, news: [...(plan.news ?? []), line.slice(0, 600)].slice(-10) };
+    this.persist();
+    this.updated(r);
+  }
+
+  /** The chat that has a handed plan now: what the old chat's delegates still report goes there, the results waiting too. */
+  planHandedTo(oldId: string, newId: string): void {
+    const r = this.chats.get(oldId);
+    if (!r?.s.plan?.handed) return;
+    r.s.plan = { ...r.s.plan, handedTo: newId };
+    this.persist(true);
+    this.updated(r);
+    this.moveChildResults(oldId, newId);
+  }
+
   /** «Riprendi» (ADR 0342): the chat is open again and, unless its plan waits for the user, goes on; a plan put away
    *  before its approval is proposed again. One that does not go out leaves the plan stopped. */
   async planResume(chatId: string, cwd?: string): Promise<void> {
     const r = this.need(chatId), plan = r.s.plan;
+    if (plan?.handed) throw new Error('Il piano di questa chat è passato a un altro Strategist: riprendilo dalla pagina Piani.');
     // the engines as they are now (ADR 0361): a job whose engine is stopped and whose role now starts on another one goes on
     // in a linked chat, its plan with it as it is (the approval too); one with children at work stays where they report
     const children = this.openChildren(chatId), moved = !!cwd?.trim() && !sameFolder(cwd, r.s.cwd);
@@ -335,6 +390,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
   async planReplan(chatId: string, text: string): Promise<void> {
     const r = this.need(chatId), plan = r.s.plan, change = text.trim();
     if (!plan) throw new Error('Questo lavoro non ha ancora un piano.');
+    if (plan.handed) throw new Error('Il piano di questa chat è passato a un altro Strategist.');
     if (!change || change.length > 2000) throw new Error('Scrivi cosa cambiare (al massimo 2000 caratteri).');
     if (plan.phase === 'proposed') return this.decidePlan(chatId, 'change', plan.at, change);
     const revising: StrategyPlan = { ...plan, phase: 'revising', at: Math.max(Date.now(), plan.at + 1) };

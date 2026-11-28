@@ -11,12 +11,12 @@ import type { McpTool } from '../mcp/server';
 import { callerOf } from '../mcp/caller';
 import type { Plans, PlanChange } from './service';
 
-export const PLAN_TOOL_ACTIONS = ['list', 'search', 'read', 'create', 'edit', 'replan', 'merge', 'split', 'project', 'approve', 'keep', 'start', 'stop', 'resume', 'archive', 'delete', 'restore', 'compare'] as const;
+export const PLAN_TOOL_ACTIONS = ['list', 'search', 'read', 'create', 'edit', 'replan', 'handoff', 'merge', 'split', 'project', 'approve', 'keep', 'start', 'stop', 'resume', 'archive', 'delete', 'restore', 'compare'] as const;
 export type PlanToolAction = (typeof PLAN_TOOL_ACTIONS)[number];
 /** Who calls: the Orchestrator (everything), or a Strategist (its own plan, and reading). */
 export type PlanCaller = { kind: 'orchestrator' } | { kind: 'strategist'; chatId: string };
 
-export const PLAN_TOOL_TEXT = 'The user\'s plans (ADR 0359): every job and idea is one plan, kept by the app. list (what waits for the user first; trash: true = the trash) | search (query: words in titles, goals, steps) | read (plan: id or exact title; full text with steps, proofs, what each waits for, decisions) | create (title, idea, goal, why, project, constraints, links: written down, no chat starts) | edit (plan + set {title, idea, goal, why, project, constraints, links} and/or add / remove by name {constraints, links} and/or steps: operations add | set | move | remove | cancel | done (with proof) | import; nothing you do not name changes; every save is a version) | replan (text) | merge (plan, other: the other goes to the trash, nothing is lost) | split (plan, numbers, title) | project (plan, project: another project name) | approve | keep | start | stop | resume | archive | delete (to the trash, restore brings it back) | restore | compare (plan, version, other version: what changed). A step is «fatto» only with its proof (what ran, what was read or seen); a step you finish yourself: edit with steps [{op: "done", step, proof}]. Closing a plan or losing a chat never changes a step. Resume goes to the chat that works, never to a second Strategist. Only the user deletes for good.';
+export const PLAN_TOOL_TEXT = 'The user\'s plans (ADR 0359): every job and idea is one plan, kept by the app. list (what waits for the user first; trash: true = the trash) | search (query: words in titles, goals, steps) | read (plan: id or exact title; full text with steps, proofs, what each waits for, decisions) | create (title, idea, goal, why, project, constraints, links: written down, no chat starts) | edit (plan + set {title, idea, goal, why, project, constraints, links} and/or add / remove by name {constraints, links} and/or steps: operations add | set | move | remove | cancel | done (with proof) | import; nothing you do not name changes; every save is a version) | replan (text) | handoff (plan, text?: what to change or add; to?: the chat id of an open Strategist with no job of its own, else a new one starts; only when the user asks: the old Strategist stops, every step keeps its state and proof, the new one proposes again) | merge (plan, other: the other goes to the trash, nothing is lost) | split (plan, numbers, title) | project (plan, project: another project name) | approve | keep | start | stop | resume | archive | delete (to the trash, restore brings it back) | restore | compare (plan, version, other version: what changed). A step is «fatto» only with its proof (what ran, what was read or seen); a step you finish yourself: edit with steps [{op: "done", step, proof}]. Closing a plan or losing a chat never changes a step. Resume goes to the chat that works, never to a second Strategist. Only the user deletes for good.';
 
 export const PLAN_TOOL_PROPS = {
   action: { type: 'string', enum: [...PLAN_TOOL_ACTIONS] },
@@ -26,7 +26,8 @@ export const PLAN_TOOL_PROPS = {
   archived: { type: 'boolean', description: 'list: the archived ones' },
   trash: { type: 'boolean', description: 'list: the trash' },
   title: { type: 'string' }, idea: { type: 'string' }, goal: { type: 'string' }, why: { type: 'string' }, project: { type: 'string' },
-  text: { type: 'string', description: 'replan: what to change' },
+  text: { type: 'string', description: 'replan, handoff: what to change or add' },
+  to: { type: 'string', description: 'handoff: the chat id of the Strategist that takes it; empty = a new one' },
   set: { type: 'object', description: 'edit: fields to set (title, idea, goal, why, project, constraints[], links[]); null empties a text' },
   add: { type: 'object', description: 'edit: constraints[] and links[] {kind file|link|plan|chat, ref, label?} to add' },
   remove: { type: 'object', description: 'edit: constraints[] (the exact lines) and links[] (the refs) to take away' },
@@ -34,7 +35,7 @@ export const PLAN_TOOL_PROPS = {
   constraints: { type: 'array', items: { type: 'string' } }, links: { type: 'array', items: { type: 'object' } },
   numbers: { type: 'array', items: { type: 'integer' }, description: 'split: the numbers of the steps that go to the new plan' },
   version: { type: 'integer', description: 'compare: a version number' },
-  cwd: { type: 'string', description: 'resume, start: another existing absolute folder for its Strategist' },
+  cwd: { type: 'string', description: 'resume, start, handoff: another existing absolute folder for its new Strategist' },
 } as const;
 
 const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
@@ -90,7 +91,7 @@ export async function planAction(plans: Plans, who: PlanCaller, a: Record<string
   // what changes a plan: the Orchestrator everywhere; a Strategist only on its own plan, and never the user's decisions
   const own = who.kind === 'strategist' && plans.get(id)?.owner?.chatId === who.chatId;
   if (who.kind === 'strategist') {
-    if (['approve', 'keep', 'start', 'stop', 'resume', 'archive', 'delete', 'restore'].includes(action)) throw new Error(`${action}: the user decides that, through the Orchestrator.`);
+    if (['approve', 'keep', 'start', 'stop', 'resume', 'handoff', 'archive', 'delete', 'restore'].includes(action)) throw new Error(`${action}: the user decides that, through the Orchestrator.`);
     if (action === 'merge' && plans.get(planOf(plans, a.other))?.owner?.chatId !== who.chatId) throw new Error('merge: the other plan is not yours either: the merge sends it to the trash. Say to the Orchestrator what you would merge.');
     if (!own) throw new Error('This plan is not yours: you only read it. Say what you would change to the Orchestrator (send_to_chat), which edits it.');
   }
@@ -102,6 +103,10 @@ export async function planAction(plans: Plans, who: PlanCaller, a: Record<string
     if (!change.set && !change.add && !change.remove && !change.steps) throw new Error('edit: set, add, remove or steps');
     const m = await plans.change(id, change, by);
     return { ok: true, plan: m.id, version: m.version };
+  }
+  if (action === 'handoff') {
+    const r = await plans.handoff(id, { ...(text(a.to) ? { to: text(a.to) } : {}), ...(text(a.text) ? { text: text(a.text) } : {}), ...(text(a.cwd) ? { cwd: text(a.cwd) } : {}) }, by);
+    return { ok: true, plan: r.plan.id, state: r.plan.state, chatId: r.plan.owner?.chatId, interrupted: r.interrupted };
   }
   if (action === 'merge') { const m = await plans.merge(id, planOf(plans, a.other), by); return { ok: true, plan: m.id, version: m.version }; }
   if (action === 'split') { const m = await plans.split(id, (Array.isArray(a.numbers) ? a.numbers : []).map(Number), text(a.title) || 'Piano diviso', by); return { ok: true, plan: m.id }; }

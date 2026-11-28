@@ -10,15 +10,18 @@ import type { ChatService } from '../services';
 
 const STEP = { todo: 'da fare', now: 'in corso', blocked: 'bloccato', partial: 'fatto in parte', done: 'fatto', cancelled: 'annullato', check: 'da verificare' } as const;
 
+/** what a Strategist that takes a plan over is told (ADR 0372) */
+export const HANDED_TEXT = 'Questo lavoro ti passa da un altro Strategist, che non lo segue più. Leggi il piano (plans read) e controlla a che punto è davvero; i passi già partiti restano ({ keep: <numero> } con plan_propose revise: true), quelli da fare puoi cambiarli e aggiungerne. Il piano aspetta di nuovo il mio ok.';
+
 /** The new Strategist's first message. */
-export function startPrompt(m: Plan, change?: string): string {
+export function startPrompt(m: Plan, change?: string, handed = false): string {
   const plan = m.plan, again = !!plan?.steps.length || !!m.owner;
   return [
     m.idea ?? m.title,
     ...(m.idea ? [`Titolo del lavoro: ${m.title}.`] : []),
     ...(m.goal ? [`Obiettivo: ${m.goal}`] : []), ...(m.why ? [`Perché: ${m.why}`] : []), ...(m.project ? [`Progetto: ${m.project}`] : []),
     ...(m.constraints.length ? ['Vincoli:', ...m.constraints.map(c => `- ${c}`)] : []), ...(m.links.length ? ['File e link:', ...m.links.map(l => `- ${l.ref}${l.label ? ` (${l.label})` : ''}`)] : []),
-    ...(again ? ['Questo lavoro continua: la sua chat di prima non c’è più. Controlla a che punto è davvero prima di proporre il piano, che aspetta di nuovo il mio ok.'] : []),
+    ...(handed ? [HANDED_TEXT] : again ? ['Questo lavoro continua: la sua chat di prima non c’è più. Controlla a che punto è davvero prima di proporre il piano, che aspetta di nuovo il mio ok.'] : []),
     ...(plan?.clarified.length ? ['Risposte già date (non sono un ok al piano):', ...plan.clarified.map(x => `- ${x.q} → ${x.a}`)] : []),
     ...(plan?.steps.length ? ['Piano salvato:', ...plan.steps.map((s, i) => `${i + 1}. ${s.title} (${s.role ? `${s.role}, ` : ''}${STEP[s.state]}${s.proof ? `, prova: ${s.proof.text}` : ''})`)] : []),
     ...(change ? [`Cosa cambiare: ${change}`] : []),
@@ -33,11 +36,11 @@ export interface StartDeps {
   folderOf(map: Plan): string | null;
 }
 
-export const strategistStarter = (d: StartDeps) => async (m: Plan, change: string | undefined, by: string, asked?: string): Promise<ChatSummary> => {
+export const strategistStarter = (d: StartDeps) => async (m: Plan, change: string | undefined, by: string, asked?: string, handed = false): Promise<ChatSummary> => {
   // the folder the user (or the Orchestrator) named, else the last one it used (ADR 0362)
   const cwd = asked?.trim() || d.folderOf(m);
   if (!cwd) throw new Error('Non so in quale cartella lavorare: scegli prima la cartella del cervello.');
-  const prompt = startPrompt(m, change);
+  const prompt = startPrompt(m, change, handed);
   return d.chats.create({ harness: d.harness(), cwd, title: m.title, prompt: by === 'user' ? prompt : `${ORCHESTRATOR_USER_LABEL}\n\n${prompt}`, goal: (change ? `${m.title}: ${change}` : m.idea ?? m.title).slice(0, PLAN_LIMITS.change), orchestrator: false, roleId: 'strategist' },
     'agent', undefined, undefined, { planId: m.id, ...(m.plan ? { resumePlan: m.plan } : {}) });
 };

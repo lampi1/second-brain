@@ -26,7 +26,11 @@ import type { ChatSummary, PendingRequest } from '@shared/contract';
 import { approvalGate } from '@shared/plan-doubts';
 import { PLAN_LIMITS, planActions, stepViews, waitsForUser, planInfo, type Plan, type PlanAction, type PlanInfo, type PlanLink, type PlanState, type PlanFull } from '@shared/plan';
 import { applySteps, type StepOp } from '@shared/plan-edit';
+import type { StrategyPlan } from '@shared/strategy';
 import { errText, log } from '../log';
+import { ORCHESTRATOR_USER_LABEL } from '@shared/agent-label';
+import { ended } from '@shared/plan-steps';
+import { HANDED_TEXT } from './start';
 import { follow, left, ownsJob, requestOf, settle, stateLine, summaryOf, taskOf, titleOf } from './follow';
 import { asksOf, liveOf, movesBelow, type LiveInput } from './live';
 import { LiveMemory, liveKey } from './live-memory';
@@ -41,6 +45,14 @@ export interface PlanChats {
   planResume(chatId: string, cwd?: string): Promise<void>;
   planReplan(chatId: string, text: string): Promise<void>;
   planPutAway(chatId: string): void;
+  /** the plan leaves this chat for another Strategist (ADR 0372); returns how many chats it interrupted */
+  planRelease?(chatId: string): Promise<number>;
+  /** an open Strategist chat takes a plan over */
+  planTake?(chatId: string, plan: StrategyPlan, text: string): Promise<void>;
+  /** told to the chat with its next message */
+  planNote?(chatId: string, line: string): void;
+  /** which chat has the plan a chat handed over */
+  planHandedTo?(oldChatId: string, newChatId: string): void;
   /** the steps of the plan a live chat carries, by explicit operations (ChatManager.planEdit) */
   planEdit?(chatId: string, ops: readonly StepOp[], by: 'user' | 'strategist'): void;
   /** the open requests, for whom a chat waits */
@@ -61,7 +73,7 @@ export interface PlansDeps {
   /** tells the page a map changed */
   emit(id: string): void;
   /** opens a Strategist for a map (an idea, or a job whose chat is gone); the chat carries the map's id */
-  startStrategist?(map: Plan, change: string | undefined, by: string, cwd?: string): Promise<ChatSummary>;
+  startStrategist?(map: Plan, change: string | undefined, by: string, cwd?: string, handed?: boolean): Promise<ChatSummary>;
   /** a plan just came to wait for the user's ok: its page opens (the chat that owns it) */
   show?(chatId: string): void;
   now?: () => number;
@@ -77,6 +89,12 @@ const ORDER: readonly PlanState[] = ['toApprove', 'running', 'stopped', 'planned
 export interface PlanFields { title?: string; idea?: string | null; goal?: string | null; why?: string | null; project?: string | null; constraints?: readonly string[]; links?: readonly PlanLink[] }
 /** One save: what to set, what to add or take away by name, and the steps' operations. Nothing else changes. */
 export interface PlanChange { set?: PlanFields; add?: { constraints?: readonly string[]; links?: readonly PlanLink[] }; remove?: { constraints?: readonly string[]; links?: readonly string[] }; steps?: readonly StepOp[] }
+/** An edit that gives an ended plan work again opens it: it is not «finished» or «seen» over steps still to do. */
+const reopened = (m: Plan): Plan => {
+  if (!m.plan?.steps.some(x => !ended(x)) || m.finishedAt === undefined) return m;
+  const { finishedAt: _f, seenAt: _v, archivedAt: _a, ...rest } = m;
+  return settle(rest);
+};
 /** what makes a version: everything but the version's own fields */
 /** the same text whatever the order of the keys: a restart that builds the record in another order is no new version */
 const canon = (v: unknown): unknown => (Array.isArray(v) ? v.map(canon) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).sort(([x], [y]) => x.localeCompare(y)).map(([k, x]) => [k, canon(x)])) : v);
@@ -88,6 +106,8 @@ export class Plans {
   private seenChats = new Map<string, { plan: ChatSummary['plan']; key: string }>();
   /** maps with an action under way: a second click waits for nothing, it is refused */
   private busy = new Set<string>();
+  /** chats taking a plan over right now: their events make no plan of their own meanwhile */
+  private taking = new Set<string>();
 
   /** map → its live status as the page last had it: an event that changes nothing there is not sent */
   private pictures = new Map<string, string>();
@@ -113,6 +133,7 @@ export class Plans {
     for (const c of chats) this.safe(c.id, () => { this.hand(c); this.onChat(c, true); });
     const ids = new Set(chats.map(c => c.id));
     for (const m of [...this.maps.values()]) if (m.owner && !ids.has(m.owner.chatId)) this.safe(m.owner.chatId, () => this.put(left(m, 'gone', this.now()), undefined, !this.memory.removedBy(m.owner!.chatId)));
+    for (const m of [...this.maps.values()]) if (m.owner && m.state !== 'finished' && m.state !== 'archived' && m.stopped?.by !== 'replaced' && chats.find(c => c.id === m.owner!.chatId)?.plan?.handed) this.safe(m.owner.chatId, () => this.put(settle({ ...m, stopped: { at: this.now(), by: 'replaced' } })));
     for (const c of chats) this.liveKeys.set(c.id, { key: liveKey(c), ...(c.parentId ? { parent: c.parentId } : {}) });
     for (const m of this.maps.values()) this.pictures.set(m.id, this.picture(m));
   }
@@ -151,7 +172,7 @@ export class Plans {
   }
 
   private onChat(c: ChatSummary, atLoad = false): void {
-    if (!ownsJob(c)) return;
+    if (!ownsJob(c) || this.taking.has(c.id)) return;
     const key = `${taskOf(c)}|${c.title}|${c.cwd}|${c.closedAt ?? 0}|${c.closedBy ?? ''}|${c.run?.report?.at ?? 0}|${c.run?.report?.via ?? ''}|${c.plan ? '' : c.workSince ?? 0}|${c.continuedFrom?.id ?? ''}|${c.planId ?? ''}`;
     const last = this.seenChats.get(c.id);
     if (last && last.plan === c.plan && last.key === key) return;
@@ -387,6 +408,7 @@ export class Plans {
     const m = this.maps.get(id);
     if (!m) throw new Error('Questo piano non c’è.');
     if (m.deletedAt !== undefined) throw new Error('Il piano è nel cestino: ripristinalo prima di cambiarlo.');
+    if (this.busy.has(id)) throw new Error('Un’azione su questo piano è già in corso.');
     const words = c.set || c.add || c.remove ? this.withWords(m, c) : m;
     if (c.steps?.length) {
       const chat = this.liveChat(m);
@@ -396,12 +418,77 @@ export class Plans {
         this.d.chats.planEdit(chat.id, c.steps, by === 'user' ? 'user' : 'strategist');
         this.sync(id, by);
         const now = this.maps.get(id)!;
-        return this.clone(c.set || c.add || c.remove ? this.put(this.withWords(now, c), by) : now);
+        const saved = c.set || c.add || c.remove ? this.put(this.withWords(now, c), by) : now;
+        if (by !== 'Strategist') this.d.chats.planNote?.(chat.id, `${by}: passi cambiati (${c.steps.map(o => o.op).join(', ')}).`);
+        return this.clone(saved);
       }
       const plan = applySteps(m.plan ?? { phase: 'asking', clarified: [], steps: [], at: this.now() }, c.steps, this.now(), by === 'user' ? 'user' : 'strategist');
-      return this.clone(this.put(settle({ ...words, plan }), by));
+      const opened = reopened(settle({ ...words, plan }));
+      // given work again with no chat to do it: stopped, so «Riprendi» opens one
+      const orphan = m.finishedAt !== undefined && opened.finishedAt === undefined && opened.owner && !this.ownerChat(opened);
+      return this.clone(this.put(orphan ? settle({ ...opened, stopped: { at: this.now(), by: 'gone' } }) : opened, by));
     }
-    return this.clone(this.put(words, by));
+    const saved = this.put(words, by), live = c.set || c.add || c.remove ? this.ownerChat(saved) : null;
+    if (live && by !== 'Strategist') this.d.chats.planNote?.(live.id, `${by}: cambiati ${Object.keys({ ...c.set, ...c.add, ...c.remove }).join(', ')}.`);
+    return this.clone(saved);
+  }
+
+  /** The plan passes to another Strategist (ADR 0372), at the user's request: a new one, or an open one with no job of its own
+   *  under way. The old chat stops and moves nothing any more; every step keeps its state and proof; the new one reads the plan
+   *  and proposes again before anything starts. One active Strategist per plan, as always. */
+  async handoff(id: string, a: { to?: string; text?: string; cwd?: string } = {}, by = 'user'): Promise<{ plan: Plan; interrupted: number }> {
+    const m = this.maps.get(id);
+    if (!m) throw new Error('Questo piano non c’è.');
+    if (m.deletedAt !== undefined) throw new Error('Il piano è nel cestino: ripristinalo prima di passarlo.');
+    const text = (a.text ?? '').trim() || undefined;
+    if (text && text.length > PLAN_LIMITS.change) throw new Error(`Cosa cambiare: al massimo ${PLAN_LIMITS.change} caratteri.`);
+    const old = this.ownerChat(m), target = a.to ? this.d.chats.list().find(c => c.id === a.to) : undefined;
+    if (a.to) {
+      if (!target || target.parentId || target.isOrchestrator || target.agent?.id !== 'strategist' || target.plan?.handed) throw new Error('to: la chat di uno Strategist aperto, non delegato.');
+      if (target.closedAt || target.continuedBy) throw new Error('to: quella chat è chiusa o continua in un’altra: scegline una aperta, o lascia «to» vuoto.');
+      if (target.id === old?.id) throw new Error('Il piano è già di quella chat.');
+      const own = this.ofChat(target.id);
+      if (own && own.id !== id && own.plan?.steps.length && own.state !== 'finished' && own.state !== 'archived') throw new Error(`Quello Strategist ha un lavoro suo aperto («${own.title}»): scegline un altro, o lascia «to» vuoto per uno nuovo.`);
+      if (!this.d.chats.planTake) throw new Error('Qui non si può passare un piano a una chat aperta.');
+    } else if (!this.d.startStrategist) throw new Error('Qui non si può avviare uno Strategist.');
+    if (this.busy.has(id)) throw new Error('Un’azione su questo piano è già in corso.');
+    this.busy.add(id);
+    try {
+      this.sync(id, by);
+      // the plan keeps its own name, whatever the chat that takes it is called
+      this.edit(id, by, x => ({ ...x, titled: true as const }));
+      const snapshot = this.clone(this.maps.get(id)!);
+      const interrupted = old && this.d.chats.planRelease ? await this.d.chats.planRelease(old.id) : 0;
+      try {
+        if (target) await this.take(snapshot, target.id, text, by); else await this.begin(snapshot, by, text, a.cwd, true);
+      } catch (e) {
+        // the old chat let go already: the plan waits, stopped, and «Riprendi» opens a new Strategist
+        this.edit(id, by, x => settle({ ...x, stopped: { at: this.now(), by: 'replaced' } }));
+        throw e;
+      }
+      const heir = this.maps.get(id)!.owner?.chatId;
+      if (old && heir && heir !== old.id) this.d.chats.planHandedTo?.(old.id, heir);
+      log.info('plans', 'plan passed to another Strategist', { data: { id, new: !target, interrupted } });
+      return { plan: this.clone(this.maps.get(id)!), interrupted };
+    } finally { this.busy.delete(id); }
+  }
+
+  /** An open chat takes the plan: its earlier records let it go (they stay as they were), then this one is its own. */
+  private async take(m: Plan, chatId: string, text: string | undefined, by: string): Promise<void> {
+    const plan = m.plan ?? { phase: 'asking' as const, clarified: [], steps: [], at: this.now() };
+    const said = [HANDED_TEXT, `Il piano: «${m.title}» (${m.id}).`, ...(m.goal ? [`Obiettivo: ${m.goal}`] : []), ...(text ? [`Cosa cambiare: ${text}`] : [])].join('\n');
+    this.taking.add(chatId);
+    try {
+      await this.d.chats.planTake!(chatId, plan, by === 'user' ? said : `${ORCHESTRATOR_USER_LABEL}\n\n${said}`);
+      for (const was of [...this.maps.values()]) if (was.id !== m.id && was.owner?.chatId === chatId) {
+        const { owner, ...rest } = was;
+        this.put(settle({ ...rest, past: [...new Set([...(was.past ?? []), owner!.chatId])].slice(-PLAN_LIMITS.past) }), by);
+      }
+      const now = this.d.chats.list().find(c => c.id === chatId);
+      if (!now) throw new Error('La chat non c’è più.');
+      this.edit(m.id, by, x => this.moved(x, now));
+    } finally { this.taking.delete(chatId); }
+    this.sync(m.id, by);
   }
 
   /** Two plans in one (the first one stays, with the other's steps, answers, doubts, constraints, links and history of where it came
@@ -417,7 +504,11 @@ export class Plans {
       const ops = [{ op: 'import' as const, steps }], start = a.plan ?? { phase: 'asking' as const, clarified: [], steps: [], at: this.now() };
       applySteps(start, ops, this.now());
       // a live chat carries the plan: the steps come in there, or its next event would put its own plan back
-      if (chat && this.d.chats.planEdit) { this.d.chats.planEdit(chat.id, ops, by === 'user' ? 'user' : 'strategist'); this.sync(a.id, by); cur = this.maps.get(a.id)!; }
+      if (chat && this.d.chats.planEdit) {
+        this.d.chats.planEdit(chat.id, ops, by === 'user' ? 'user' : 'strategist');
+        if (by !== 'Strategist') this.d.chats.planNote?.(chat.id, `${by}: entrati i passi del piano «${b.title}».`);
+        this.sync(a.id, by); cur = this.maps.get(a.id)!;
+      }
       else cur = settle({ ...a, plan: applySteps(start, ops, this.now()) });
     }
     const merged = cur.plan ?? { phase: 'asking' as const, clarified: [], steps: [], at: this.now() };
@@ -538,9 +629,9 @@ export class Plans {
     }
   }
 
-  private async begin(m: Plan, by: string, change?: string, cwd?: string): Promise<void> {
+  private async begin(m: Plan, by: string, change?: string, cwd?: string, handed = false): Promise<void> {
     if (!this.d.startStrategist) throw new Error('Qui non si può avviare uno Strategist.');
-    const chat = await this.d.startStrategist(structuredClone(m), change, by, cwd);
+    const chat = await this.d.startStrategist(structuredClone(m), change, by, cwd, handed);
     // its own events linked it already (ChatSummary.planId); one that did not is linked here
     this.edit(m.id, by, x => (x.owner?.chatId === chat.id ? x : this.moved(x, chat)));
     this.sync(m.id, by);
@@ -552,7 +643,7 @@ export class Plans {
     let c = m.owner && m.stopped?.by !== 'replaced' ? all.find(x => x.id === m.owner!.chatId) : undefined;
     // the chat went on in another one: that one works now, and «Riprendi» goes there, never to a second Strategist
     for (let n = 0; c?.continuedBy && n < 20; n++) c = all.find(x => x.id === c!.continuedBy!.id) ?? c;
-    return c && (m.owner!.task === 'chat' || taskOf(c) === m.owner!.task || !!c.continuedFrom) ? c : null;
+    return c && !c.plan?.handed && (m.owner!.task === 'chat' || taskOf(c) === m.owner!.task || !!c.continuedFrom) ? c : null;
   }
   /** The owner chat only while it still carries a plan: a chat whose plan is gone (a later job, a plan archived away)
    *  cannot take step edits, so the map's own plan is edited instead. */

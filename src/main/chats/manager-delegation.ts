@@ -90,16 +90,17 @@ export abstract class ManagerDelegation extends ManagerTopics {
     r.s.lastText = cut(result.summary, 300);
     this.persist();
     this.updated(r);
-    const parent = this.chats.get(parentId);
-    // the parent Strategist's step for this child: done once every chat of the step reported done (ADR 0108)
-    if (parent?.s.plan && (!run?.parentRunId || run.parentRunId === parent.s.run?.runId)) {
+    const delegator = this.chats.get(parentId), parent = delegator && this.planHolder(delegator), moved = parent !== delegator;
+    // the parent Strategist's step for this child: done once every chat of the step reported done (ADR 0108); the plan may have
+    // passed to another Strategist meanwhile (ADR 0372): its step, and the result, are that one's
+    if (parent?.s.plan && (moved || !run?.parentRunId || run.parentRunId === parent.s.run?.runId)) {
       // a sibling gone without a result (closed by the user) counts as not done: the step shows blocked, never stuck
       const next = afterReport(parent.s.plan, chatId, id => this.stepReport(parent, id), at);
       if (next !== parent.s.plan) { parent.s.plan = next; this.persist(); }
     }
     if (parent) {
       this.updated(parent); // its waiting on this child may be over
-      this.queueChildResult(parentId, chatId, r.s.title, `[task ${run?.runId ?? chatId}]\n${resultMessage(d.role, r.s.title, result, { correction })}`, run?.runId, correction);
+      this.queueChildResult(parent.s.id, chatId, r.s.title, `[task ${run?.runId ?? chatId}]\n${resultMessage(d.role, r.s.title, result, { correction })}`, run?.runId, correction);
     }
     // The execution parent still receives its private continuation. The owner's one conversation receives
     // the canonical outcome too; no worker input or manual synthesis is required to inspect it.
@@ -274,6 +275,18 @@ export abstract class ManagerDelegation extends ManagerTopics {
     if (q.timer) clearTimeout(q.timer);
     q.timer = setTimeout(() => this.flushChildResults(parentId), Math.max(0, Math.min(ms, q.first + ms * CHILD_RESULTS_CAP - now)));
     q.timer.unref?.();
+  }
+
+  /** Results waiting for a chat that handed its plan over wait for the one that has it now. */
+  protected moveChildResults(from: string, to: string): void {
+    const q = this.childResults.get(from);
+    if (!q) return;
+    if (q.timer) clearTimeout(q.timer);
+    this.childResults.delete(from);
+    const mine = this.childResults.get(to) ?? { items: [], timer: null };
+    mine.items.push(...q.items);
+    this.childResults.set(to, mine);
+    this.flushChildResults(to);
   }
 
   protected flushChildResults(parentId: string): void {

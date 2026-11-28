@@ -146,6 +146,7 @@ export const RUN_SAVE_MS = 1000;
 /** A user message within this long of the previous one is part of a conversation going on (no estimate for a short
  *  follow-up, ADR 0186). */
 export const FOLLOW_UP_WINDOW_MS = 30 * 60_000;
+export const PLAN_NOTES_LABEL = '[nota dell’app · il tuo piano è cambiato per mano di un altro: rileggilo con plans read e tienine conto]';
 export const USER_NOTES_LABEL = "[nota dell'app · l'utente ha scritto direttamente in chat che hai delegato: tienine conto nel piano, non disfare ciò che le ha chiesto]";
 export const userNoteLine = (n: Pick<UserWroteNote, 'title' | 'role' | 'at' | 'text'>): string =>
   `- ${n.role ?? 'Chat'} «${n.title}», ${new Date(n.at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}: «${n.text}»`;
