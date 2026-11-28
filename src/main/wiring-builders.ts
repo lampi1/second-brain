@@ -17,6 +17,15 @@ import { uiLang } from './locale';
 import { engineInfos } from './engines/registry';
 import { withApiModels } from './engines/sessions';
 import { engineOn } from './engines/policy';
+import { electronNode, runNode } from './brain/node';
+import { ActivitiesService } from './activities/service';
+import { devopsReader } from './activities/sources/devops';
+import { mcpReader, outlookConfig, teamsConfig } from './activities/sources/mcp';
+import { createGmailReader } from './activities/sources/gmail';
+import { defaultLocate } from './tasks/service';
+import type { ActivitySource, ActivitySourceReader } from '../shared/activities';
+import type { McpServersService } from './mcp-servers/service';
+import type { OrchestratorWake } from './chats/orchestrator-wake';
 import type { BrainService } from './services';
 import type { TaskService } from './tasks/service';
 import type { HeadlessRunner } from './compare/headless';
@@ -102,5 +111,45 @@ export function buildNews(ctx: Ctx, brain: BrainService, headless: HeadlessRunne
     },
     changed: state => ctx.emitter.emit('news:changed', state),
     setInterval: (fn, ms) => t.setInterval(fn, ms), clearInterval: h => t.clearInterval(h as NodeJS.Timeout),
+  });
+}
+
+/** «Attività pianificate» (ADR 0373): the engine with its readers. DevOps = the Task service's own read (the brain's or the
+ *  app's devops-me.mjs, zero tokens); Outlook and Teams = tools/call on the user's connectors through the MCP gateway (zero
+ *  tokens, held back while a connector needs its login); Gmail = the connector the user added whose id says «gmail» (none:
+ *  a visible error); the triage = one hidden pass on Claude with no tool; the news = one grouped news to the
+ *  Orchestrator. The timer is the service's own (start()); stop() is called at shutdown. */
+export function buildActivities(ctx: Ctx, brain: BrainService, headless: HeadlessRunner, mcpServers: McpServersService, wake: OrchestratorWake): ActivitiesService {
+  const claude = () => engineInfos().find(e => e.kind === 'claude' && engineOn(brain.settings(), e.id)) ?? null;
+  const node = electronNode();
+  const call = (server: string, tool: string, args: Record<string, unknown>) => mcpServers.gateway.callServer(server, tool, args);
+  const held = (server: string) => mcpServers.gateway.heldReason(server);
+  const gmailId = (): string | null => mcpServers.state().servers.find(s => /gmail/i.test(s.id))?.id ?? null;
+  const readers: Record<ActivitySource, ActivitySourceReader> = {
+    devops: devopsReader(async days => {
+      const root = brain.info().brainRoot;
+      const script = root ? defaultLocate(root) : null;
+      return root && script ? runNode(node, script, ['--json', '--full', '--days', String(days)], root, 180_000) : null;
+    }),
+    outlook: mcpReader(outlookConfig(), { call, held }),
+    teams: mcpReader(teamsConfig(), { call, held }),
+    gmail: createGmailReader({ serverId: () => gmailId(), call }),
+  };
+  const dir = path.join(ctx.userData, 'activities');
+  return new ActivitiesService({
+    file: path.join(ctx.userData, 'activities.json'),
+    reader: source => readers[source],
+    ai: async prompt => {
+      const e = claude();
+      if (!e) return { ok: false, error: 'Claude è spento (Impostazioni → Motori): la selezione ha bisogno di lui' };
+      fs.mkdirSync(dir, { recursive: true });
+      const out = await headless.run({ engine: e.id, model: 'haiku', effort: e.caps.effort ? 'low' : null, cwd: dir, prompt, round: 'activity-triage', timeoutMs: 5 * 60_000, noTools: true });
+      if (!out.ok) return { ok: false, error: out.error };
+      const tk = out.tokens;
+      return { ok: true, text: out.text, tokens: tk ? tk.input + tk.cacheRead + tk.cacheWrite + tk.output : null, costUsd: out.costUsd, model: out.model };
+    },
+    notify: n => { wake.activityNews({ activityId: n.activityId, title: n.activityName, text: n.text }); },
+    emit: st => ctx.emitter.emit('activities:changed', st),
+    gmailConnector: () => gmailId() !== null,
   });
 }

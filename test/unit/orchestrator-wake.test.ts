@@ -420,6 +420,18 @@ describe('OrchestratorWake', () => {
     expect(off.w.stalledWork({ threadId: 'w1', title: 't', detail: 'd' })).toBe(false);
   });
 
+  it('a scheduled activity\'s proposal wakes the Orchestrator as one grouped news per activity, the newest wins (ADR 0373)', async () => {
+    const { w, sent } = make();
+    expect(w.activityNews({ activityId: 'a1', title: 'Posta di Rossi', text: 'Prima.' })).toBe(true);
+    expect(w.activityNews({ activityId: 'a1', title: 'Posta di Rossi', text: 'Seconda: 2 mail nuove.' })).toBe(true);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).toContain('- Attività «Posta di Rossi»: Seconda: 2 mail nuove.');
+    expect(sent[0]!.text).not.toContain('Prima.');
+    expect(sent[0]!.text).not.toContain('lavoro approvato fermo');
+    expect(make({ enabled: false }).w.activityNews({ activityId: 'a1', title: 't', text: 'x' })).toBe(false);
+  });
+
   it('stalled news the thread outgrew is withdrawn before it goes (ADR 0238)', async () => {
     const { w, sent } = make();
     w.stalledWork({ threadId: 'w1', title: 'Esportazione CSV', detail: 'fermo' });

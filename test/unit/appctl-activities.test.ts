@@ -36,6 +36,7 @@ function make(seed: ActivityInput[] = []) {
     remove: ({ id }) => { calls.push(`remove:${id}`); st.activities = st.activities.filter(x => x.id !== id); return ok(id); },
     run: async ({ id }) => { calls.push(`run:${id}`); const r = run({ activityId: id, trigger: 'manual' }); runs.set(id, [r, ...(runs.get(id) ?? [])]); const i = st.activities.findIndex(x => x.id === id); st.activities[i] = { ...st.activities[i]!, lastRun: r }; return ok(id, r); },
     history: ({ id }) => runs.get(id) ?? [],
+    pause: ({ paused }) => { calls.push(`pause:${paused}`); st.paused = paused; return st; },
   };
   const tool = activityTools(svc, () => NOW)[0]!;
   const input = (name: string, over: Partial<ActivityInput> = {}): ActivityInput => ({ name, source: 'outlook', schedule: { everyMin: 15, days: [1, 2, 3, 4, 5], window: { from: '08:00', to: '19:00' } }, filter: { ...defaultFilter(), unreadOnly: true }, propose: 'Se serve una risposta, proponimela.', dailyCap: 10, enabled: false, ...over });
@@ -208,8 +209,18 @@ describe('app_activity', () => {
     expect((await t.call({ action: 'history', id: 'a1' })).note).toBe('Nessun giro ancora.');
   });
 
+  it('pause: flips the global pause both ways and asks for `paused`', async () => {
+    const t = make();
+    const on = await t.call({ action: 'pause', paused: true });
+    expect(on.paused).toBe(true);
+    expect(on.note).toMatch(/Pausa generale accesa/);
+    expect((await t.call({ action: 'pause', paused: false })).paused).toBe(false);
+    expect(t.calls).toEqual(['pause:true', 'pause:false']);
+    await expect(t.call({ action: 'pause' })).rejects.toThrow(/manca `paused`/);
+  });
+
   it('refuses an unknown action', async () => {
-    await expect(make().call({ action: 'pause' })).rejects.toThrow(/action: una tra list, create, update, enable, disable, delete, run, history/);
+    await expect(make().call({ action: 'stop' })).rejects.toThrow(/action: una tra list, create, update, enable, disable, delete, run, history, pause/);
   });
 });
 

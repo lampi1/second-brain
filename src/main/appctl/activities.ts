@@ -25,6 +25,7 @@ export interface ActivitiesControl {
   remove(a: { id: string }): Maybe<ActivityResult>;
   run(a: { id: string }): Maybe<ActivityResult>;
   history(a: { id: string }): Maybe<ActivityRun[]>;
+  pause(a: { paused: boolean }): Maybe<ActivitiesState>;
 }
 interface Tool { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(a: Record<string, unknown>): Promise<object> | object }
 
@@ -115,6 +116,7 @@ export function activityTools(svc: ActivitiesControl, now: () => number = Date.n
       propose: { type: 'string', description: 'the user\'s sentence of what to propose when something passes, e.g. «se un collega segnala un bug, proponimi un fix»' },
       dailyCap: { type: 'number', description: `triage passes per day, 1-${ACTIVITY_CAP_MAX}` },
       enabled: { type: 'boolean', description: 'create, update: on or off' },
+      paused: { type: 'boolean', description: 'pause: true = global pause on, false = resume' },
     }, required: ['action'] },
     run: async a => {
       const action = a.action;
@@ -174,6 +176,11 @@ export function activityTools(svc: ActivitiesControl, now: () => number = Date.n
         const { a: cur } = await find(a.id);
         const runs = [...(await svc.history({ id: cur.id }))].sort((x, y) => y.at - x.at).slice(0, ACTIVITY_HISTORY_MAX);
         return { activity: cur.name, runs: runs.map(runRow), totalCostUsd: usd(sumCost(runs)), ...(runs.length ? {} : { note: 'Nessun giro ancora.' }) };
+      }
+      if (action === 'pause') {
+        if (typeof a.paused !== 'boolean') throw new Error('manca `paused`: true per la pausa generale, false per riprendere');
+        const st = await svc.pause({ paused: a.paused });
+        return { paused: st.paused, note: st.paused ? 'Pausa generale accesa: nessuna attività parte da sola (a mano sì).' : 'Pausa tolta: le attività accese ripartono ai loro orari.' };
       }
       throw new Error(`action: una tra ${ACTIVITY_ACTIONS.join(', ')}`);
     },

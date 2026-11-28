@@ -184,7 +184,7 @@ export interface ActivitiesState {
 export interface ActivityTemplate { id: string; label: string; input: ActivityInput }
 
 /** The Orchestrator's tool. One call = one action; `id` is an activity's id or its name. */
-export const ACTIVITY_ACTIONS = ['list', 'create', 'update', 'enable', 'disable', 'delete', 'run', 'history'] as const;
+export const ACTIVITY_ACTIONS = ['list', 'create', 'update', 'enable', 'disable', 'delete', 'run', 'history', 'pause'] as const;
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
 
 /** What app_activity takes: `create` needs name, source and propose (the rest defaults); `update` takes `id` and any of
@@ -199,6 +199,8 @@ export interface ActivityToolArgs {
   propose?: string;
   dailyCap?: number;
   enabled?: boolean;
+  /** `pause`: true = the global pause (no activity starts by itself), false = resume */
+  paused?: boolean;
 }
 
 /** The result of a create/update/enable/disable/delete/run, in one shape for the page and the tool. */

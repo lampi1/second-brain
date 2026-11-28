@@ -59,7 +59,7 @@ export function appScript(bundleUrl: string = import.meta.url): string | null {
   try { const p = path.join(path.dirname(fileURLToPath(bundleUrl)), '..', 'tasks', 'devops-me.mjs'); return fs.existsSync(p) ? p : null; } catch { return null; }
 }
 /** The brain's own script first (the owner's personal one wins), else the app's. */
-const defaultLocate = (root: string): string | null => found(root, SCRIPT) ?? appScript();
+export const defaultLocate = (root: string): string | null => found(root, SCRIPT) ?? appScript();
 const defaultLocateQa = (root: string): string | null => found(root, QA_SCRIPT);
 const EMPTY: Saved = { lastOk: null, news: [], read: [], assigned: [], urgent: [], oldReviews: [], reviews: [], prs: [], details: {}, qa: [], qaAt: null, notified: [] };
 /** A repo name usable as a folder name (no path separators, not only dots). */

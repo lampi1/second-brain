@@ -161,7 +161,7 @@ const { clearInterval } = timersFor('wiring');
 import { attachAppTools, createLater, commandRunner, attachCommandAsks, attachOrchestratorWake, attachRunResults, attachPlans, attachArtifacts, createAppSource, createAgentCatalog } from './wiring-shared';
 import type { CommandRunner } from './run/runner';
 import type { Ctx, Wired } from './wiring-types';
-import { buildLearn, buildNews } from './wiring-builders';
+import { buildActivities, buildLearn, buildNews } from './wiring-builders';
 import { createPhonePort, type PhoneCommands } from './chats/phone-port';
 export { toMcp, attachAppTools, createLater, commandRunner, attachCommandAsks, attachOrchestratorWake, attachRunResults, attachArtifacts, createAppSource, createAgentCatalog } from './wiring-shared';
 export type { Ctx, Wired } from './wiring-types';
@@ -871,7 +871,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       if (!p) throw new Error(`ruolo sconosciuto: ${c.agentId ?? ''}`);
       agentPacks.learning.save(changedDraft(p, c.key, c.value), p.id, roleReason(c.reason));
     } });
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: (req, o) => resolveStart(req, o), creditOf: (engine, model) => credits.verdict(engine, model), creditFresh: () => credits.freshAll(), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, plans,
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: (req, o) => resolveStart(req, o), creditOf: (engine, model) => credits.verdict(engine, model), creditFresh: () => credits.freshAll(), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), activities: { state: () => activities.state(), save: a => activities.save(a), enable: a => activities.enable(a), remove: a => activities.remove(a), run: a => activities.run(a), history: a => activities.history(a.id), pause: a => activities.pause(a) }, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, plans,
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       held: pendingConfig,
@@ -928,6 +928,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // the other side's answers and the verdicts: never read by a run, whatever the brain lists
     denyRead: () => { const root = brain.info().brainRoot; return root ? [path.join(root, 'reviews', 'compare')] : []; },
   });
+  // «Attività pianificate» (ADR 0373): its own minute timer starts here, only while the app is open
+  const activities = buildActivities(ctx, brain, headless, mcpServers, wake);
+  activities.start();
   const oneShot = new OneShotService({ userData: ctx.userData, profile: id => agents.list().profiles.find(p => p.id === currentRoleId(id)),
     settings: () => brain.settings(), registry: () => brain.modelRegistry(),
     hasKey: id => engines.hasKey(id), addApiSpend: (id, usd) => engines.addSpend(id, usd), fallback: () => brain.settings().jobs?.fallback ?? 'auto',
@@ -1046,7 +1049,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     judging: { estimate: now => judgingEstimate(manager.runs.list(), now, { shares: judgeShares(), capUsd: Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD, lastBatch: judgeSampler.lastBatch() }) },
     phonePort: createPhonePort(manager, ctx.emitter, awayCommands),
     worktreePool,
-    chats, browser, recordings, learn, news, plans, brain, mcp, addChatTools, runner, asks, pendingConfig, briefYes: (id: string, ask: string) => artifacts.briefYes(id, ask), wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, modelLists, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, quips, userCorrections,
+    chats, browser, recordings, learn, news, activities, plans, brain, mcp, addChatTools, runner, asks, pendingConfig, briefYes: (id: string, ask: string) => artifacts.briefYes(id, ask), wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, modelLists, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, quips, userCorrections,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : null),
       checkpoint: () => manager.checkpointForUpdate(),
@@ -1054,7 +1057,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { stopSourceCheck(); stopPrune?.(); news.dispose(); plans.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (worktreeFirst) clearTimeout(worktreeFirst); if (worktreeTimer) clearInterval(worktreeTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); if (workDriverTimer) clearInterval(workDriverTimer); hybrid.stop(); userCorrections.flush(); orchestratorTopics.flush(); engines.stop(); modelLists.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { stopSourceCheck(); stopPrune?.(); news.dispose(); activities.stop(); plans.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (worktreeFirst) clearTimeout(worktreeFirst); if (worktreeTimer) clearInterval(worktreeTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); if (workDriverTimer) clearInterval(workDriverTimer); hybrid.stop(); userCorrections.flush(); orchestratorTopics.flush(); engines.stop(); modelLists.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { manager.killAll(); runner.shutdown(); },
   };
 }

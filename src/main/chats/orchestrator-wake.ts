@@ -93,7 +93,7 @@ export function stuckStrategist(c: ChatSummary, all: readonly ChatSummary[], ope
   return true;
 }
 /** requestId: the open request it tells about (question, permission, command): answered before it goes, it is dropped */
-export interface WakeEvent { eventId?: string; seq?: number; chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a root chat's clean agent_report (cleanReport): its role and summary, quiet */ report?: { role: string }; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; /** kind error: no failure, its model ran out of credits and it waits for its role's card (ADR 0346) */ credits?: { role: string; model: string | null }; requestId?: string; /** the user asked about this chat (agents/watched-asks.ts, ADR 0371 point 4): its result wakes, with the line to tell him */ asked?: true; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean; /** a delegated chat's "finished" with nothing of the user's beside it: no text (ADR 0083) and its result goes to its parent, so it rides along and never wakes */ silent?: boolean; /** set only on the message sent: a root Strategist stopped without a result (stuckStrategist) */ stuck?: true }
+export interface WakeEvent { eventId?: string; seq?: number; chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a root chat's clean agent_report (cleanReport): its role and summary, quiet */ report?: { role: string }; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; /** kind error: no failure, its model ran out of credits and it waits for its role's card (ADR 0346) */ credits?: { role: string; model: string | null }; requestId?: string; /** the user asked about this chat (agents/watched-asks.ts, ADR 0371 point 4): its result wakes, with the line to tell him */ asked?: true; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean; /** a scheduled activity's run proposed something (ADR 0373): a `stalled`-class thread news worded by the activity */ activity?: true; /** a delegated chat's "finished" with nothing of the user's beside it: no text (ADR 0083) and its result goes to its parent, so it rides along and never wakes */ silent?: boolean; /** set only on the message sent: a root Strategist stopped without a result (stuckStrategist) */ stuck?: true }
 
 export interface WakeSubmissionReceipt { submitted(): void; failed(error: unknown): void }
 export interface OrchestratorWakeDeps {
@@ -138,7 +138,7 @@ export function wakeLine(e: WakeEvent): string {
     case 'started': return `- ${who}: è partita.`;
     case 'user-message': return `- ${who}: l'utente ci ha scritto direttamente (${new Date(e.at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}): «${e.detail}».`;
     case 'user-closed': return `- ${who}: l'utente l'ha chiusa con ✕ mentre aveva lavoro aperto (${d}). Il lavoro è fermo e annullato, la chat resta tra le chiuse con la sua cronologia: app_reopen_chat la riapre solo se lo chiede lui. Non rilancia il lavoro da sola.`;
-    case 'stalled': return `- Filo «${e.title}»: lavoro approvato fermo. ${e.detail}`;
+    case 'stalled': return e.activity ? `- Attività «${e.title}»: ${e.detail}` : `- Filo «${e.title}»: lavoro approvato fermo. ${e.detail}`;
   }
 }
 
@@ -383,6 +383,19 @@ export class OrchestratorWake {
     const id = this.orchestratorId(), o = id ? this.chats.get(id) : undefined;
     if (!id || !o) return false;
     const e: WakeEvent = { chatId: `work:${n.threadId}`, title: n.title, harness: o.harness, kind: 'stalled', detail: cut(n.detail, 600), at: n.at ?? this.now() };
+    this.buffer.set(slotOf(e), e);
+    this.reschedule();
+    this.changed();
+    return true;
+  }
+
+  /** A scheduled activity's run proposed something (activities/service.ts, ADR 0373): one grouped news per activity, the
+   *  newest wins, like stalledWork. False = not taken (events off, no Orchestrator): the run still lists its proposals. */
+  activityNews(n: { activityId: string; title: string; text: string; at?: number }): boolean {
+    if (!this.d.enabled()) return false;
+    const id = this.orchestratorId(), o = id ? this.chats.get(id) : undefined;
+    if (!id || !o) return false;
+    const e: WakeEvent = { chatId: `activity:${n.activityId}`, title: n.title, harness: o.harness, kind: 'stalled', detail: cut(n.text, 1500), at: n.at ?? this.now(), activity: true };
     this.buffer.set(slotOf(e), e);
     this.reschedule();
     this.changed();

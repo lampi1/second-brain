@@ -22,7 +22,7 @@ import { McpClientError } from './client';
 import { log, errText } from '../log';
 import type { McpServerDef, RoleMcpAccess } from '../../shared/mcp-servers';
 import { serversFor, toolFor, type ChatMcpContext } from './access';
-import { connect, type Endpoint, type Upstream, type UpstreamTool } from './client';
+import { connect, type CallResult, type Endpoint, type Upstream, type UpstreamTool } from './client';
 import { ConnectorHealth, failKind, waitText, type ServerHealth, type Transition } from './health';
 
 export interface GatewayDeps {
@@ -49,6 +49,8 @@ export interface GatewayDeps {
 /** listed: it gave its tools once (its program started: a later failure of it is not one that does not start) */
 interface Conn { up: Upstream; tools: Promise<UpstreamTool[]> | null; toolsAt: number; used: number; def: string; listed?: boolean }
 const TOOLS_TTL = 5 * 60_000;
+/** The key under which the app's own calls (callServer) keep their connections, apart from every chat's. */
+const APP_CALLER = '#app-activities';
 
 export class McpGateway {
   private readonly tokens = new EndpointTokens();
@@ -184,6 +186,34 @@ export class McpGateway {
         }
       },
     }));
+  }
+
+  /** Why `server` is held back now (needs-login / broken) in the user's words, null = it may be called (activities). */
+  heldReason(server: string): string | null {
+    const g = this.health.gate(server);
+    return g.open ? null : heldText(server, g.health, g.waitMs);
+  }
+
+  /** The app's own tools/call (the «Attività pianificate» readers, zero tokens): no chat, its own connection key, the same
+   *  health rules as a chat's call. A held server throws; a failure counts like a chat's. */
+  async callServer(server: string, tool: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<CallResult> {
+    const key = `${APP_CALLER}|${server}`;
+    let probe = false;
+    if (!this.conns.has(key)) {
+      const g = this.health.gate(server);
+      if (!g.open) throw new UpstreamError(heldText(server, g.health, g.waitMs));
+      probe = g.probe;
+    }
+    const c = this.conn(APP_CALLER, server);
+    try {
+      const raw = await c.up.call(tool, args, signal);
+      if (probe) this.worked(server);
+      return raw;
+    } catch (e) {
+      this.drop(APP_CALLER, server, c);
+      if ((e instanceof McpClientError && e.code === 'auth') || probe) this.failed(APP_CALLER, server, e);
+      throw e;
+    }
   }
 
   /** A failure of a request made now: one more in a row. Its card is told at the first failure of a run and when its

@@ -269,7 +269,7 @@ app.whenReady().then(async () => {
     ...mediaHandlers(ctx),
     ...chessHandlers(chessEngine, chessGames),
     ...libraryHandlers(library),
-    ...(demo ? activitiesDemoHandlers(st => emitter.emit('activities:changed', st), process.env.SB_DEMO_FREEZE === '1' ? () => FROZEN_EPOCH : Date.now) : activitiesHandlers()),
+    ...(demo ? activitiesDemoHandlers(st => emitter.emit('activities:changed', st), process.env.SB_DEMO_FREEZE === '1' ? () => FROZEN_EPOCH : Date.now) : activitiesHandlers(s.activities)),
   };
   // the deck's sources call the same handlers their old pages called (never a second path to the same write)
   const call = <K extends InvokeChannel>(ch: K, arg: InvokeArg<K>): Promise<InvokeResult<K>> =>
