@@ -1,0 +1,64 @@
+/* «Attività pianificate» (ADR 0373): the page's styles (brain/pages/Activities.tsx). Classes start with ac-; colours and radii are the app's tokens. */
+.ac-page { display: block; min-width: 0; padding-top: 6px; color: var(--text); font-size: var(--fs-m); }
+.ac-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; flex-wrap: wrap; margin-bottom: 18px; }
+.ac-head h1 { margin: 0 0 6px; }
+.ac-lead { margin: 0; max-width: 62ch; color: var(--text-2); line-height: 1.55; }
+.ac-pause { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--r-l); background: var(--surface); }
+.ac-pause span:last-child { display: grid; gap: 2px; }
+.ac-pause small { color: var(--text-3); font-size: var(--fs-s); max-width: 34ch; }
+.ac-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.ac-muted { color: var(--text-3); }
+
+.ac-switch { flex: none; position: relative; width: 42px; height: 24px; border-radius: var(--r-s); border: 1px solid var(--border-control); background: var(--surface-4); cursor: pointer; padding: 0; transition: background var(--dur-fast) var(--ease); }
+.ac-switch > span { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: var(--r-xs); background: var(--text-2); transition: transform var(--dur-fast) var(--ease); }
+.ac-switch.on { background: var(--green); border-color: var(--green); }
+.ac-switch.on > span { transform: translateX(18px); background: #fff; }
+.ac-switch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .ac-switch, .ac-switch > span { transition: none; } }
+
+.ac-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.ac-item { display: grid; gap: 6px; }
+.ac-row { display: flex; align-items: flex-start; gap: 14px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--r-l); background: var(--surface); }
+.ac-row.on { border-color: var(--border-2); background: linear-gradient(145deg, var(--surface-2), var(--surface)); }
+.ac-src { flex: none; width: 32px; height: 32px; border-radius: var(--r-l); display: grid; place-items: center; font-weight: 700; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.ac-src.s-outlook { color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent); }
+.ac-src.s-teams { color: var(--violet); background: color-mix(in srgb, var(--violet) 14%, transparent); }
+.ac-src.s-gmail { color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); }
+.ac-main { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.ac-name { display: flex; align-items: center; gap: 10px; }
+.ac-state { color: var(--text-3); font-size: var(--fs-s); }
+.ac-sched { color: var(--text-2); }
+.ac-last { color: var(--text-3); font-size: var(--fs-s); }
+.ac-warn { color: var(--amber); font-size: var(--fs-s); margin: 4px 0 0; }
+.ac-actions { flex: none; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.ac-confirm { color: var(--text-2); font-size: var(--fs-s); }
+
+.ac-detail { margin-left: 8px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--r-l); background: var(--surface); }
+.ac-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ac-detail h3, .ac-form h3 { margin: 0 0 8px; }
+.ac-propose { margin: 0 0 10px; color: var(--text-2); font-style: italic; }
+.ac-runs { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.ac-run { display: grid; grid-template-columns: 170px 110px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 6px 4px; border-top: 1px solid var(--border); font-size: var(--fs-s); }
+.ac-run .when, .ac-run .who { color: var(--text-3); white-space: nowrap; }
+.ac-run-line { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+.ac-form { margin-bottom: 16px; padding: 16px; border: 1px solid var(--border-2); border-radius: var(--r-l); background: var(--surface-2); }
+.ac-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.ac-field { display: grid; gap: 4px; align-content: start; min-width: 0; }
+.ac-field.wide { grid-column: 1 / -1; }
+.ac-field > span { color: var(--text-3); font-size: var(--fs-s); }
+.ac-field small { color: var(--text-3); }
+.ac-field input:not([type="checkbox"]), .ac-field select, .ac-field textarea { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid var(--border-control); border-radius: var(--r-s); background: var(--surface); color: var(--text); font: inherit; }
+.ac-field input:focus-visible, .ac-field select:focus-visible, .ac-field textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.ac-days { display: flex; gap: 4px; flex-wrap: wrap; }
+.ac-days > button { appearance: none; min-width: 42px; height: 30px; padding: 0 8px; border: 1px solid var(--border-control); border-radius: var(--r-s); background: var(--surface); color: var(--text-2); cursor: pointer; font: inherit; }
+.ac-days > button.on { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+.ac-days > button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.ac-window { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.ac-check { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); cursor: pointer; }
+.ac-times { display: inline-flex; gap: 12px; align-items: center; }
+.ac-times input { width: auto !important; }
+.ac-flags { display: flex; gap: 18px; flex-wrap: wrap; }
+.ac-errors { margin-top: 12px; padding: 10px 14px; border: 1px solid var(--red); border-radius: var(--r-m); color: var(--red); }
+.ac-errors ul { margin: 4px 0 0; padding-left: 18px; }
+.ac-form-actions { display: flex; gap: 8px; margin-top: 14px; }

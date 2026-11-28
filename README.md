@@ -76,7 +76,10 @@ Each character has a vice for the quiet moments (all six also play in **Chess**)
 - **A real browser.** QA agents drive your test environment in a tab next to their chat and bring back screenshots.
 - **A brain that learns.** **Memory**, **Skills**, **Scripts**, journal and artifacts in plain Markdown. **Maintenance** reads past work and proposes only the skill changes that matter, each with a reason and an Undo.
 - **Voice, phone and Remote Mode.** Local dictation, voice conversation, call **Recordings**, and **Remote Mode** on both Claude (`claude.ai/code`) and Antigravity/ACP engines through the **Telegram** phone bridge.
-- **Also on board.** **Tasks**, **Trends**, **Log**, the 2D brain **Map**, searchable **Settings**, and **Leisure** with a curated multi-edition **News** reader and **Chess** against your animated crew.
+- **Scheduled activities.** Tell the app what to watch (DevOps, Outlook, Teams or Gmail), how often and what to propose: it reads at zero tokens, filters deterministically, and only when something new passes does one cheap model pass propose actions to the Orchestrator. Every activity has a switch, a global pause, a **Run now** and its last 20 runs with read, kept, proposals and cost.
+- **Also on board.** **Trends**, **Log**, the 2D brain **Map**, searchable **Settings**, and **Leisure** with a curated multi-edition **News** reader and **Chess** against your animated crew.
+
+<p align="center"><img src="docs/screenshots/activities.webp" alt="The Scheduled activities page: a row per activity with its switch, schedule in words and last run, the last runs of one open below it" width="720"></p>
 
 <p align="center"><img src="docs/screenshots/plan.webp" alt="A Strategist's plan on the Plans page: its steps in turns with role and preset, Approve and start above them" width="720"></p>
 

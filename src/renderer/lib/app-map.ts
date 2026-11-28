@@ -13,8 +13,7 @@ import { settingsSections } from './settings-sections';
 import { paletteActions } from '../components/CommandPalette';
 import { lang, t, textsWhere, type Key } from '../i18n';
 import { app } from '../store/store';
-import { tasks } from '../store/tasks';
-import { menuGroups, menuLabelKey, menuTasksUnread } from './nav-menu';
+import { MENU_GROUPS, menuLabelKey } from './nav-menu';
 import { pageLabel, ui } from '../store/ui';
 import { setViewPrefs, viewPrefs, type ViewPrefs } from './view-prefs';
 
@@ -37,8 +36,8 @@ const clean = (s: string | null | undefined, n = 70): string => {
 
 /** The ☰ menu's groups as it lists them now (closed or open: the same groups the Sidebar draws, lib/nav-menu.ts), each
  *  title marked ☰ so the Orchestrator knows the user opens the menu first (ADR 0366). */
-export function menuNav(tasksUnread: number): AppMapNav[] {
-  return menuGroups(tasksUnread).map(g => ({ group: `☰ ${t(`dialogs.sidebar.${g.id}` as Key)}`, items: g.pages.flatMap(id => {
+export function menuNav(): AppMapNav[] {
+  return MENU_GROUPS.map(g => ({ group: `☰ ${t(`dialogs.sidebar.${g.id}` as Key)}`, items: g.pages.flatMap(id => {
     const p = BRAIN_PAGES.find(x => x.id === id);
     if (!p) return [];
     const k = menuLabelKey(id);
@@ -60,7 +59,7 @@ function navNow(): AppMapNav[] {
     const [label, key] = (el.dataset.tip ?? '').split('|');
     out[out.length - 1]!.items.push({ page, label: clean(label || el.getAttribute('aria-label')), ...(key ? { key } : {}) });
   }
-  return [...out.filter(g => g.items.length), ...menuNav(menuTasksUnread(tasks.get()))];
+  return [...out.filter(g => g.items.length), ...menuNav()];
 }
 
 /** A page's subtitle or lead, when the dictionary has one for it. */

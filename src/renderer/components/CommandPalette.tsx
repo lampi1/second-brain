@@ -43,7 +43,7 @@ interface Cmd {
 const PAGE_ICON: Record<BrainPageId, ReactNode> = {
   home: <IconBrain />,
   agenti: <IconLayers />,
-  andamento: <IconChart />, script: <IconTerminal />, log: <IconList />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
+  andamento: <IconChart />, script: <IconTerminal />, log: <IconList />, file: <IconBrain />, attivita: <IconBell />, skill: <IconSparkle />, impostazioni: <IconSettings />,
   registrazioni: <IconMic />, impara: <IconLearn />, scacchi: <IconChess />,
   memoria: <IconHistory />, piani: <IconTicket />, collegamenti: <IconMap />,
 };

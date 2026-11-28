@@ -32,6 +32,7 @@ import { visualsEn } from './areas/visuals.en';
 import { dialogsEn } from './areas/dialogs.en';
 import { toolsEn } from './areas/tools.en';
 import { brainPagesEn } from './areas/brainPages.en';
+import { activitiesEn } from './areas/activities.en';
 import { chessEn } from './areas/chess.en';
 import { libraryEn } from './areas/library.en';
 import { brainLibEn } from './areas/brainLib.en';
@@ -139,6 +140,7 @@ export const en: Dict = {
   ...dialogsEn,
   ...toolsEn,
   ...brainPagesEn,
+  ...activitiesEn,
   ...chessEn,
   ...libraryEn,
   ...brainLibEn,
