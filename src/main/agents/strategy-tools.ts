@@ -11,7 +11,7 @@ import type { McpTool } from '../mcp/server';
 import type { ChatSummary } from '../../shared/contract';
 import { callerOf } from '../mcp/caller';
 import type { PresetId } from '../../shared/model-presets';
-import { checkProposal, checkRevision, checkStep, DETAIL_ASK, DONE_WHEN_MAX, proposalGate, stepIndex, STEPS_MAX, TITLE_ASK, type StrategyPlan } from '../../shared/strategy';
+import { checkProposal, checkRevision, checkStep, DETAIL_ASK, DONE_WHEN_MAX, proposalGate, PLAN_HANDED, stepIndex, STEPS_MAX, TITLE_ASK, type StrategyPlan } from '../../shared/strategy';
 import { STEP_STATES, type PlanStep, type StepProof, type StepState } from '../../shared/plan-steps';
 import { WORK_ROLE_IDS } from '../../shared/roles';
 import { checkDoubts, DOUBT_BY, DOUBTS_MAX, openDoubts, openDoubtsNote, type DoubtEvidence, type PlanDoubt } from '../../shared/plan-doubts';
@@ -76,6 +76,7 @@ export function strategyTools(chats: StrategyChats, away: () => boolean = () => 
       const { revise: reviseArg, doubts: doubtsArg, ...rest } = a;
       if (reviseArg !== undefined && typeof reviseArg !== 'boolean') throw new Error('revise: true or false.');
       const revise = reviseArg === true, id = callerOf(ctx.params), plan = chats.planOf(id);
+      if (plan?.handed) throw new Error(`plan_propose refused: ${PLAN_HANDED}`);
       if (!revise && rest.remove !== undefined) throw new Error('plan_propose: remove goes with revise: true.');
       if (revise && (!plan || !plan.steps.length)) throw new Error('plan_propose revise: there is no plan of yours to revise; propose it without revise.');
       if (!revise && plan && (plan.phase === 'running' || plan.phase === 'done')) throw new Error('plan_propose: the plan is approved and under way; update its steps with plan_update, or bring it to the current standard with plan_propose revise: true.');

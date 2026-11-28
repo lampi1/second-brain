@@ -52,6 +52,12 @@ export interface StrategyPlan {
   stopped?: true;
   /** with `stopped`: the user put the plan in the archive before approving it; proposed again it is not stopped */
   putAway?: true;
+  /** the plan passed to another Strategist (ADR 0372): this chat's copy is history, it moves and delegates nothing */
+  handed?: true;
+  /** with `handed`: the chat that has the plan now; late reports of this chat's delegates go there */
+  handedTo?: string;
+  /** what another hand changed in this plan, told to the chat with its next message and then dropped */
+  news?: string[];
   /** every doubt of this job, open or closed with who closed it and its source (ADR 0344); absent = never listed */
   doubts?: PlanDoubt[];
 }
@@ -60,6 +66,8 @@ export interface StrategyPlan {
 export const STEPS_MIN = 1, STEPS_MAX = 40, QUESTIONS_MAX = 8, DONE_WHEN_MAX = 400, CLARIFIED_MAX = 8, CLARIFIED_TEXT_MAX = 120;
 /** what a proposed step's title and detail may take: the plan stays readable (a saved or migrated one may be longer) */
 export const TITLE_ASK = 120, DETAIL_ASK = 400;
+/** what a Strategist is told when it tries to move a plan it handed over */
+export const PLAN_HANDED = 'this plan passed to another Strategist at the user\'s request: start nothing, change nothing, end your turn.';
 /** what the user's «Approva e parti» sends to the Strategist (also how its transcript shows the click) */
 export const PLAN_APPROVED = 'Piano approvato: parti.';
 /** Only complete, unqualified approval phrases count, and only on a host-verified direct user message for a pending
@@ -265,6 +273,7 @@ export function proposalGate(plan: StrategyPlan, listed: boolean): string | null
 /** agent_delegate / agent_assign_task from a Strategist with a plan: null once the user approved it; else what to do. */
 export function delegationGate(plan: StrategyPlan | null, tool: 'agent_delegate' | 'agent_assign_task'): string | null {
   if (!plan) return null;
+  if (plan.handed) return `${tool} refused: ${PLAN_HANDED}`;
   if (plan.stopped) return `${tool} refused: the user stopped this job. Start nothing: end your turn and wait for the user to resume it.`;
   if (plan.phase === 'running' || plan.phase === 'done') return null;
   if (plan.phase === 'approved') return `${tool} refused: the user approved your plan and keeps it for later. Start nothing: end your turn and wait for «${PLAN_APPROVED}».`;
@@ -367,6 +376,8 @@ export function readPlan(v: unknown): StrategyPlan | null {
     ...(p.pcOnly === true ? { pcOnly: true } : {}), ...(p.asked ? { asked: p.asked as number } : {}), ...(p.enough === true ? { enough: true } : {}),
     steps,
     ...(p.doneWhen ? { doneWhen: p.doneWhen as string } : {}), ...(p.stopped === true ? { stopped: true as const, ...(p.putAway === true ? { putAway: true as const } : {}) } : {}),
+    ...(p.handed === true ? { handed: true as const } : {}), ...(typeof p.handedTo === 'string' && /^[\w-]{1,80}$/.test(p.handedTo) ? { handedTo: p.handedTo } : {}),
+    ...(Array.isArray(p.news) && p.news.length ? { news: p.news.filter((x): x is string => typeof x === 'string' && x.length <= 600).slice(-10) } : {}),
     ...(doubts ? { doubts } : {}),
   };
 }

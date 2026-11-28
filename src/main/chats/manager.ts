@@ -60,7 +60,7 @@ import { slug as slugTitle } from './mail';
 import { splitMode } from '../../shared/newchat';
 import { recallWarning } from '../search/hybrid/recall';
 import type { CreateOpts, Inherited, SubmissionReceipt, Rec } from './manager-types';
-import { sysItem, MODES, RESEARCH_TITLE, RESEARCH_FRAME, FOLLOW_UP_WINDOW_MS, USER_NOTES_LABEL, EFFORTS, MODEL_ID, startTags, repoOf } from './manager-helpers';
+import { sysItem, MODES, RESEARCH_TITLE, RESEARCH_FRAME, FOLLOW_UP_WINDOW_MS, USER_NOTES_LABEL, PLAN_NOTES_LABEL, EFFORTS, MODEL_ID, startTags, repoOf } from './manager-helpers';
 import { pickLines } from '../../shared/model-levels';
 import { ManagerRemote } from './manager-remote';
 export { RESUME_TEXT, turnReply, workBehind, WAITING_REASON, lastAnswer, RESEARCH_TITLE, RUN_SAVE_MS, USER_NOTES_LABEL, userNoteLine, restoredOwner, startTags, repoOf } from './manager-helpers';
@@ -295,7 +295,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     const strategist = by === 'agent' && agent.owner.source === 'catalog' && agent.owner.id === 'strategist' && !delegator && !req.orchestrator;
     const asking = strategist && given ? askingPlan(now, opts.intake && this.planIntake(opts.intake)) : undefined, resume = opts.resumePlan;
     // a plan's job goes on in a new chat (ADR 0342): the answers the user already gave are kept
-    const plan = asking && resume ? { ...asking, clarified: resume.clarified, ...(resume.steps.length ? { steps: structuredClone(resume.steps) } : {}), ...(resume.pcOnly ? { pcOnly: true as const } : {}), ...(resume.asked ? { asked: resume.asked } : {}), ...(resume.enough ? { enough: true as const } : {}) } : asking;
+    const plan = asking && resume ? { ...asking, clarified: resume.clarified, ...(resume.steps.length ? { steps: resume.steps.map(({ drop: _d, ...x }) => structuredClone(x)) } : {}), ...(resume.doubts ? { doubts: structuredClone(resume.doubts) } : {}), ...(resume.doneWhen ? { doneWhen: resume.doneWhen } : {}), ...(resume.pcOnly ? { pcOnly: true as const } : {}), ...(resume.asked ? { asked: resume.asked } : {}), ...(resume.enough ? { enough: true as const } : {}) } : asking;
     const continued = opts.continuationOf ? this.chats.get(opts.continuationOf) : undefined;
     const told = given && folderNotes.length ? `${given}\n\nCartella di lavoro (dall’app):\n${folderNotes.map(n => `- ${n}`).join('\n')}` : given;
     const prompt = told && pack ? `${told}\n\n${pack}` : told && plan ? `${told}\n\n${strategyPrompt(plan)}` : told;
@@ -701,7 +701,10 @@ export class ChatManager extends ManagerRemote implements ChatService {
     if (notes?.length) this.notesFor.delete(chatId);
     const noted0 = notes?.length ? `${USER_NOTES_LABEL}\n${notes.join('\n')}\n\n${text0}` : text0;
     // the user put the files back before the last turn: the chat learns it with its next message
-    const noted = r.undoNote ? `${r.undoNote}\n\n${noted0}` : noted0;
+    // kept on the plan until the message really goes out (ADR 0372)
+    const changed = r.s.plan?.news;
+    const noted1 = changed?.length ? `${PLAN_NOTES_LABEL}\n${changed.join('\n')}\n\n${noted0}` : noted0;
+    const noted = r.undoNote ? `${r.undoNote}\n\n${noted1}` : noted1;
     r.undoNote = undefined;
     // the model reads the estimate as the app's own block after the user's words, never inside them
     const asked0 = [noted, estimate].filter(Boolean).join('\n\n');
@@ -748,6 +751,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
       // (AI-DLC's human-turn record) never take it for the user's turn; the user's own text goes as it is
       const composed = `${role}${brief}${this.compactToolHint(r)}${warning}${body}${hint}${langHint}${voiceHint}${phoneHint}${awayHint}`;
       r.session.send(forEngine(composed, { claude: engineOf(r.s.harness)?.kind === 'claude', relayed }), imgs);
+      if (changed && r.s.plan?.news) { const { news, ...rest } = r.s.plan, later = news.filter(x => !changed.includes(x)); r.s.plan = later.length ? { ...rest, news: later } : rest; this.persist(); }
       r.sentTo = r.session;
       if (awayHint) { if (awayOn) r.awayTold = session; else delete r.awayTold; }
       receipt?.submitted();

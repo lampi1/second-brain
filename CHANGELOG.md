@@ -9,6 +9,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - `node scripts/bench-ui.mjs` (issue #491): with 20 chats working on the Grindhouse it measures the renderer's frames
   (p50, p95, max, missed 60 Hz frames, long tasks) and how long a chat takes to open from a click on its strip. In the
   Linux container: frames p50 16.7 ms, max 16.8 ms, 0 missed, 0 long tasks; chat open p50 14 ms, max 20 ms.
+- A plan passes from one Strategist to another when the user asks the Orchestrator (`plans` handoff, ADR 0372): the old
+  chat stops and moves nothing, every step keeps its state and proof, the new one may widen it and proposes again. Changes
+  made to a live plan reach its Strategist with its next message; a finished plan given new steps opens again.
 - The app gives each message to the Orchestrator its topic (ADR 0369): rules first (his tag, «Rispondi», a named chat,
   plan or folder, key words, the open question a short reply answers), the lightest model only when unsure and never
   holding the turn; chats, results and replies carry their topic; the topic chip moves a message to another topic. On ACP
