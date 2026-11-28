@@ -196,7 +196,7 @@ export function goTarget(target: string): void {
 }
 
 /** Old page names (app-control docs, links made before; the agents' workspace page is the Grindhouse since SPEC 19) → today's ids; the deleted Idee, Regole and 3D Mappa open their clean replacements. */
-const ALIAS: Record<string, string> = { oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', fatto: 'log', diario: 'log', workspace: 'home', grid: 'home', chat: 'home', chats: 'home', map: 'collegamenti', mappa: 'collegamenti', idee: 'memoria', spunti: 'memoria', regole: 'memoria', miglioramento: 'memoria', esplora: 'file', procedure: 'skill', procedura: 'skill', dashboard: 'memoria', confronto: 'qualita' };
+const ALIAS: Record<string, string> = { task: 'attivita', oggi: 'attivita', adesso: 'attivita', dafare: 'attivita', devops: 'attivita', fatto: 'log', diario: 'log', workspace: 'home', grid: 'home', chat: 'home', chats: 'home', map: 'collegamenti', mappa: 'collegamenti', idee: 'memoria', spunti: 'memoria', regole: 'memoria', miglioramento: 'memoria', esplora: 'file', procedure: 'skill', procedura: 'skill', dashboard: 'memoria', confronto: 'qualita' };
 
 /** Go to a place: a brain page (the Grindhouse holds the agents) or the map; `element` is highlighted for 1.5 s on arrival. */
 export function go(place: Place, opts: { push?: boolean } = {}): void {
@@ -553,7 +553,7 @@ async function nextAfterPending(): Promise<void> {
 
 /** Where a morning row leads: the Task page for a PR, Memoria → Proposte, the stalled chat, the ideas file. */
 export function openMorningNext(next: MorningNext): void {
-  if (next.kind === 'pr') go({ page: 'task' });
+  if (next.kind === 'pr') go({ page: 'attivita' });
   else if (next.kind === 'approvals') go({ page: 'memoria', arg: 'proposte' });
   else if (next.kind === 'stalled') focusChat(next.chat.chatId);
   else go({ page: 'file', arg: 'ideas.md' });

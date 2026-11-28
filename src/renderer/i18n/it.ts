@@ -33,6 +33,7 @@ import { visualsIt } from './areas/visuals.it';
 import { dialogsIt } from './areas/dialogs.it';
 import { toolsIt } from './areas/tools.it';
 import { brainPagesIt } from './areas/brainPages.it';
+import { activitiesIt } from './areas/activities.it';
 import { chessIt } from './areas/chess.it';
 import { libraryIt } from './areas/library.it';
 import { brainLibIt } from './areas/brainLib.it';
@@ -140,6 +141,7 @@ export const it = {
   ...dialogsIt,
   ...toolsIt,
   ...brainPagesIt,
+  ...activitiesIt,
   ...chessIt,
   ...libraryIt,
   ...brainLibIt,

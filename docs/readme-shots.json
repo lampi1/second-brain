@@ -135,6 +135,16 @@
         "src/main/demo-plans.ts"
       ]
     },
+    "activities": {
+      "test": "README screenshot: the scheduled activities",
+      "sources": [
+        "src/renderer/brain/pages/Activities.tsx",
+        "src/renderer/brain/pages/activities.css",
+        "src/renderer/lib/activities.ts",
+        "src/renderer/store/activities.ts",
+        "src/main/ipc-handlers/activities-demo.ts"
+      ]
+    },
     "voice": {
       "test": "README showcase: voice, Log, recordings, quality, news, costs, trends, the maintenance notice",
       "sources": [
@@ -234,9 +244,8 @@
     "piani": [
       "Plans"
     ],
-    "task": [
-      "Tasks",
-      "Task page"
+    "attivita": [
+      "Scheduled activities"
     ],
     "andamento": [
       "Trends"

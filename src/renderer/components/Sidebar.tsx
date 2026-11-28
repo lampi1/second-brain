@@ -1,8 +1,8 @@
 // The left rail: chat-focused sidebar (Grindhouse header + live delegation tree with role mini-icons in SidebarTree.tsx)
 // paired with a discreet Hamburger (☰) popover menu holding the other views grouped into Lavoro (Grindhouse, Piani),
-// Svago (Impara, Scacchi) and Sistema (Agenti, Memoria, Andamento, Impostazioni): lib/nav-menu.ts, ADR 0366. Task,
-// Registrazioni, Collegamenti and Log are out of the menu, still reachable from the palette and the Orchestrator; Task
-// comes back in it while it has unread items, and those light the dot on ☰ (store/tasks.ts).
+// Svago (Impara, Scacchi) and Sistema (Agenti, Memoria, Andamento, Impostazioni): lib/nav-menu.ts, ADR 0366. Lavoro also
+// lists «Attività pianificate» (ADR 0373, it took Task's place). Registrazioni, Collegamenti and Log are out of the menu,
+// still reachable from the palette and the Orchestrator; the proposals of the memory light the dot on ☰.
 // Used by App.tsx.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { BRAIN_PAGES, type BrainPageId } from '../brain';
@@ -12,11 +12,10 @@ import { clampSidebarWidth, DEFAULT_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, MIN_SIDEBA
 import { schedule, suspendViews } from '../lib/viewports';
 import { go, showOverview } from '../actions';
 import {
-  IconBook, IconBrain, IconChess, IconChart, IconGrid, IconHistory, IconLayers, IconList, IconMap, IconMenu, IconMic, IconSettings, IconSparkle, IconTerminal, IconTicket,
+  IconBell, IconBook, IconBrain, IconChess, IconChart, IconGrid, IconHistory, IconLayers, IconList, IconMap, IconMenu, IconMic, IconSettings, IconSparkle, IconTerminal, IconTicket,
 } from './Icons';
 import { t } from '../i18n';
-import { menuAlert, menuGroups, menuLabelKey, menuTasksUnread } from '../lib/nav-menu';
-import { useTasks } from '../store/tasks';
+import { menuAlert, MENU_GROUPS, menuLabelKey } from '../lib/nav-menu';
 import { SidebarTree } from './SidebarTree';
 import { useProposalCount } from '../lib/proposals';
 import { workingCount } from '../lib/working-count';
@@ -24,7 +23,7 @@ import { workingCount } from '../lib/working-count';
 const ICON: Record<BrainPageId, ReactNode> = {
   home: <IconGrid />,
   agenti: <IconLayers />,
-  andamento: <IconChart />, script: <IconTerminal />, log: <IconList />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
+  andamento: <IconChart />, script: <IconTerminal />, log: <IconList />, file: <IconBrain />, attivita: <IconBell />, skill: <IconSparkle />, impostazioni: <IconSettings />,
   registrazioni: <IconMic />, impara: <IconBook />, scacchi: <IconChess />,
   memoria: <IconHistory />, piani: <IconTicket />, collegamenti: <IconMap />,
 };
@@ -50,7 +49,6 @@ export function Sidebar() {
   const working = useApp(s => workingCount(s.chats));
   const b = badges(feed, read);
   const proposals = useProposalCount();
-  const tasksUnread = useTasks(menuTasksUnread);
 
   useEffect(() => {
     const onResize = () => setWinW(window.innerWidth);
@@ -94,7 +92,7 @@ export function Sidebar() {
     const label = labelOf(p.id, p.label);
     const badge = p.id === 'memoria' && proposals
       ? <span className="nav-badge amber nav-badge-pulse" data-testid="nav-badge-proposals" aria-label={t('mh.badge', { n: proposals })}>{proposals > 99 ? '99+' : proposals}</span>
-      : p.id === 'home' ? null : <span data-testid={`nav-badge-${p.id}`}><Badge n={p.id === 'task' ? tasksUnread : b[p.id] ?? 0} warn={WARN_SECTIONS.has(p.id)} /></span>;
+      : p.id === 'home' ? null : <span data-testid={`nav-badge-${p.id}`}><Badge n={b[p.id] ?? 0} warn={WARN_SECTIONS.has(p.id)} /></span>;
     return (
       <button key={p.id} type="button" className={`nav-item ${on ? 'on' : ''}`} role="menuitem"
         onClick={() => { setMenuOpen(false); if (p.id === 'home') showOverview(); else go({ page: p.id }); }}
@@ -118,7 +116,7 @@ export function Sidebar() {
           data-tip={t('dialogs.sidebar.menuTip')} data-testid="nav-menu-btn"
           onClick={() => setMenuOpen(o => !o)}>
           <IconMenu size={16} />
-          {menuAlert(proposals, tasksUnread) && <span className="nav-menu-dot" aria-hidden="true" data-testid="nav-menu-dot" />}
+          {menuAlert(proposals) && <span className="nav-menu-dot" aria-hidden="true" data-testid="nav-menu-dot" />}
         </button>
         <button type="button" className={`nav-item nav-home-btn ${homeOn ? 'on' : ''}`}
           onClick={() => { setMenuOpen(false); showOverview(); }}
@@ -130,7 +128,7 @@ export function Sidebar() {
         </button>
         {menuOpen && (
           <div className="nav-menu-pop" role="menu" aria-label={t('dialogs.sidebar.menuLabel')} data-testid="nav-menu">
-            {menuGroups(tasksUnread).map((g, i) => <div key={g.id} role="none">
+            {MENU_GROUPS.map((g, i) => <div key={g.id} role="none">
               {i > 0 && <div className="nav-sep" />}
               <div className="nav-title" data-testid={`nav-group-${g.id}`}>{t(`dialogs.sidebar.${g.id}`)}</div>
               {g.pages.map(menuItem)}

@@ -389,6 +389,15 @@ test('README screenshot: Artifacts', async () => {
   await save('artifacts', await frameOf(page.getByTestId('mh-panel-artifact')));
 });
 
+test('README screenshot: the scheduled activities', async () => {
+  // the page that took Task's place (ADR 0373): a row per activity on the demo's in-memory catalog, the last runs of one open
+  await goPage(page, 'attivita');
+  await expect(page.getByTestId('ac-list')).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId('ac-row').first().getByTestId('ac-details').click();
+  await expect(page.getByTestId('ac-detail')).toBeVisible();
+  await save('activities', await frameOf(page.getByTestId('activities-page')));
+});
+
 // Last: its jobs are chats of the demo, which no other picture should show.
 test('README screenshot: the plans', async () => {
   // the plans' page (ADR 0359): one row per Strategist job or idea, by status, what waits for the user on top

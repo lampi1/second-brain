@@ -3,7 +3,7 @@
 // Costi and Qualità are tabs of Andamento since ADR 0202, rendered by components/andamento/AndamentoPage.tsx; Task took the place of Oggi and Adesso on 2026-10-12, their old links open it; the old
 // Miglioramento, Idee and Regole links open Memoria) and the full-screen 3D map, in the app's own style, fed by the
 // brain's data API (invoke 'brain:api'). This file is the ONE mount point the workspace UI imports:
-//   <BrainPage id="task" onNavigate={t => …} />  renders a page (it fills and scrolls its container);
+//   <BrainPage id="attivita" onNavigate={t => …} />  renders a page (it fills and scrolls its container);
 //   <BrainMap onClose={…} onNavigate={…} />                 is the full-screen map overlay (Esc closes).
 // onNavigate receives "<page>[/<arg>]" ("esplora/now.md", "andamento/costi/30",
 // "costi" → "andamento/costi") or "mappa" / "mappa/tutto" for the map. Without onNavigate a page follows its own links and opens the
@@ -16,7 +16,7 @@ import { FileViewer } from './pages/FileViewer';
 import { Costi } from './pages/Costi';
 import { Qualita } from './pages/Qualita';
 import {normalizeFileArg} from '@shared/file-view';
-import { TaskPage } from './pages/Task';
+import { ActivitiesPage } from './pages/Activities';
 import { BrainMapView } from './map/BrainMap';
 import type { LiveSource } from './lib/live';
 import { preloadEngine } from './map/engine';
@@ -29,14 +29,15 @@ export type { DiscussBridge };
 export type { LiveSnapshot, LiveSource, LiveTool } from './lib/live';
 export { FADE_MS } from './lib/live';
 
-export type BrainPageId = 'home' | 'task' | 'andamento' | 'script' | 'log' | 'file' | 'skill' | 'impostazioni' | 'agenti' | 'registrazioni' | 'impara' | 'memoria' | 'piani' | 'collegamenti' | 'scacchi';
+export type BrainPageId = 'home' | 'attivita' | 'andamento' | 'script' | 'log' | 'file' | 'skill' | 'impostazioni' | 'agenti' | 'registrazioni' | 'impara' | 'memoria' | 'piani' | 'collegamenti' | 'scacchi';
 
 /** label is a getter (ADR 0057): read at use time, so it follows the current language */
 const page = (id: BrainPageId, key: string): { id: BrainPageId; readonly label: string; key: string } => ({ id, key, get label() { return id==='file'?t('viewer.title'):t(`brainPages.nav.${id}`); } });
 export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string }[] = [
   page('home', 'G H'),
   page('agenti', 'G A'),
-  page('task', 'G O'),
+  // «Attività pianificate» (ADR 0373) took Task's place and its G O key; the old task/oggi/adesso/dafare/devops links open it
+  page('attivita', 'G O'),
   // Skill and Script are Memoria's Skill tab (ADR 0122, 0263): their ids, keys and links stay and land on it
   // (actions.ts go() → lib/memory-hub.ts); the sidebar does not list them
   // Andamento (ADR 0202): Costi, Qualità, Apprendimento and Uso as tabs (components/andamento/), rendered
@@ -69,7 +70,7 @@ export const isBrainPage = (s: string): s is BrainPageId => IDS.has(s);
  *  (the user, 2026-10-12: "li trovo ridondanti e poco utili, mentre sezione devops super utile"), DevOps became Task
  *  (ADR 0079). Fatto e standup left (ADR 0181): its old links open the Log, the app's record of what was done;
  *  Confronto modelli went (ADR 0201): its links open Andamento's Qualità tab (lib/andamento.ts TREND_PAGES). */
-export const PAGE_ALIAS: Record<string, BrainPageId> = { fatto: 'log', diario: 'log', oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', esplora: 'file', procedure: 'skill', procedura: 'skill', idee: 'memoria', spunti: 'memoria', regole: 'memoria', miglioramento: 'memoria', changelog: 'log', diagnostica: 'log', dashboard: 'memoria',
+export const PAGE_ALIAS: Record<string, BrainPageId> = { fatto: 'log', diario: 'log', task: 'attivita', oggi: 'attivita', adesso: 'attivita', dafare: 'attivita', devops: 'attivita', esplora: 'file', procedure: 'skill', procedura: 'skill', idee: 'memoria', spunti: 'memoria', regole: 'memoria', miglioramento: 'memoria', changelog: 'log', diagnostica: 'log', dashboard: 'memoria',
   // the four statistics pages merged into Andamento (ADR 0202); parseTarget and go() keep the tab they name
   costi: 'andamento', qualita: 'andamento', apprendimento: 'andamento', classificatori: 'andamento' };
 /** Their old go-to keys still work: G D (the Dashboard, gone with ADR 0122) opens Memoria; G Q and G J
@@ -112,7 +113,7 @@ export function BrainPage({ id, arg, onNavigate, bridge }: { id: BrainPageId; ar
     case 'home': page = <Suspense fallback={null}><Home nav={nav} /></Suspense>; break;
     case 'file': page = <FileViewer arg={cur.arg}/>; break;
     case 'impostazioni': case 'skill': case 'registrazioni': case 'impara': case 'scacchi': case 'memoria': case 'piani': case 'collegamenti': case 'script': case 'log': page = null; break; // rendered by the app (App.tsx PageFrame)
-    case 'task': page = <TaskPage />; break;
+    case 'attivita': page = <ActivitiesPage />; break;
     // in the app Andamento is App.tsx PageFrame's (components/andamento/); alone (the test route) its two brain tabs show
     // as the full pages they were
     case 'andamento': { const tr = parseTrendArg(cur.arg); page = tr.tab === 'costi' ? <Costi arg={tr.rest ?? undefined} nav={nav} /> : tr.tab === 'qualita' ? <Qualita nav={nav} /> : null; break; }

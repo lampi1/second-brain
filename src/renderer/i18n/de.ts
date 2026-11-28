@@ -33,6 +33,7 @@ import { visualsDe } from './areas/visuals.de';
 import { dialogsDe } from './areas/dialogs.de';
 import { toolsDe } from './areas/tools.de';
 import { brainPagesDe } from './areas/brainPages.de';
+import { activitiesDe } from './areas/activities.de';
 import { chessDe } from './areas/chess.de';
 import { libraryDe } from './areas/library.de';
 import { brainLibDe } from './areas/brainLib.de';
@@ -138,6 +139,7 @@ export const de: Dict = {
   ...dialogsDe,
   ...toolsDe,
   ...brainPagesDe,
+  ...activitiesDe,
   ...chessDe,
   ...libraryDe,
   ...brainLibDe,
