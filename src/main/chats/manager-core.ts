@@ -34,8 +34,6 @@ export abstract class ManagerCore {
   protected synthesisRetry = new Map<string, NodeJS.Timeout>();
   /** notes for a chat's next message (the user wrote in one of its delegated children): they ride along, no turn of their own */
   protected notesFor = new Map<string, string[]>();
-  /** what changed in a chat's plan by another hand, told with its next message (ADR 0372) */
-  protected planNotes = new Map<string, string[]>();
   protected userWroteListeners: ((n: UserWroteNote) => void)[] = [];
   protected cleanReportListeners: ((n: CleanReportNote) => boolean)[] = [];
   /** agents/watched-asks.ts (ADR 0371 point 4): the user's own messages to the Orchestrator, and each released root result */

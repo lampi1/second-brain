@@ -101,6 +101,8 @@ export abstract class ManagerContinuity extends ManagerRequests {
     // a new task never lands silently on a chat that already went on: the caller assigns the one that goes on
     if (next && opts.assignment) throw new Error(`This chat already goes on in «${next.s.title}» (chatId ${next.s.id}): assign the task there.`);
     if (next) return { ...next.s };
+    // a plan that passed to another Strategist left this chat for good: a successor of it would make a second plan (ADR 0372)
+    if (r.s.plan?.handed) throw new Error('Il piano di questa chat è passato a un altro Strategist: continua in quella chat, o aprine una nuova.');
     // never two agents on the same files: the old chat must have finished its turn (a fresh note does not cover this one)
     const hasTurns = r.lastTurnAt > 0 || r.items.some(i => i.kind === 'result' || i.kind === 'user');
     if (r.handoffTurn || (hasTurns && (r.session?.busy || r.pending.size > 0))) throw new Error('La chat sta lavorando o ti aspetta: si riprende quando ha finito il turno.');

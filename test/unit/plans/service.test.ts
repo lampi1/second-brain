@@ -494,7 +494,7 @@ describe('widening and failing hand-overs (ADR 0372)', () => {
     expect(w.get(m.id)!.state).toBe('finished');
     await w.change(m.id, { steps: [{ op: 'add', title: 'Ancora', after: [1] }] as never }, 'Orchestrator');
     expect(w.get(m.id)!.finishedAt).toBeUndefined();
-    expect(w.get(m.id)!.state).not.toBe('finished');
+    expect(w.get(m.id)).toMatchObject({ state: 'stopped', stopped: { by: 'gone' } });
     expect(w.get(m.id)!.plan!.steps[0]!.state).toBe('done');
   });
   it('if the new Strategist cannot start, the plan waits stopped with its steps, and «Riprendi» opens one', async () => {

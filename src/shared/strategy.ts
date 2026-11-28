@@ -54,6 +54,10 @@ export interface StrategyPlan {
   putAway?: true;
   /** the plan passed to another Strategist (ADR 0372): this chat's copy is history, it moves and delegates nothing */
   handed?: true;
+  /** with `handed`: the chat that has the plan now; late reports of this chat's delegates go there */
+  handedTo?: string;
+  /** what another hand changed in this plan, told to the chat with its next message and then dropped */
+  news?: string[];
   /** every doubt of this job, open or closed with who closed it and its source (ADR 0344); absent = never listed */
   doubts?: PlanDoubt[];
 }
@@ -372,7 +376,8 @@ export function readPlan(v: unknown): StrategyPlan | null {
     ...(p.pcOnly === true ? { pcOnly: true } : {}), ...(p.asked ? { asked: p.asked as number } : {}), ...(p.enough === true ? { enough: true } : {}),
     steps,
     ...(p.doneWhen ? { doneWhen: p.doneWhen as string } : {}), ...(p.stopped === true ? { stopped: true as const, ...(p.putAway === true ? { putAway: true as const } : {}) } : {}),
-    ...(p.handed === true ? { handed: true as const } : {}),
+    ...(p.handed === true ? { handed: true as const } : {}), ...(typeof p.handedTo === 'string' && /^[\w-]{1,80}$/.test(p.handedTo) ? { handedTo: p.handedTo } : {}),
+    ...(Array.isArray(p.news) && p.news.length ? { news: p.news.filter((x): x is string => typeof x === 'string' && x.length <= 600).slice(-10) } : {}),
     ...(doubts ? { doubts } : {}),
   };
 }

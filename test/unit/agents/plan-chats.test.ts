@@ -736,3 +736,104 @@ describe('a plan passes from one Strategist to another (ADR 0372)', () => {
     expect(f.sent.get(s.id)!.at(-1)).not.toContain('il tuo piano è cambiato');
   });
 });
+
+describe('what the review of the hand-over found (ADR 0372)', () => {
+  const THREE = { steps: [{ title: 'Uno', role: 'artisan', after: [] }, { title: 'Due', role: 'artisan', after: [1] }], doneWhen: 'I test passano', doubts: [{ text: 'Vale per i resi?', by: 'choice', answer: 'No', source: 'più prudente' }] };
+  const REPORT = { outcome: 'done', summary: 'fatto bene', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }] };
+  async function proposed() {
+    const f = fixture(), s = await f.root();
+    await f.enough(s.id);
+    await f.call('plan_propose', s.id, THREE);
+    return { f, s, id: f.mapOf(s.id).id };
+  }
+  async function delegated() {
+    const f = fixture(), s = await f.proposed();
+    await act(f, s.id, 'approve');
+    await f.call('agent_delegate', s.id, f.task('scout', 'Sconti · Dove', 1));
+    return { f, s, id: f.mapOf(s.id).id, kid: f.kids(s.id)[0]!.id };
+  }
+
+  it('doubts and «finito quando» go along, to a new Strategist and to an open one', async () => {
+    for (const open of [false, true]) {
+      const { f, id } = await proposed();
+      const to = open ? (await f.root()).id : undefined;
+      const got = (await f.maps().handoff(id, to ? { to } : {})).plan;
+      const kept = { doneWhen: 'I test passano', doubts: [{ text: 'Vale per i resi?', state: 'closed', answer: 'No' }] };
+      expect(got.plan).toMatchObject(kept);
+      expect(f.m.planOf(got.owner!.chatId)).toMatchObject(kept);
+    }
+  });
+
+  it('an open doubt goes along and still holds the proposal of the new Strategist', async () => {
+    const f = fixture(), s = await f.root();
+    await f.enough(s.id);
+    await f.call('plan_propose', s.id, { steps: THREE.steps, doubts: [{ text: 'Scadono?' }] });
+    const id = f.mapOf(s.id).id, fresh = (await f.maps().handoff(id)).plan.owner!.chatId;
+    expect(f.m.planOf(fresh)!.doubts).toMatchObject([{ text: 'Scadono?', state: 'open' }]);
+    await f.enough(fresh);
+    await f.call('plan_propose', fresh, { steps: THREE.steps });
+    expect(f.m.planOf(fresh)!.phase).not.toBe('proposed');
+  });
+
+  it('the old chat is not continued: no second plan is born from it', async () => {
+    const { f, s, id } = await delegated();
+    await f.maps().handoff(id);
+    await expect(f.m.continueChat(s.id, { ask: false })).rejects.toThrow(/passato a un altro Strategist/);
+    expect(f.maps().list()).toHaveLength(1);
+  });
+
+  it('a late report of the old chat\'s delegate moves the step of the plan and goes to the Strategist that has it', async () => {
+    const { f, s, id, kid } = await delegated();
+    const fresh = (await f.maps().handoff(id)).plan.owner!.chatId, before = f.sent.get(s.id)?.length ?? 0;
+    await f.call('agent_report', kid, REPORT);
+    expect(f.maps().get(id)!.plan!.steps[0]).toMatchObject({ state: 'done', proof: { by: 'report' } });
+    expect(f.m.planOf(s.id)).toMatchObject({ handed: true, handedTo: fresh });
+    await vi.waitFor(() => expect((f.sent.get(fresh) ?? []).some(t => t.includes('fatto bene'))).toBe(true), { timeout: 5000 });
+    expect(f.sent.get(s.id)?.length ?? 0).toBe(before);
+  });
+
+  it('a quit between letting go and taking over: after the restart «Riprendi» opens a Strategist', async () => {
+    const { f, s, id } = await delegated();
+    await f.m.planRelease(s.id);
+    await f.m.shutdown();
+    const g = fixture({ dir: f.dir });
+    expect(g.maps().get(id)).toMatchObject({ state: 'stopped', stopped: { by: 'replaced' } });
+    const back = await g.maps().act(id, 'resume');
+    expect(back.owner!.chatId).not.toBe(s.id);
+    expect(g.maps().list()).toHaveLength(1);
+    expect(back.plan!.steps).toHaveLength(3);
+  });
+
+  it('a removal that was never approved removes nothing on the way', async () => {
+    const { f, s, id } = await delegated();
+    await f.call('plan_propose', s.id, { revise: true, steps: [{ title: 'Nuovo', role: 'artisan', after: [] }], remove: [1] });
+    const free = await f.root();
+    const got = (await f.maps().handoff(id, { to: free.id })).plan;
+    expect(got.plan!.steps.map(x => x.title)).toEqual(expect.arrayContaining(['Trovo dove si calcola lo sconto', 'Nuovo']));
+    expect(got.plan!.steps.some(x => x.drop)).toBe(false);
+  });
+
+  it('the plan keeps its name, and a closed Strategist is not reopened to take it', async () => {
+    const { f, id } = await delegated(), title = f.maps().get(id)!.title;
+    const closed = await f.root();
+    await f.m.archive(closed.id);
+    await expect(f.maps().handoff(id, { to: closed.id })).rejects.toThrow(/chiusa/);
+    expect(f.m.list().find(c => c.id === closed.id)!.closedAt).toBeDefined();
+    expect((await f.maps().handoff(id)).plan.title).toBe(title);
+    const other = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'strategist', title: 'Un altro nome', prompt: 'ciao' }, 'agent');
+    expect((await f.maps().handoff(id, { to: other.id })).plan.title).toBe(title);
+  });
+
+  it('the note of a change waits on the chat, also over a restart, until a message really goes out', async () => {
+    const { f, s, id } = await delegated();
+    await planAction(f.maps(), { kind: 'orchestrator' }, { action: 'edit', plan: id, steps: [{ op: 'add', title: 'In più', after: [3] }] });
+    expect(f.m.planOf(s.id)!.news).toHaveLength(1);
+    expect(f.maps().get(id)!.plan).not.toHaveProperty('news');
+    await f.m.shutdown();
+    const g = fixture({ dir: f.dir });
+    expect(g.m.planOf(s.id)!.news).toHaveLength(1);
+    await g.m.send(s.id, 'eccomi');
+    expect(g.sent.get(s.id)!.at(-1)).toContain('il tuo piano è cambiato');
+    expect(g.m.planOf(s.id)!.news).toBeUndefined();
+  });
+});

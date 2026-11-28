@@ -26,7 +26,7 @@ function over(c: ChatSummary): boolean {
 /** The steps of an earlier chat stay on the map while its new chat has none yet; what was under way there is not. */
 function planFrom(m: Plan, c: ChatSummary): StrategyPlan | undefined {
   if (!c.plan) return m.plan ? structuredClone(m.plan) : undefined;
-  const plan = structuredClone(c.plan);
+  const { news: _n, ...plan } = structuredClone(c.plan);
   if (plan.steps.length || plan.phase === 'done' || !m.past?.length || !m.plan?.steps.length) return plan;
   return { ...plan, steps: m.plan.steps.map(({ drop: _d, ...s }) => structuredClone(s)) };
 }

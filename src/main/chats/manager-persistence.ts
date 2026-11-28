@@ -61,13 +61,21 @@ export abstract class ManagerPersistence extends ManagerCore {
   protected stepReport(parent: Rec, id: string): StepReport | undefined {
     const c = this.chats.get(id), result = c?.s.delegation?.result;
     if (!c || !result || result.noReport) return undefined;
-    if (!c.s.closedAt && c.s.run?.parentRunId && c.s.run.parentRunId !== parent.s.run?.runId) return undefined;
+    // a delegate of the chat that handed the plan over counts for the chat that has it now
+    if (!c.s.closedAt && c.s.parentId === parent.s.id && c.s.run?.parentRunId && c.s.run.parentRunId !== parent.s.run?.runId) return undefined;
     return { outcome: result.outcome, summary: result.summary, at: result.at };
+  }
+
+  /** The chat whose plan a delegate's work moves: its parent, or the chat the parent handed the plan to (ADR 0372). */
+  protected planHolder(parent: Rec): Rec {
+    let r = parent;
+    for (let n = 0; r.s.plan?.handed && r.s.plan.handedTo && n < 20; n++) { const next = this.chats.get(r.s.plan.handedTo); if (!next) break; r = next; }
+    return r;
   }
 
   /** A delegated chat of a blocked step is open again with its work to give: the step is under way again. Nothing else moves. */
   protected stepOfEnded(r: Rec): void {
-    const parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
+    const up = r.s.parentId ? this.chats.get(r.s.parentId) : undefined, parent = up && this.planHolder(up);
     if (!parent?.s.plan || r.s.closedAt) return;
     const next = afterReopen(parent.s.plan, r.s.id);
     if (next === parent.s.plan) return;
