@@ -147,7 +147,7 @@ export interface AppCtlDeps {
   brainEdit?: BrainQuickEdit;
   /** the «Giornale» (ADR 0280): app_news, app_news_edition, app_news_source, app_news_refresh on the Orchestrator's own endpoint */
   news?: NewsControl;
-  /** the scheduled activities (ADR 0373): app_activity on the Orchestrator's own endpoint; the engine's service */
+  /** the scheduled activities (ADR 0374): app_activity on the Orchestrator's own endpoint; the engine's service */
   activities?: ActivitiesControl;
   /** the configuration the Orchestrator changes for the user (app_config, ADR 0149); settings come from `brain` */
   config?: Omit<ConfigDeps, 'callerId' | 'userAsked' | 'saidYesTo' | 'brain'>;

@@ -928,7 +928,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // the other side's answers and the verdicts: never read by a run, whatever the brain lists
     denyRead: () => { const root = brain.info().brainRoot; return root ? [path.join(root, 'reviews', 'compare')] : []; },
   });
-  // «Attività pianificate» (ADR 0373): its own minute timer starts here, only while the app is open
+  // «Attività pianificate» (ADR 0374): its own minute timer starts here, only while the app is open
   const activities = buildActivities(ctx, brain, headless, mcpServers, wake);
   activities.start();
   const oneShot = new OneShotService({ userData: ctx.userData, profile: id => agents.list().profiles.find(p => p.id === currentRoleId(id)),

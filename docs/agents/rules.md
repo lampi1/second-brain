@@ -28,7 +28,8 @@ app (each CLI logs in itself) with these exceptions:
   that server's own process env or request header, never to an engine or a chat (ADR 0086); an http server's MCP OAuth
   login the same way: the user's «Accedi» in the system browser, the access and refresh tokens encrypted with
   safeStorage, bound to the server's origin, refreshed by main, sent only in that server's Authorization header
-  (ADR 0273);
+  (ADR 0273), and its OAuth client secret when the server's client has one (write-only, encrypted, never in the
+  definition or an IPC answer, sent only to that login server's token endpoint, ADR 0373);
 - the Telegram bot token the user types in Settings → Telefono, encrypted with safeStorage in its own slot, write-only
   from the UI, used only by the main process in its calls to `api.telegram.org`, redacted from logs (`addRedaction`,
   `src/main/log.ts`), never given to an engine, a chat, an agent or a file (ADR 0219);

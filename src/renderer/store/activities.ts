@@ -1,4 +1,4 @@
-// The renderer's state of the «Attività pianificate» (ADR 0373): main pushes the whole ActivitiesState on 'activities:changed'
+// The renderer's state of the «Attività pianificate» (ADR 0374): main pushes the whole ActivitiesState on 'activities:changed'
 // (after every change and every run's end); this store starts itself on the first use of the page, loads 'activities:state'
 // once and keeps the last value. Actions: save, switch, remove, global pause, «Esegui ora» and a activity's history; each
 // says its outcome with a toast and returns whether it worked (the form stays open on an error). Used by

@@ -1,4 +1,4 @@
-// The Gmail reader of the scheduled activities (ADR 0373): an ActivitySourceReader that reads the mailbox through Google's
+// The Gmail reader of the scheduled activities (ADR 0374): an ActivitySourceReader that reads the mailbox through Google's
 // official remote MCP (https://gmailmcp.googleapis.com/mcp/v1, scope gmail.readonly) added by the user in Impostazioni →
 // Connettori, at zero tokens: no model is involved. It asks `search_threads` with a Gmail query built from the cursor and
 // the activity's filter, maps the threads to ActivityItems (one per thread: its newest message) and, only when a thread

@@ -1,4 +1,4 @@
-// «Attività pianificate» (ADR 0373): the engine's state file, userData/activities.json. What it keeps: the catalog, each
+// «Attività pianificate» (ADR 0374): the engine's state file, userData/activities.json. What it keeps: the catalog, each
 // activity's cursor (what the source already gave), its next run time, its last ACTIVITY_HISTORY_MAX runs and the global
 // pause. Written atomically (temp file + rename, a direct write if the rename is refused for a moment on Windows) and
 // rechecked on load, so a hand-edited or half-written file never breaks the start (it starts empty and says so in the log).

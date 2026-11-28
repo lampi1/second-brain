@@ -1,4 +1,4 @@
-/* «Attività pianificate» (ADR 0373): the page's styles (brain/pages/Activities.tsx). Classes start with ac-; colours and radii are the app's tokens. */
+/* «Attività pianificate» (ADR 0374): the page's styles (brain/pages/Activities.tsx). Classes start with ac-; colours and radii are the app's tokens. */
 .ac-page { display: block; min-width: 0; padding-top: 6px; color: var(--text); font-size: var(--fs-m); }
 .ac-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; flex-wrap: wrap; margin-bottom: 18px; }
 .ac-head h1 { margin: 0 0 6px; }

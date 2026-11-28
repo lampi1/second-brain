@@ -1,4 +1,4 @@
-// «Attività pianificate» (ADR 0373): the engine. It owns the catalog, the timer and the run of every activity.
+// «Attività pianificate» (ADR 0374): the engine. It owns the catalog, the timer and the run of every activity.
 // A RUN: the activity's reader gives what the source shows now (zero tokens) → selectNew keeps what is after the cursor and
 // passes the filter → nothing left: the run ends «idle», no model → else the daily cap is checked (reached: «capped», the
 // activity waits for tomorrow, the cursor stays so nothing is lost) → ONE triage pass (triage.ts, cheapest model, no tool)

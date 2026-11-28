@@ -524,7 +524,7 @@
 .bx-md code.bx-copy:hover { border-color: var(--bx-blue-line); }
 .bx-md code.bx-copy:focus-visible { border-color: var(--bx-blue-line); outline: 2px solid var(--focus); outline-offset: 1px; }
 
-/* ── The DevOps lead line (the Task page is gone, ADR 0373); the list styles are in pages/worklog.css ── */
+/* ── The DevOps lead line (the Task page is gone, ADR 0374); the list styles are in pages/worklog.css ── */
 .dv-lead { font-size: var(--bx-fs-l); color: var(--bx-text-2); max-width: 82ch; line-height: 1.5; }
 .dv-lead b { color: var(--bx-text); font-weight: 600; }
 
@@ -626,7 +626,7 @@
 .dv-tests { display: grid; gap: 6px; justify-items: start; }
 .dv-tests ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .dv-tests li { display: flex; gap: 8px; align-items: baseline; font-size: var(--bx-fs-s); color: var(--bx-text-2); }
-/* "Test e QA" bars (the page is gone, ADR 0373) */
+/* "Test e QA" bars (the page is gone, ADR 0374) */
 .qa-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 2px; background: var(--bx-surface-2); }
 .qa-seg { min-width: 6px; }
 .qa-seg.good { background: var(--bx-green); }

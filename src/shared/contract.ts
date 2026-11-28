@@ -140,7 +140,7 @@ export interface EventMap {
   'news:changed': NewsState;
   /** Memoria → Artifact (ADR 0328): the index changed (an agent saved one, the user removed one, a file went) */
   'library:changed': void;
-  /** «Attività pianificate» (ADR 0373): an activity was saved, switched, deleted or ran; the whole state after it */
+  /** «Attività pianificate» (ADR 0374): an activity was saved, switched, deleted or ran; the whole state after it */
   'activities:changed': ActivitiesState;
 }
 

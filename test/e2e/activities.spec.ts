@@ -1,4 +1,4 @@
-// E2E of «Attività pianificate» (ADR 0373), the page that took Task's place in ☰: on the demo's in-memory catalog (four
+// E2E of «Attività pianificate» (ADR 0374), the page that took Task's place in ☰: on the demo's in-memory catalog (four
 // activities, ipc-handlers/activities-demo.ts) it opens from the menu and from the old G O key; a row shows the switch, the
 // schedule in words and the last run «letti · tenuti · proposte · costo»; the switch turns an activity on; «Esegui ora» adds
 // a run to the detail, which lists them; the global pause clears the next runs; a wrong form shows the validator's errors and

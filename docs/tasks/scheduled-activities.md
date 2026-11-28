@@ -1,10 +1,10 @@
-<!-- Work split of the «Attività pianificate» feature (ADR 0373): four parts built in parallel from one contract, and who owns which files. -->
+<!-- Work split of the «Attività pianificate» feature (ADR 0374): four parts built in parallel from one contract, and who owns which files. -->
 # Scheduled activities: the four parallel parts
 
 The contract is done and fixed: read it first, then build your part. Change it only through the integrator (a part that needs a
 different shape asks; it never edits another part's files).
 
-- Decision and rules: `docs/adr/0373-scheduled-activities.md`.
+- Decision and rules: `docs/adr/0374-scheduled-activities.md`.
 - Shapes and pure rules (validation, `nextRunAt`, filter, cursor, triage clip, templates): `src/shared/activities.ts`.
 - IPC: `src/shared/contract/activities.ts` (7 invoke channels) and the event `activities:changed` in `src/shared/contract.ts`.
 - Placeholder handlers (answer «not ready»): `src/main/ipc-handlers/activities.ts`, wired in `src/main/index.ts`.
@@ -26,7 +26,7 @@ different shape asks; it never edits another part's files).
 3. The engine takes the readers as `ActivitySourceReader` objects so that the engine, the tools and the page can be tested with fakes
    before the real sources exist.
 4. A branch's gate: `npm run check:quick` green, a clean Sentinel, the guard; merge to `main` only when verified (rules 7-9).
-5. Nothing is sent, deleted or run on production by an activity: it only proposes (ADR 0373 decision 4).
+5. Nothing is sent, deleted or run on production by an activity: it only proposes (ADR 0374 decision 4).
 
 ## Wiring notes: the tools part (`app_activity`)
 

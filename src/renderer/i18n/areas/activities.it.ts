@@ -1,4 +1,4 @@
-// Italian UI texts of the «Attività pianificate» page (ADR 0373, brain/pages/Activities.tsx): spread into it.ts. Keys start with "activities.".
+// Italian UI texts of the «Attività pianificate» page (ADR 0374, brain/pages/Activities.tsx): spread into it.ts. Keys start with "activities.".
 export const activitiesIt = {
   'brainPages.nav.attivita': 'Attività pianificate',
   'activities.title': 'Attività pianificate',

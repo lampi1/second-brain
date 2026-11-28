@@ -114,7 +114,7 @@ export function buildNews(ctx: Ctx, brain: BrainService, headless: HeadlessRunne
   });
 }
 
-/** «Attività pianificate» (ADR 0373): the engine with its readers. DevOps = the Task service's own read (the brain's or the
+/** «Attività pianificate» (ADR 0374): the engine with its readers. DevOps = the Task service's own read (the brain's or the
  *  app's devops-me.mjs, zero tokens); Outlook and Teams = tools/call on the user's connectors through the MCP gateway (zero
  *  tokens, held back while a connector needs its login); Gmail = the connector the user added whose id says «gmail» (none:
  *  a visible error); the triage = one hidden pass on Claude with no tool; the news = one grouped news to the

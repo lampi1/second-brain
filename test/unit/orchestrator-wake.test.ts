@@ -420,7 +420,7 @@ describe('OrchestratorWake', () => {
     expect(off.w.stalledWork({ threadId: 'w1', title: 't', detail: 'd' })).toBe(false);
   });
 
-  it('a scheduled activity\'s proposal wakes the Orchestrator as one grouped news per activity, the newest wins (ADR 0373)', async () => {
+  it('a scheduled activity\'s proposal wakes the Orchestrator as one grouped news per activity, the newest wins (ADR 0374)', async () => {
     const { w, sent } = make();
     expect(w.activityNews({ activityId: 'a1', title: 'Posta di Rossi', text: 'Prima.' })).toBe(true);
     expect(w.activityNews({ activityId: 'a1', title: 'Posta di Rossi', text: 'Seconda: 2 mail nuove.' })).toBe(true);

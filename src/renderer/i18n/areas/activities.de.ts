@@ -1,4 +1,4 @@
-// German UI texts of the «Geplante Aktivitäten» page (ADR 0373): the same keys as activities.it.ts (typed by it), spread into de.ts.
+// German UI texts of the «Geplante Aktivitäten» page (ADR 0374): the same keys as activities.it.ts (typed by it), spread into de.ts.
 import type { activitiesIt } from './activities.it';
 
 export const activitiesDe: typeof activitiesIt = {

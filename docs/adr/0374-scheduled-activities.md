@@ -1,4 +1,4 @@
-# ADR 0373 · Scheduled activities: the app watches DevOps, Outlook, Teams and Gmail on a timer, at zero tokens until something matters
+# ADR 0374 · Scheduled activities: the app watches DevOps, Outlook, Teams and Gmail on a timer, at zero tokens until something matters
 
 Date: 2026-11-28 · Status: accepted (owner, 2026-11-28: «al posto di task che non la guardo mai», «lettura mail di devops»,
 «Gmail da subito», «nn aprire nessuna issue risolvi te») · Builds on: ADR 0079, 0093, 0182 (the Task page and its reader),

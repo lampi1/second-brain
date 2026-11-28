@@ -1,7 +1,7 @@
 // The left rail: chat-focused sidebar (Grindhouse header + live delegation tree with role mini-icons in SidebarTree.tsx)
 // paired with a discreet Hamburger (☰) popover menu holding the other views grouped into Lavoro (Grindhouse, Piani),
 // Svago (Impara, Scacchi) and Sistema (Agenti, Memoria, Andamento, Impostazioni): lib/nav-menu.ts, ADR 0366. Lavoro also
-// lists «Attività pianificate» (ADR 0373, it took Task's place). Registrazioni, Collegamenti and Log are out of the menu,
+// lists «Attività pianificate» (ADR 0374, it took Task's place). Registrazioni, Collegamenti and Log are out of the menu,
 // still reachable from the palette and the Orchestrator; the proposals of the memory light the dot on ☰.
 // Used by App.tsx.
 import { useEffect, useRef, useState, type ReactNode } from 'react';

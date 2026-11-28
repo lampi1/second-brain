@@ -1,4 +1,4 @@
-// The ☰ menu of the sidebar (lib/nav-menu.ts, ADR 0366, issue #491, ADR 0373): Grindhouse, Piani and Attività pianificate under
+// The ☰ menu of the sidebar (lib/nav-menu.ts, ADR 0366, issue #491, ADR 0374): Grindhouse, Piani and Attività pianificate under
 // Lavoro, then Impara, Scacchi, Agenti, Memoria, Andamento, Impostazioni in three groups; Registrazioni, Collegamenti and Log
 // are hidden from it but remain pages of the app (reachable from the palette and the Orchestrator). «Attività pianificate»
 // took Task's place, and Task's old links open it.

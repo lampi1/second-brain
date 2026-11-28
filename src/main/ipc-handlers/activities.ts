@@ -1,4 +1,4 @@
-// IPC handlers, «Attività pianificate» (ADR 0373): the seven 'activities:*' channels of src/shared/contract/activities.ts.
+// IPC handlers, «Attività pianificate» (ADR 0374): the seven 'activities:*' channels of src/shared/contract/activities.ts.
 // With the engine's service (src/main/activities/service.ts) they call it; without one (the integrator has not wired it
 // yet) they keep the contract commit's placeholder answers (an empty catalog, «not ready») so that main compiles and the
 // page shows its empty state. Wiring: src/main/index.ts passes the service to activitiesHandlers(service).

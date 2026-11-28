@@ -1,10 +1,10 @@
-// The Orchestrator's tool for the «Attività pianificate» (ADR 0373; owner 2026-11-28: «l'orchestrator ovviamente deve poterle
+// The Orchestrator's tool for the «Attività pianificate» (ADR 0374; owner 2026-11-28: «l'orchestrator ovviamente deve poterle
 // gestire in toto, attivarle, disabilitarle, crearne nuove facilmente»): ONE tool, app_activity, with the actions list,
 // create, update, enable, disable, delete, run and history (ActivityToolArgs in src/shared/activities.ts). It calls the same
 // service methods as the page's IPC handlers (ActivitiesControl below mirrors the 'activities:*' channels), so there is no
 // second path to a write: every field goes through validateActivityInput, and a wrong one is refused with a reason in
 // Italian. No approval and no «user turn» gate: the Orchestrator counts as the user (ADR 0275), an activity only reads and
-// proposes (ADR 0373 decision 4) and can be deleted and rebuilt in a minute. `id` is an activity's id or its name. The
+// proposes (ADR 0374 decision 4) and can be deleted and rebuilt in a minute. `id` is an activity's id or its name. The
 // answers carry names, the rules in words, last runs and costs, and never an item's text (no mail bodies, no chat text).
 // The engine part builds the service; the integrator hands it to appControlTools as `activities` (see the wiring notes in
 // docs/tasks/scheduled-activities.md). Tests: test/unit/appctl-activities.test.ts, with a fake ActivitiesControl.

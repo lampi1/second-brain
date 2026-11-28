@@ -10,7 +10,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { log, errText } from '../log';
+import { addRedaction, log, errText } from '../log';
 import type { McpServer } from '../mcp/server';
 import type { SecretCipher } from '../engines/secrets';
 import type { McpImportCandidate, McpServerDef, McpServerView, McpServersState, McpTestResult } from '../../shared/mcp-servers';
@@ -66,7 +66,10 @@ export class McpServersService {
   constructor(private readonly opts: McpServersOptions) {
     this.store = new McpServerStore(opts.userData, opts.cipher);
     this.oauth = new McpOAuth({
-      load: id => { const j = this.store.oauthSession(id); if (!j) return null; try { return JSON.parse(j) as OAuthSession; } catch { return null; } },
+      load: id => {
+        const j = this.store.oauthSession(id); if (!j) return null;
+        try { const s = JSON.parse(j) as OAuthSession; if (s.clientSecret) addRedaction(s.clientSecret); return s; } catch { return null; }
+      },
       save: (id, sess) => {
         const def = this.store.def(id);
         if (!def?.url || new URL(def.url).origin !== sess.origin) return false;
@@ -126,7 +129,7 @@ export class McpServersService {
   /** The servers as the cards show them, without asking the OS keyring whether it works: the top bar's chip reads this
    *  at start (ADR 0349), and on macOS that question can reach the Keychain before the user opened anything. */
   views(): McpServerView[] {
-    return this.store.servers().map(s => ({ ...s, secretMasks: this.store.masks(s.id), lastTest: this.store.test(s.id), login: s.transport === 'http' ? this.store.oauthLabel(s.id) : null }));
+    return this.store.servers().map(s => ({ ...s, secretMasks: this.store.masks(s.id), lastTest: this.store.test(s.id), login: s.transport === 'http' ? this.store.oauthLabel(s.id) : null, ...(s.transport === 'http' ? { oauthSecretSet: this.store.oauthSecretSet(s.id) } : {}) }));
   }
 
   state(): McpServersState {
@@ -281,7 +284,11 @@ export class McpServersService {
     if (def.awaiting) throw new Error(`«${def.label}» aspetta «Attiva»: attivalo prima dalla sua scheda.`);
     const why = this.store.secretsAvailable();
     if (why) throw new Error(`Accesso non salvabile: ${why}.`);
-    try { await this.oauth.login(def.id, def.url, def.oauth ?? {}, { ...def.headers }); }
+    // the client secret goes only to the token endpoint's origin it was first sent to (ADR 0373)
+    const secret = def.oauth?.clientId ? this.store.oauthClientSecret(def.id) : null;
+    const pinned = (): string | undefined => this.store.oauthSecretPin(def.id) ?? undefined;
+    const secretPin = { get origin() { return pinned(); }, set: (origin: string) => this.store.pinOAuthSecret(def.id, origin) };
+    try { await this.oauth.login(def.id, def.url, { ...def.oauth, ...(secret ? { clientSecret: secret, secretPin } : {}) }, { ...def.headers }); }
     catch (e) { log.warn('mcp-servers', 'MCP OAuth login failed', { data: { server: def.id }, cause: errText(e) }); const d = describeError(e); throw new Error(`${d.message} ${d.fix}`); }
     this.changed(def.id);
     return this.test(def.id);

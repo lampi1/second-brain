@@ -1,4 +1,4 @@
-// What the ☰ menu of the sidebar lists (ADR 0366, issue #491), in three groups. «Attività pianificate» (ADR 0373) took
+// What the ☰ menu of the sidebar lists (ADR 0366, issue #491), in three groups. «Attività pianificate» (ADR 0374) took
 // Task's place under Lavoro, always listed: the owner never opened Task and wants to switch activities on and off. Registrazioni,
 // Collegamenti and Log are hidden from it, not removed: they stay reachable from the command palette (Ctrl+K), their G-letter
 // keys and the Orchestrator (app_ui). Pure: used by components/Sidebar.tsx and lib/app-map.ts (the rail the Orchestrator

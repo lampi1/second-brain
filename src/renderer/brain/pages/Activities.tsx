@@ -1,4 +1,4 @@
-// «Attività pianificate» (ADR 0373): the page that replaces Task. One row per activity: the switch, the source, what it
+// «Attività pianificate» (ADR 0374): the page that replaces Task. One row per activity: the switch, the source, what it
 // does in words, the schedule in words (describeSchedule), the last run («letti · tenuti · proposte · costo», zero token
 // unless a model ran), and «Esegui ora», «Dettaglio» (the last 20 runs), «Modifica», «Elimina». On top the global pause and
 // the ready-made examples (activityTemplates) next to «Nuova attività»; the editor is validated by the same

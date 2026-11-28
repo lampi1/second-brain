@@ -1,4 +1,4 @@
-// The app's own call to a connector (McpGateway.callServer, ADR 0373: the «Attività pianificate» Outlook/Teams/Gmail readers):
+// The app's own call to a connector (McpGateway.callServer, ADR 0374: the «Attività pianificate» Outlook/Teams/Gmail readers):
 // no chat, its own connection that every chat's never shares, the same health rules as a chat's call (a held server throws
 // with the user's words and opens nothing; a failure counts in a row, the back-off's probe lets one call through), and
 // heldReason tells why a server is held. Fakes for the upstream and the clock; no process, no network.

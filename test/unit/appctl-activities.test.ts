@@ -1,4 +1,4 @@
-// The Orchestrator's tool for the scheduled activities (src/main/appctl/activities.ts, ADR 0373) over a fake service that
+// The Orchestrator's tool for the scheduled activities (src/main/appctl/activities.ts, ADR 0374) over a fake service that
 // behaves like the engine's handlers (validated save, switch, remove, run, history): every action, the id given as a name,
 // and every refusal with its reason in Italian. No engine, no clock, no disk.
 import { describe, expect, it } from 'vitest';

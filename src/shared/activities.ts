@@ -1,4 +1,4 @@
-// «Attività pianificate» (ADR 0373): the shapes and the pure rules shared by main (main/activities/: the timer, the
+// «Attività pianificate» (ADR 0374): the shapes and the pure rules shared by main (main/activities/: the timer, the
 // readers, the filter, the triage pass, the store), the renderer (the page that replaces «Task») and the Orchestrator's
 // tool app_activity (main/appctl/activities.ts). An ACTIVITY is one thing the user wants watched on a timer: a source
 // (DevOps, Outlook, Teams or Gmail), when to look (every N minutes, optionally on some days and inside a time window), a

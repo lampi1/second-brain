@@ -36,7 +36,7 @@ const page = (id: BrainPageId, key: string): { id: BrainPageId; readonly label: 
 export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string }[] = [
   page('home', 'G H'),
   page('agenti', 'G A'),
-  // «Attività pianificate» (ADR 0373) took Task's place and its G O key; the old task/oggi/adesso/dafare/devops links open it
+  // «Attività pianificate» (ADR 0374) took Task's place and its G O key; the old task/oggi/adesso/dafare/devops links open it
   page('attivita', 'G O'),
   // Skill and Script are Memoria's Skill tab (ADR 0122, 0263): their ids, keys and links stay and land on it
   // (actions.ts go() → lib/memory-hub.ts); the sidebar does not list them

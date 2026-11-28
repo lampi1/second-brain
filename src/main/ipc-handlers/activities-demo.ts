@@ -1,4 +1,4 @@
-// Demo handlers of the «Attività pianificate» (SB_DEMO=1, ADR 0373): the seven 'activities:*' channels answered from a small
+// Demo handlers of the «Attività pianificate» (SB_DEMO=1, ADR 0374): the seven 'activities:*' channels answered from a small
 // in-memory catalog (four made-up activities with their last runs, one of them Gmail) so that the page, its e2e and the
 // README screenshot can be seen with no engine, no source and no token. Nothing is written to disk and no model runs:
 // «Esegui ora» adds a quiet run. Pure of Electron: it takes a `push` callback for 'activities:changed'. Used by main/index.ts

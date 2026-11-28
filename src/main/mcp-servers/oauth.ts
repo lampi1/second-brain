@@ -6,7 +6,9 @@
 //      → the Protected Resource Metadata → its first authorization server → that server's metadata (RFC 8414 or OpenID
 //      discovery, both well-known forms);
 //   2. the client: the connector's own pre-registered client id (some servers, Keycloak among them, refuse dynamic
-//      registration), else dynamic client registration (RFC 7591) as a public client;
+//      registration), with its client secret when it has one (Google's «Desktop» clients; sent as `client_secret` at the
+//      code exchange and the refresh), else dynamic client registration (RFC 7591) as a public client; the connector may
+//      also pin the scope to ask (Google's metadata lists every Gmail scope, send included);
 //   3. authorization code + PKCE S256 in the system browser, the answer on a one-shot loopback listener on 127.0.0.1
 //      (RFC 8252; a fixed port when the connector names one), `resource` = the server (RFC 8707), the state checked;
 //   4. the token exchange; then refresh_token whenever the access token is within REFRESH_EARLY_MS of its end, or the
@@ -32,7 +34,14 @@ export interface OAuthSession {
   /** «Connesso come …» */
   who?: string; at: number;
 }
-export interface OAuthConfig { clientId?: string; port?: number }
+/** The connector's own OAuth settings. clientSecret is read from the store's encrypted slot by the caller (service.ts),
+ *  for this one call only: it is never part of the connector's definition. scope = the scopes to ask (else the server's). */
+export interface OAuthConfig {
+  clientId?: string; clientSecret?: string; port?: number; scope?: string;
+  /** Where the client secret may go: the token endpoint origin it was first sent to (none yet = this login pins it).
+   *  A `clientSecret` without it is refused. */
+  secretPin?: { origin?: string; set(origin: string): void };
+}
 export interface OAuthDeps {
   /** the session saved for a connector, or null */
   load(id: string): OAuthSession | null;
@@ -200,23 +209,40 @@ export class McpOAuth {
     try {
       if (cancelled) throw new McpClientError('auth', 'Login interrotto.', 'Premi di nuovo «Accedi».');
       let clientId = cfg.clientId?.trim(), clientSecret: string | undefined;
+      // a pre-registered client may come with its secret (Google's «Desktop» clients require it at the token endpoint)
+      // The login server comes from discovery, which the MCP server itself steers (its resource_metadata can name any
+      // https address): the secret goes only to the token endpoint's origin it was first sent to (ADR 0373).
+      let secretDest: string | undefined;
+      if (clientId && cfg.clientSecret) {
+        if (!cfg.secretPin) throw new McpClientError('auth', 'Il Client secret non può essere usato qui.', 'Riprova «Accedi» da Impostazioni → Connettori.');
+        secretDest = new URL(disc.as.token_endpoint).origin;
+        if (cfg.secretPin.origin && cfg.secretPin.origin !== secretDest) {
+          log.warn('mcp-servers', 'MCP OAuth login refused: the login server is not the one the client secret was given to', { data: { server: id, expected: cfg.secretPin.origin, found: secretDest }, cause: 'the discovered token endpoint is on another origin', hint: 'type the Client secret again in Impostazioni → Connettori if the change is right' });
+          throw new McpClientError('auth', 'Il server di login non è quello a cui avevi dato il Client secret.', 'Il Client secret non viene mandato a un altro indirizzo. Se il cambio è giusto, scrivilo di nuovo in «Modifica» e premi «Accedi».');
+        }
+        clientSecret = cfg.clientSecret; addRedaction(clientSecret);
+      }
+      const scope = cfg.scope?.trim() || disc.scope;
       if (!clientId) {
         if (!disc.as.registration_endpoint) throw new McpClientError('auth', 'Il server non permette di registrare l’app da sola.', 'Chiedi a chi lo gestisce un Client ID per second-brain e scrivilo in «Modifica» → Client ID OAuth.');
         const r = await this.json(disc.as.registration_endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify({ client_name: 'second-brain', redirect_uris: [redirect], grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'], token_endpoint_auth_method: 'none', ...(disc.scope ? { scope: disc.scope } : {}) }) });
+          body: JSON.stringify({ client_name: 'second-brain', redirect_uris: [redirect], grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'], token_endpoint_auth_method: 'none', ...(scope ? { scope } : {}) }) });
         if ((r.status !== 200 && r.status !== 201) || typeof r.body?.client_id !== 'string') throw new McpClientError('auth', `Registrazione dell’app rifiutata (HTTP ${r.status}).`, 'Chiedi a chi gestisce il server un Client ID e scrivilo in «Modifica» → Client ID OAuth.');
         clientId = r.body.client_id;
         if (typeof r.body.client_secret === 'string') { clientSecret = r.body.client_secret; addRedaction(clientSecret); }
       }
       const auth = new URL(disc.as.authorization_endpoint);
-      const q = { response_type: 'code', client_id: clientId, redirect_uri: redirect, code_challenge: challengeS256, code_challenge_method: 'S256', state, resource: disc.resource, ...(disc.scope ? { scope: disc.scope } : {}) };
+      const q = { response_type: 'code', client_id: clientId, redirect_uri: redirect, code_challenge: challengeS256, code_challenge_method: 'S256', state, resource: disc.resource, ...(scope ? { scope } : {}),
+        // Google gives a refresh token only to a request that asks for it (it has no `offline_access` scope)
+        ...(auth.hostname === 'accounts.google.com' ? { access_type: 'offline', prompt: 'consent' } : {}) };
       for (const [k, v] of Object.entries(q)) auth.searchParams.set(k, v);
       log.info('mcp-servers', 'MCP OAuth login opened in the browser', { data: { server: id, port, as: auth.host, registered: !cfg.clientId } });
       await this.d.openExternal(auth.toString());
       const got = await code;
+      if (secretDest && !cfg.secretPin?.origin) cfg.secretPin?.set(secretDest);   // first use: from now on only there
       const tok = await this.token(disc.as.token_endpoint, { grant_type: 'authorization_code', code: got, redirect_uri: redirect, client_id: clientId, code_verifier: verifier, resource: disc.resource, ...(clientSecret ? { client_secret: clientSecret } : {}) });
       if (cancelled) throw new McpClientError('auth', 'Login interrotto.', 'Premi di nuovo «Accedi».');
-      const s: OAuthSession = { ...tok, clientId, ...(clientSecret ? { clientSecret } : {}), tokenEndpoint: disc.as.token_endpoint, resource: disc.resource, ...(disc.scope ? { scope: disc.scope } : {}), origin: new URL(serverUrl).origin, at: this.now() };
+      const s: OAuthSession = { ...tok, clientId, ...(clientSecret ? { clientSecret } : {}), tokenEndpoint: disc.as.token_endpoint, resource: disc.resource, ...(scope ? { scope } : {}), origin: new URL(serverUrl).origin, at: this.now() };
       if (!this.d.save(id, s)) throw new McpClientError('auth', 'L’indirizzo del connettore è cambiato durante il login.', 'Premi di nuovo «Accedi».');
       log.info('mcp-servers', 'MCP OAuth login done', { data: { server: id, refresh: !!s.refresh, expiresIn: s.expiresAt ? Math.round((s.expiresAt - this.now()) / 1000) : null } });
       return s;

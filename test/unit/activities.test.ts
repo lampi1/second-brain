@@ -1,4 +1,4 @@
-// «Attività pianificate» (ADR 0373): the pure rules of src/shared/activities.ts: validation, the schedule, the filter,
+// «Attività pianificate» (ADR 0374): the pure rules of src/shared/activities.ts: validation, the schedule, the filter,
 // the cursor and the triage clip; and that the contract carries the activities channels.
 import { describe, expect, it } from 'vitest';
 import {

@@ -93,7 +93,7 @@ export function stuckStrategist(c: ChatSummary, all: readonly ChatSummary[], ope
   return true;
 }
 /** requestId: the open request it tells about (question, permission, command): answered before it goes, it is dropped */
-export interface WakeEvent { eventId?: string; seq?: number; chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a root chat's clean agent_report (cleanReport): its role and summary, quiet */ report?: { role: string }; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; /** kind error: no failure, its model ran out of credits and it waits for its role's card (ADR 0346) */ credits?: { role: string; model: string | null }; requestId?: string; /** the user asked about this chat (agents/watched-asks.ts, ADR 0371 point 4): its result wakes, with the line to tell him */ asked?: true; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean; /** a scheduled activity's run proposed something (ADR 0373): a `stalled`-class thread news worded by the activity */ activity?: true; /** a delegated chat's "finished" with nothing of the user's beside it: no text (ADR 0083) and its result goes to its parent, so it rides along and never wakes */ silent?: boolean; /** set only on the message sent: a root Strategist stopped without a result (stuckStrategist) */ stuck?: true }
+export interface WakeEvent { eventId?: string; seq?: number; chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a root chat's clean agent_report (cleanReport): its role and summary, quiet */ report?: { role: string }; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; /** kind error: no failure, its model ran out of credits and it waits for its role's card (ADR 0346) */ credits?: { role: string; model: string | null }; requestId?: string; /** the user asked about this chat (agents/watched-asks.ts, ADR 0371 point 4): its result wakes, with the line to tell him */ asked?: true; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean; /** a scheduled activity's run proposed something (ADR 0374): a `stalled`-class thread news worded by the activity */ activity?: true; /** a delegated chat's "finished" with nothing of the user's beside it: no text (ADR 0083) and its result goes to its parent, so it rides along and never wakes */ silent?: boolean; /** set only on the message sent: a root Strategist stopped without a result (stuckStrategist) */ stuck?: true }
 
 export interface WakeSubmissionReceipt { submitted(): void; failed(error: unknown): void }
 export interface OrchestratorWakeDeps {
@@ -389,7 +389,7 @@ export class OrchestratorWake {
     return true;
   }
 
-  /** A scheduled activity's run proposed something (activities/service.ts, ADR 0373): one grouped news per activity, the
+  /** A scheduled activity's run proposed something (activities/service.ts, ADR 0374): one grouped news per activity, the
    *  newest wins, like stalledWork. False = not taken (events off, no Orchestrator): the run still lists its proposals. */
   activityNews(n: { activityId: string; title: string; text: string; at?: number }): boolean {
     if (!this.d.enabled()) return false;

@@ -1,4 +1,4 @@
-// «Attività pianificate» (ADR 0373): the IPC area of the scheduled activities page, which replaces «Task». One area of
+// «Attività pianificate» (ADR 0374): the IPC area of the scheduled activities page, which replaces «Task». One area of
 // the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape here first, then
 // both sides). The shapes and rules are in src/shared/activities.ts; handlers: src/main/ipc-handlers/activities.ts; the
 // event 'activities:changed' (in contract.ts' EventMap) carries the whole state after every change and every run's end.

@@ -87,7 +87,7 @@ export interface Wired {
   plans?: Plans;
   /** Impara «News» (ADR 0265, news/service.ts): the AI newspaper; absent = the news:* channels say it is not available */
   news?: NewsService;
-  /** «Attività pianificate» (ADR 0373, activities/service.ts); absent = the page's channels keep their placeholder answers */
+  /** «Attività pianificate» (ADR 0374, activities/service.ts); absent = the page's channels keep their placeholder answers */
   activities?: ActivitiesService;
   /** the engines of the brain, which definitions the user turned on, the API keys (ADR 0046) */
   engines: EnginesApi;

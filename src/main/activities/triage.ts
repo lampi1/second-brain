@@ -1,4 +1,4 @@
-// «Attività pianificate» (ADR 0373): the triage pass, the ONE model call of a run. The kept items (already clipped by
+// «Attività pianificate» (ADR 0374): the triage pass, the ONE model call of a run. The kept items (already clipped by
 // clipForTriage: at most TRIAGE_MAX_ITEMS of TRIAGE_ITEM_CHARS characters) go to the cheapest model in one prompt, with no
 // tool and no file (pattern: src/main/news/summarize.ts); the model says, for each item that deserves it, one action to
 // propose, following the user's own sentence. The items' text comes from mail, chats and tickets of other people: it sits

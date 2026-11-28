@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
 import type { ConnectorState } from '@shared/connectors';
 import type { McpImportCandidate, McpServerView, McpServersState } from '@shared/mcp-servers';
-import { runsOf, slotKey } from '@shared/mcp-servers';
+import { OAUTH_SECRET_SLOT, runsOf, slotKey } from '@shared/mcp-servers';
 import { AppConnectorScreen } from '../../modules/onboarding/AppScreen';
 import { HelpTip } from './HelpTip';
 import { ToolCatalog } from './ToolCatalog';
@@ -20,7 +20,7 @@ import { IconPlus, IconRefresh } from './Icons';
 import { locale, t } from '../i18n';
 import { toast } from '../store/ui';
 import { holdUpdate } from '../lib/update-barrier';
-import { defOf, emptyForm, formOf, hubTotals, monogram, onMcpDraft, rolesWith, runsAs, serverStatus, takeMcpDraft, useMcpServers, type ServerForm } from '../lib/mcp-servers';
+import { defOf, emptyForm, formOf, hubTotals, monogram, onMcpDraft, rolesWith, runsAs, saveServer, serverStatus, takeMcpDraft, useMcpServers, type ServerForm } from '../lib/mcp-servers';
 import { MCP_ACCESS_ROLES, type McpServerDef } from '@shared/mcp-servers';
 import { McpAddPanel, ServerRoles } from './McpAddPanel';
 import '../styles/connectors-hub.css';
@@ -131,10 +131,33 @@ function Field({ label, tip, children }: { label: string; tip?: string; children
 export function ServerEditor({ server, onDone }: { server: McpServerView | null; onDone: (s?: McpServersState) => void }) {
   const [f, setF] = useState<ServerForm>(() => (server ? formOf(server) : emptyForm()));
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  // the OAuth client secret: write-only (the card never gets it back, only whether one is saved)
+  const [secretText, setSecretText] = useState('');
+  // the id the definition was saved under when only its secret was refused: the next Salva renames from it
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const errorText = (e: unknown): string => e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : t('hub.error');
+  const removeSecret = async () => {
+    if (!server) return;
+    setBusy(true); setError('');
+    // the editor stays open: the app's «mcpservers:changed» brings the card's new «not set»
+    try { await window.sb.invoke('mcpservers:deleteSecret', { id: server.id, slot: OAUTH_SECRET_SLOT }); }
+    catch (e) { setError(errorText(e)); }
+    finally { setBusy(false); }
+  };
   const set = <K extends keyof ServerForm>(k: K, v: ServerForm[K]) => setF(x => ({ ...x, [k]: v }));
   const save = async () => {
     setBusy(true); setError('');
-    try { onDone(await window.sb.invoke('mcpservers:save', { def: defOf(f, server ?? undefined), ...(server ? { previousId: server.id } : {}) })); }
+    try {
+      const def = defOf(f, server ?? undefined);
+      // the OAuth client secret goes alone to the secret store, after the definition is saved (never inside it); the
+      // typed text is cleared only once it is saved: a refusal keeps it, with the error, and the editor stays open
+      const r = await saveServer({ save: a => window.sb.invoke('mcpservers:save', a), setSecret: a => window.sb.invoke('mcpservers:setSecret', a) },
+        def, savedId ?? server?.id, f.transport === 'http' ? secretText.trim() : '');
+      setSavedId(r.savedId);
+      if (r.secretError !== undefined) { setError(errorText(r.secretError)); return; }
+      setSecretText('');
+      onDone(r.state);
+    }
     catch (e) { setError(e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : t('hub.error')); }
     finally { setBusy(false); }
   };
@@ -161,6 +184,14 @@ export function ServerEditor({ server, onDone }: { server: McpServerView | null;
           {field('oauthClientId', t('hub.f.clientId'), { mono: true, placeholder: 'second-brain', tip: t('hub.f.clientIdTip') })}
           {field('oauthPort', t('hub.f.port'), { mono: true, placeholder: '8765', tip: t('hub.f.portTip') })}
         </div>
+        <Field label={t('hub.f.clientSecret')} tip={t('hub.f.clientSecretTip')}>
+          {id => <div className="hub-secret" data-testid="hub-oauth-secret">
+            <input id={id} className="st-input mono" type="password" autoComplete="new-password" spellCheck={false} value={secretText} disabled={busy}
+              placeholder={server?.oauthSecretSet ? t('hub.f.clientSecretSet') : t('hub.f.clientSecretNone')} onChange={e => setSecretText(e.target.value)} />
+            {server?.oauthSecretSet && <small className="hub-muted" data-testid="hub-oauth-secret-state">{t('hub.f.clientSecretSaved')} <button type="button" className="btn btn-ghost btn-s" disabled={busy} onClick={() => void removeSecret()}>{t('hub.f.clientSecretRemove')}</button></small>}
+          </div>}
+        </Field>
+        {field('oauthScope', t('hub.f.scope'), { mono: true, placeholder: 'https://www.googleapis.com/auth/gmail.readonly', tip: t('hub.f.scopeTip') })}
       </>}
       <div className="hub-form-row">
         {field('tokenName', t(f.transport === 'stdio' ? 'hub.f.tokenEnv' : 'hub.f.tokenHeader'), { mono: true, placeholder: f.transport === 'stdio' ? 'AZURE_DEVOPS_PAT' : 'Authorization', tip: t('hub.f.tokenTip') })}

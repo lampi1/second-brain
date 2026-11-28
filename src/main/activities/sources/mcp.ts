@@ -1,4 +1,4 @@
-// «Attività pianificate» (ADR 0373): the generic reader of an app-managed MCP connector, at zero tokens. A source is
+// «Attività pianificate» (ADR 0374): the generic reader of an app-managed MCP connector, at zero tokens. A source is
 // described by data: the connector's server id, one read-only tool, how to build its arguments and how to map its answer
 // to ActivityItems (the shape Gmail's reader also returns). outlookConfig and teamsConfig are the two shipped descriptions
 // (Outlook: outlook_list_emails; Teams: teams_get_unread); their mappers accept the usual field names of a mail or chat

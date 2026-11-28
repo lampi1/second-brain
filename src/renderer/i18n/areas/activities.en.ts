@@ -1,4 +1,4 @@
-// English UI texts of the «Scheduled activities» page (ADR 0373): the same keys as activities.it.ts (typed by it), spread into en.ts.
+// English UI texts of the «Scheduled activities» page (ADR 0374): the same keys as activities.it.ts (typed by it), spread into en.ts.
 import type { activitiesIt } from './activities.it';
 
 export const activitiesEn: typeof activitiesIt = {

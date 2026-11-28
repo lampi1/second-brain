@@ -1,4 +1,4 @@
-// «Attività pianificate» (ADR 0373): the DevOps reader. It reuses the Task page's zero-token read: the brain's (or the
+// «Attività pianificate» (ADR 0374): the DevOps reader. It reuses the Task page's zero-token read: the brain's (or the
 // app's) devops-me.mjs run as a Node child (src/main/tasks/service.ts), asked only for the days since the activity's
 // cursor, and turns its news (mentions, comments, reviews, changes on followed items) into ActivityItems. Never a model,
 // never a write to DevOps. The script runner is injected (the integrator passes the same one the Task service uses), so

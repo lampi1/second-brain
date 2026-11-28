@@ -390,7 +390,7 @@ test('README screenshot: Artifacts', async () => {
 });
 
 test('README screenshot: the scheduled activities', async () => {
-  // the page that took Task's place (ADR 0373): a row per activity on the demo's in-memory catalog, the last runs of one open
+  // the page that took Task's place (ADR 0374): a row per activity on the demo's in-memory catalog, the last runs of one open
   await goPage(page, 'attivita');
   await expect(page.getByTestId('ac-list')).toBeVisible({ timeout: 30_000 });
   await page.getByTestId('ac-row').first().getByTestId('ac-details').click();

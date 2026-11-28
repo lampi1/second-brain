@@ -617,8 +617,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
     tech: [
       tech(DATA, 'La cache tasks.json nella cartella dati dell’app; IPC tasks:get e l’evento tasks:state.',
         'The tasks.json cache in the app’s data folder; IPC tasks:get and the event tasks:state.'),
-      tech(WHERE, 'Lettura e avvisi in src/main/tasks/, la sorgente delle attività in src/main/activities/sources/devops.ts (ADR 0373).',
-        'Reads and alerts in src/main/tasks/, the activities’ source in src/main/activities/sources/devops.ts (ADR 0373).'),
+      tech(WHERE, 'Lettura e avvisi in src/main/tasks/, la sorgente delle attività in src/main/activities/sources/devops.ts (ADR 0374).',
+        'Reads and alerts in src/main/tasks/, the activities’ source in src/main/activities/sources/devops.ts (ADR 0374).'),
     ],
     sources: ['src/main/tasks/service.ts', 'src/main/activities/sources/devops.ts'],
   },
@@ -1637,7 +1637,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'At most 30 activities, every 5-720 minutes, cap 1-100 per day, 15 items of 300 characters per pass, 20 runs of history.'),
       tech(TOOLS, 'app_activity sull’endpoint dell’Orchestrator (list, create, update, enable, disable, delete, run, history, pause).', 'app_activity on the Orchestrator’s endpoint (list, create, update, enable, disable, delete, run, history, pause).'),
     ],
-    sources: ['src/shared/activities.ts', 'src/main/appctl/activities.ts', 'docs/adr/0373-scheduled-activities.md'],
+    sources: ['src/shared/activities.ts', 'src/main/appctl/activities.ts', 'docs/adr/0374-scheduled-activities.md'],
   },
   {
     id: 'brain-map',

@@ -1,5 +1,5 @@
 // The DevOps read's state in the renderer: main's TaskService pushes it on 'tasks:state' (after each read, a mark as read, a
-// settings change); this store starts itself on the first use and loads 'tasks:get' once. The Task page is gone (ADR 0373,
+// settings change); this store starts itself on the first use and loads 'tasks:get' once. The Task page is gone (ADR 0374,
 // «Attività pianificate» took its place): the read stays as the source of the DevOps activities, the morning brief, the
 // feed and the chats' dev links, so only the state is kept here. Used by components/ChatLinkChips.tsx.
 import type { TasksState } from '@shared/contract';

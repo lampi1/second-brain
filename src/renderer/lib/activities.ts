@@ -1,4 +1,4 @@
-// The pure side of the «Attività pianificate» page (ADR 0373): the editor's draft (strings from the form) turned into the
+// The pure side of the «Attività pianificate» page (ADR 0374): the editor's draft (strings from the form) turned into the
 // ActivityInput that validateActivityInput checks, the run's line «letti · tenuti · proposte · costo», the tone of a run's
 // status and the list parsing of the filter fields. No React, no clock, no bridge: unit-tested (test/unit/activities-page.test.ts).
 // Used by brain/pages/Activities.tsx.

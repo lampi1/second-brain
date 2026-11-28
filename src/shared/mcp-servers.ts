@@ -31,8 +31,9 @@ export interface McpServerDef {
    *  the user's own click «Attiva», which names exactly this `runs` (runsOf); no test before it. */
   awaiting?: { runs: string; at: number };
   /** an http server's MCP OAuth login (ADR 0273): a client id registered for the app (else dynamic registration) and
-   *  a fixed loopback port for the login's return (else any free one) */
-  oauth?: { clientId?: string; port?: number };
+   *  a fixed loopback port for the login's return (else any free one), the scope to ask (else the server's own list).
+   *  The client's secret, when it has one, is never here: it is a secret slot (OAUTH_SECRET_SLOT) of the secret file. */
+  oauth?: { clientId?: string; port?: number; scope?: string };
 }
 export type McpImportSource = 'claude' | 'cursor' | 'codex';
 export interface McpToolInfo { name: string; description: string; /** the server's own readOnlyHint; unknown = writes */ readOnly: boolean }
@@ -53,7 +54,11 @@ export interface McpServerView extends McpServerDef {
   lastTest: McpTestResult | null;
   /** logged in with the MCP OAuth login (ADR 0273): who (from the token, a label) and since when; null = not logged in */
   login?: { who: string | null; at: number } | null;
+  /** the OAuth client's secret is saved (only this flag reaches the renderer, never the secret or a mask of it) */
+  oauthSecretSet?: boolean;
 }
+/** The reserved slot (mcpservers:setSecret / deleteSecret) of an http server's OAuth client secret. */
+export const OAUTH_SECRET_SLOT = 'oauth:client-secret';
 export interface McpServersState {
   servers: McpServerView[];
   /** per role id */
