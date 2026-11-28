@@ -634,3 +634,105 @@ describe('a new chat for a job keeps its steps as they were (review of ADR 0363)
     expect(f.maps().get(id)!.plan!.steps.map(x => x.state)).toEqual(want);
   });
 });
+
+describe('a plan passes from one Strategist to another (ADR 0372)', () => {
+  const FOUR = { steps: [{ title: 'Uno', role: 'artisan', after: [] }, { title: 'Due', role: 'artisan', after: [] }, { title: 'Tre', role: 'artisan', after: [2] }] };
+  /** a plan with step 1 done and step 2 under way in a delegated chat */
+  async function going() {
+    const f = fixture(), s = await f.root();
+    await f.enough(s.id);
+    await f.call('plan_propose', s.id, FOUR);
+    await act(f, s.id, 'approve');
+    await f.call('plan_update', s.id, { step: 1, state: 'done', proof: 'visto' });
+    await f.call('agent_delegate', s.id, f.task('artisan', 'Sconti · Due', 2));
+    return { f, s, id: f.mapOf(s.id).id, kid: f.kids(s.id)[0]!.id };
+  }
+  const orch = { kind: 'orchestrator' } as const;
+  const roots = (f: F) => f.m.list().filter(c => c.agent?.id === 'strategist' && !c.parentId);
+
+  it('to a new one: one plan, every step as it was, the old chat moves and delegates nothing, the new one proposes again and may widen it', async () => {
+    const { f, s, id } = await going(), before = f.maps().get(id)!.plan!.steps;
+    const r = await planAction(f.maps(), orch, { action: 'handoff', plan: id, text: 'Aggiungi i resi' }) as { chatId: string; interrupted: number };
+    const fresh = r.chatId, got = f.maps().get(id)!;
+    expect(fresh).not.toBe(s.id);
+    expect(f.maps().list()).toHaveLength(1);
+    expect(got.owner!.chatId).toBe(fresh);
+    expect(got.past).toContain(s.id);
+    expect(got.stopped).toBeUndefined();
+    expect(got.plan!.steps.map(x => [x.id, x.state, x.proof?.text])).toEqual(before.map(x => [x.id, x.state, x.proof?.text]));
+    expect(f.sent.get(fresh)![0]).toContain('passa da un altro Strategist');
+    expect(f.sent.get(fresh)![0]).toContain('Aggiungi i resi');
+    // the old chat: handed over, nothing starts, nothing moves
+    expect(f.m.planOf(s.id)).toMatchObject({ handed: true, stopped: true });
+    await expect(f.call('agent_delegate', s.id, f.task('artisan', 'Sconti · Tre', 3))).rejects.toThrow(/passed to another Strategist/);
+    await expect(f.call('plan_update', s.id, { step: 2, state: 'done', proof: 'x' })).rejects.toThrow(/passed to another Strategist/);
+    await expect(f.call('plan_propose', s.id, FOUR)).rejects.toThrow(/passed to another Strategist/);
+    await expect(f.m.planResume(s.id)).rejects.toThrow(/passato a un altro/);
+    await expect(planAction(f.maps(), { kind: 'strategist', chatId: s.id }, { action: 'edit', plan: id, set: { goal: 'x' } })).rejects.toThrow(/not yours/);
+    expect(f.maps().list()).toHaveLength(1);
+    // the new one revises, keeping what started, and adds a step
+    await f.enough(fresh);
+    await f.call('plan_propose', fresh, { revise: true, steps: [{ keep: 1 }, { keep: 2 }, { keep: 3 }, { title: 'I resi', role: 'artisan', after: [2] }] });
+    expect(f.maps().get(id)!).toMatchObject({ state: 'toApprove' });
+    expect(f.maps().get(id)!.plan!.steps.map(x => x.state)).toEqual(['done', 'now', 'todo', 'todo']);
+    await f.maps().act(id, 'approve', { at: f.maps().get(id)!.plan!.at });
+    expect(f.maps().get(id)!.state).toBe('running');
+    // and again, to a third
+    const again = await f.maps().handoff(id);
+    expect(again.plan.owner!.chatId).not.toBe(fresh);
+    expect(again.plan.plan!.steps).toHaveLength(4);
+    expect(f.maps().list()).toHaveLength(1);
+  });
+
+  it('to an open Strategist with no job of its own; one that has an open job of its own is refused and nothing changes', async () => {
+    const { f, s, id } = await going();
+    const busy = await f.root();
+    await f.enough(busy.id);
+    await f.call('plan_propose', busy.id, FOUR);
+    const v = f.maps().get(id)!.version;
+    await expect(f.maps().handoff(id, { to: busy.id })).rejects.toThrow(/lavoro suo aperto/);
+    expect(f.maps().get(id)!.version).toBe(v);
+    expect(f.m.planOf(s.id)!.handed).toBeUndefined();
+    await expect(f.maps().handoff(id, { to: s.id })).rejects.toThrow(/già di quella chat/);
+    await expect(f.maps().handoff(id, { to: 'nessuna' })).rejects.toThrow(/Strategist aperto/);
+    const free = await f.root();
+    const r = await f.maps().handoff(id, { to: free.id });
+    expect(r.plan.owner!.chatId).toBe(free.id);
+    expect(f.maps().ofChat(free.id)!.id).toBe(id);
+    expect(r.plan.plan!.steps.map(x => x.state)).toEqual(['done', 'now', 'todo']);
+    expect(f.m.planOf(free.id)!.steps).toHaveLength(3);
+    expect(f.maps().list().filter(x => x.ownerChatId === free.id)).toHaveLength(1);
+  });
+
+  it('survives a restart: still one plan, the old chat still handed over', async () => {
+    const { f, s, id } = await going();
+    const fresh = (await f.maps().handoff(id)).plan.owner!.chatId;
+    await f.m.shutdown();
+    const g = fixture({ dir: f.dir });
+    expect(g.maps().list().filter(x => x.id === id)).toHaveLength(1);
+    expect(g.maps().list()).toHaveLength(1);
+    expect(g.maps().get(id)!.owner!.chatId).toBe(fresh);
+    expect(g.m.planOf(s.id)!.handed).toBe(true);
+    expect(roots(g)).toHaveLength(2);
+  });
+
+  it('only the Orchestrator hands a plan over; a plan in the trash is not passed', async () => {
+    const { f, s, id } = await going();
+    await expect(planAction(f.maps(), { kind: 'strategist', chatId: s.id }, { action: 'handoff', plan: id })).rejects.toThrow(/user decides/);
+    await f.maps().act(id, 'stop');
+    await f.maps().act(id, 'archive');
+    await f.maps().act(id, 'delete');
+    await expect(f.maps().handoff(id)).rejects.toThrow(/cestino/);
+    expect(roots(f)).toHaveLength(1);
+  });
+
+  it('a change of the steps by the Orchestrator reaches the Strategist with its next message', async () => {
+    const { f, s, id } = await going();
+    await planAction(f.maps(), orch, { action: 'edit', plan: id, steps: [{ op: 'add', title: 'Un passo in più', after: [3] }] });
+    expect(f.maps().get(id)!.plan!.steps.map(x => x.title)).toContain('Un passo in più');
+    await f.m.send(s.id, 'a che punto sei?');
+    expect(f.sent.get(s.id)!.at(-1)).toContain('il tuo piano è cambiato');
+    await f.m.send(s.id, 'ancora');
+    expect(f.sent.get(s.id)!.at(-1)).not.toContain('il tuo piano è cambiato');
+  });
+});

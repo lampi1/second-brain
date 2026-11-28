@@ -59,7 +59,7 @@ import { slug as slugTitle } from './mail';
 import { splitMode } from '../../shared/newchat';
 import { recallWarning } from '../search/hybrid/recall';
 import type { CreateOpts, Inherited, SubmissionReceipt, Rec } from './manager-types';
-import { sysItem, MODES, RESEARCH_TITLE, RESEARCH_FRAME, FOLLOW_UP_WINDOW_MS, USER_NOTES_LABEL, EFFORTS, MODEL_ID, startTags, repoOf } from './manager-helpers';
+import { sysItem, MODES, RESEARCH_TITLE, RESEARCH_FRAME, FOLLOW_UP_WINDOW_MS, USER_NOTES_LABEL, PLAN_NOTES_LABEL, EFFORTS, MODEL_ID, startTags, repoOf } from './manager-helpers';
 import { pickLines } from '../../shared/model-levels';
 import { ManagerRemote } from './manager-remote';
 export { RESUME_TEXT, turnReply, workBehind, WAITING_REASON, lastAnswer, RESEARCH_TITLE, RUN_SAVE_MS, USER_NOTES_LABEL, userNoteLine, restoredOwner, startTags, repoOf } from './manager-helpers';
@@ -685,7 +685,10 @@ export class ChatManager extends ManagerRemote implements ChatService {
     if (notes?.length) this.notesFor.delete(chatId);
     const noted0 = notes?.length ? `${USER_NOTES_LABEL}\n${notes.join('\n')}\n\n${text0}` : text0;
     // the user put the files back before the last turn: the chat learns it with its next message
-    const noted = r.undoNote ? `${r.undoNote}\n\n${noted0}` : noted0;
+    const changed = this.planNotes.get(chatId);
+    if (changed?.length) this.planNotes.delete(chatId);
+    const noted1 = changed?.length ? `${PLAN_NOTES_LABEL}\n${changed.join('\n')}\n\n${noted0}` : noted0;
+    const noted = r.undoNote ? `${r.undoNote}\n\n${noted1}` : noted1;
     r.undoNote = undefined;
     // the user's own NEW request to the Orchestrator carries the app's estimate (zero tokens), never the app's news or
     // mail, nor a short follow-up ("ok", "vai", an answer) in a conversation going on (ADR 0186)

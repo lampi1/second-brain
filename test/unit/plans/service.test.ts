@@ -485,3 +485,29 @@ describe('what the two reviews found (ADR 0363)', () => {
     expect(w.get(b.id)!.deletedAt).toBeDefined();
   });
 });
+
+describe('widening and failing hand-overs (ADR 0372)', () => {
+  it('a step added to a finished plan with no chat opens it again: not «finished» over work to do', async () => {
+    const w = maps(), m = saw(w, chat('a', { plan: plan('done', 100, steps('done')) }));
+    w.observe('chat:removed', { chatId: 'a' });
+    chats = [];
+    expect(w.get(m.id)!.state).toBe('finished');
+    await w.change(m.id, { steps: [{ op: 'add', title: 'Ancora', after: [1] }] as never }, 'Orchestrator');
+    expect(w.get(m.id)!.finishedAt).toBeUndefined();
+    expect(w.get(m.id)!.state).not.toBe('finished');
+    expect(w.get(m.id)!.plan!.steps[0]!.state).toBe('done');
+  });
+  it('if the new Strategist cannot start, the plan waits stopped with its steps, and «Riprendi» opens one', async () => {
+    let fail = true;
+    const w = maps({ startStrategist: async m => { if (fail) throw new Error('motore giù'); return put(chat('fresh', { planId: m.id, plan: plan('asking', 300, []) })); } });
+    const m = saw(w, chat('a', { state: 'idle', plan: plan('running', 100, steps('done', 'now')) }));
+    chats = [];
+    await expect(w.handoff(m.id)).rejects.toThrow(/motore giù/);
+    expect(w.get(m.id)!.state).toBe('stopped');
+    expect(w.get(m.id)!.plan!.steps.map(x => x.state)).toEqual(['done', 'now']);
+    fail = false;
+    await w.act(m.id, 'resume');
+    expect(w.get(m.id)!.owner!.chatId).toBe('fresh');
+    expect(w.get(m.id)!.plan!.steps.map(x => x.state)).toEqual(['done', 'now']);
+  });
+});

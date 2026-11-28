@@ -10,7 +10,7 @@ const one = (s: string, max: number): string => s.replace(/\s+/g, ' ').trim().sl
 const FLOW_HEAD = STRATEGY_FLOW.split('\n')[0]!;
 
 /** A root chat whose work is a job: a Strategist's, or any with a plan. A delegated chat's work is a step of its parent's. */
-export const ownsJob = (c: ChatSummary): boolean => !c.isOrchestrator && !c.parentId && (!!c.plan || c.agent?.source === 'catalog' && c.agent.id === 'strategist');
+export const ownsJob = (c: ChatSummary): boolean => !c.isOrchestrator && !c.parentId && !c.plan?.handed && (!!c.plan || c.agent?.source === 'catalog' && c.agent.id === 'strategist');
 /** The job the chat is on (a new task in the same chat is another job); 'chat' until its first run is known. */
 export const taskOf = (c: ChatSummary): string => c.run?.taskId ?? c.run?.runId ?? 'chat';
 export const titleOf = (c: ChatSummary): string => one(c.title, PLAN_LIMITS.title) || 'Lavoro';
