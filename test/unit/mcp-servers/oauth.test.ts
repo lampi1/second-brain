@@ -13,6 +13,8 @@ import type { SecretCipher } from '../../../src/main/engines/secrets';
 import { tmp } from '../chats/helpers';
 import { McpServersService } from '../../../src/main/mcp-servers/service';
 import { McpServer } from '../../../src/main/mcp/server';
+import { redact } from '../../../src/main/log';
+import { OAUTH_SECRET_SLOT } from '../../../src/shared/mcp-servers';
 
 const cipher: SecretCipher = { unavailable: () => null, encrypt: s => Buffer.from([...Buffer.from(s)].map(b => b ^ 0x5a)), decrypt: b => Buffer.from([...b].map(x => x ^ 0x5a)).toString() };
 const jwt = (claims: Record<string, unknown>) => `h.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.s`;
@@ -208,5 +210,135 @@ describe('MCP OAuth: the service', () => {
     const out = svc.logout('kc').servers[0]!;
     expect(out.login).toBeNull();
     expect(out.lastTest?.error).toMatchObject({ code: 'auth', login: true });
+  });
+});
+
+// A pre-registered client with a secret (Google's «Desktop app» clients: the token endpoint wants client_secret), and a
+// scope pinned by the connector (Google's metadata lists every Gmail scope, send included).
+const SECRET = ['GOCSPX', 'made', 'up', 'client', 'value', '1234'].join('-');   // built at run time: a guard-safe fake
+describe('MCP OAuth: a client secret and a pinned scope', () => {
+  const form = (w: ReturnType<typeof world>) => w.calls.filter(c => c.url === AS.token_endpoint).map(c => new URLSearchParams(c.body));
+
+  it('sends client_secret at the code exchange and at the refresh when set, keeps it in the session', async () => {
+    const w = world({ token: f => json(200, { access_token: `a-${f.get('grant_type')}`, refresh_token: 'r1', expires_in: 300 }) });
+    const s = await w.oauth.login('g', MCP, { clientId: 'cid.apps.googleusercontent.com', clientSecret: SECRET });
+    expect(form(w)[0]!.get('client_secret')).toBe(SECRET);
+    expect(form(w)[0]!.get('client_id')).toBe('cid.apps.googleusercontent.com');
+    expect(s.clientSecret).toBe(SECRET);
+    w.tick(400_000);
+    expect(await w.oauth.access('g')).toBe('a-refresh_token');
+    expect(form(w)[1]!.get('grant_type')).toBe('refresh_token');
+    expect(form(w)[1]!.get('client_secret')).toBe(SECRET);
+    // the authorization URL (the browser sees it) never carries the secret
+    expect(w.opened()).not.toContain(SECRET);
+  });
+
+  it('sends no client_secret when none is set (public client), and ignores a secret without a client id', async () => {
+    const w = world();
+    const s = await w.oauth.login('g', MCP, { clientId: 'cid' });
+    w.tick(400_000);
+    await w.oauth.access('g');
+    expect(form(w).every(f => !f.has('client_secret'))).toBe(true);
+    expect(s.clientSecret).toBeUndefined();
+    const dyn = world({ registration: true });
+    await dyn.oauth.login('d', MCP, { clientSecret: SECRET });
+    expect(form(dyn).every(f => f.get('client_secret') !== SECRET)).toBe(true);
+    expect(dyn.opened()).not.toContain(SECRET);
+  });
+
+  it('the pinned scope replaces the server list in the login URL and the session', async () => {
+    const w = world();
+    const s = await w.oauth.login('g', MCP, { clientId: 'cid', scope: 'https://www.googleapis.com/auth/gmail.readonly' });
+    expect(new URL(w.opened()).searchParams.get('scope')).toBe('https://www.googleapis.com/auth/gmail.readonly');
+    expect(s.scope).toBe('https://www.googleapis.com/auth/gmail.readonly');
+  });
+
+  it('asks Google for a refresh token (access_type=offline) and nobody else', async () => {
+    const w = world();
+    await w.oauth.login('kc', MCP, { clientId: 'cid' });
+    expect(new URL(w.opened()).searchParams.has('access_type')).toBe(false);
+    const GOOGLE = 'https://accounts.google.com', GMCP = 'https://gmailmcp.googleapis.com/mcp/v1';
+    const fetchFn = (async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url === GMCP) return new Response('', { status: 401, headers: { 'WWW-Authenticate': 'Bearer resource_metadata="https://gmailmcp.googleapis.com/.well-known/oauth-protected-resource/mcp/v1"' } });
+      if (url.includes('oauth-protected-resource')) return json(200, { resource: GMCP, authorization_servers: [`${GOOGLE}/`], scopes_supported: ['https://mail.google.com/', 'https://www.googleapis.com/auth/gmail.readonly'] });
+      if (url === `${GOOGLE}/.well-known/oauth-authorization-server` || url === `${GOOGLE}/.well-known/openid-configuration`) return json(200, { issuer: GOOGLE, authorization_endpoint: `${GOOGLE}/o/oauth2/v2/auth`, token_endpoint: 'https://oauth2.googleapis.com/token', code_challenge_methods_supported: ['S256'] });
+      if (url === 'https://oauth2.googleapis.com/token') return json(200, { access_token: 'g-access', refresh_token: 'g-refresh', expires_in: 3600 });
+      return json(404, {});
+    }) as typeof fetch;
+    let opened = '';
+    const oauth = new McpOAuth({ load: () => null, save: () => true, drop: () => {}, fetch: fetchFn, listen: async () => ({ port: 50123, redirect: 'http://127.0.0.1:50123/callback', code: Promise.resolve('c'), close: () => {} }), openExternal: u => { opened = u; } });
+    await oauth.login('g', GMCP, { clientId: 'cid', clientSecret: SECRET, scope: 'https://www.googleapis.com/auth/gmail.readonly' });
+    const q = new URL(opened).searchParams;
+    expect(q.get('access_type')).toBe('offline');
+    expect(q.get('prompt')).toBe('consent');
+    expect(q.get('resource')).toBe(GMCP);
+    expect(q.get('scope')).toBe('https://www.googleapis.com/auth/gmail.readonly');
+  });
+});
+
+describe('MCP OAuth: the client secret in the store and the service', () => {
+  const def = { id: 'gm', label: 'Gmail', transport: 'http', url: MCP, secrets: [], enabled: true, oauth: { clientId: 'cid', scope: 'https://www.googleapis.com/auth/gmail.readonly' } };
+
+  it('is stored encrypted, bound to the origin, shown only as a flag, and redacted from the logs', () => {
+    const dir = tmp('mcp-oauth-secret');
+    const st = new McpServerStore(dir, cipher);
+    st.upsert(def);
+    expect(st.oauthSecretSet('gm')).toBe(false);
+    expect(st.oauthClientSecret('gm')).toBeNull();
+    st.setSecret('gm', OAUTH_SECRET_SLOT, SECRET);
+    expect(st.oauthSecretSet('gm')).toBe(true);
+    expect(st.oauthClientSecret('gm')).toBe(SECRET);
+    expect(st.masks('gm')).toEqual({});
+    expect(fs.readFileSync(`${dir}/mcp-secrets.json`, 'utf8')).not.toContain(SECRET);
+    expect(fs.readFileSync(`${dir}/mcp-servers.json`, 'utf8')).not.toContain(SECRET);
+    expect(JSON.stringify(st.servers())).not.toContain(SECRET);
+    expect(new McpServerStore(dir, cipher).oauthClientSecret('gm')).toBe(SECRET);
+    expect(redact(`the secret ${SECRET} leaked`)).not.toContain(SECRET);
+    // an edit of the same origin keeps it, an address on another origin drops it, a delete forgets it
+    st.upsert({ ...def, label: 'Gmail 2' }, 'gm');
+    expect(st.oauthSecretSet('gm')).toBe(true);
+    st.deleteSecret('gm', OAUTH_SECRET_SLOT);
+    expect(st.oauthSecretSet('gm')).toBe(false);
+    st.setSecret('gm', OAUTH_SECRET_SLOT, SECRET);
+    st.upsert({ ...def, url: 'https://other.example.com/mcp' }, 'gm');
+    expect(st.oauthSecretSet('gm')).toBe(false);
+  });
+
+  it('«Esci» (the session forgotten) keeps the secret; a stdio server and a blank or spaced secret are refused', () => {
+    const st = new McpServerStore(tmp('mcp-oauth-secret2'), cipher);
+    st.upsert(def);
+    st.setSecret('gm', OAUTH_SECRET_SLOT, SECRET);
+    st.setOAuthSession('gm', JSON.stringify({ access: 'x', clientSecret: SECRET }), { at: 1 });
+    st.deleteOAuthSession('gm');
+    expect(st.oauthClientSecret('gm')).toBe(SECRET);
+    expect(() => st.setSecret('gm', OAUTH_SECRET_SLOT, '  ')).toThrow(/vuoto/);
+    expect(() => st.setSecret('gm', OAUTH_SECRET_SLOT, 'a b')).toThrow(/spazi/);
+    st.upsert({ id: 'local', label: 'Local', transport: 'stdio', command: 'node', args: [], secrets: [], enabled: true });
+    expect(() => st.setSecret('local', OAUTH_SECRET_SLOT, SECRET)).toThrow(/remoto/);
+  });
+
+  it('the scope is normalised and kept in the definition; a bad one is refused', () => {
+    const st = new McpServerStore(tmp('mcp-oauth-scope'), cipher);
+    expect(st.upsert({ ...def, oauth: { scope: ' a   b ' } }).oauth).toEqual({ scope: 'a b' });
+    expect(() => st.upsert({ ...def, id: 'x', oauth: { scope: 'a \u0000b' } })).toThrow(/Scope/);
+  });
+
+  it('«Accedi» hands the stored secret to the login; the cards and the state carry only the flag', async () => {
+    const svc = new McpServersService({ userData: tmp('mcp-oauth-svc2'), cipher, mcp: new McpServer({ name: 't', version: '1' }), context: () => null,
+      connect: () => ({ serverInfo: undefined, tools: async () => [], call: async () => ({ content: [] }), close() {} }) });
+    svc.save({ def });
+    expect(svc.state().servers[0]!.oauthSecretSet).toBe(false);
+    const st = svc.setSecret({ id: 'gm', slot: OAUTH_SECRET_SLOT, value: SECRET });
+    expect(st.servers[0]!.oauthSecretSet).toBe(true);
+    expect(JSON.stringify(st)).not.toContain(SECRET);
+    expect(JSON.stringify(svc.views())).not.toContain(SECRET);
+    const login = vi.spyOn(svc.oauth, 'login').mockResolvedValue({} as OAuthSession);
+    await svc.login('gm');
+    expect(login.mock.calls[0]![2]).toEqual({ clientId: 'cid', scope: 'https://www.googleapis.com/auth/gmail.readonly', clientSecret: SECRET });
+    expect(JSON.stringify(svc.state())).not.toContain(SECRET);
+    expect(svc.deleteSecret({ id: 'gm', slot: OAUTH_SECRET_SLOT }).servers[0]!.oauthSecretSet).toBe(false);
+    await svc.login('gm');
+    expect(login.mock.calls[1]![2]).not.toHaveProperty('clientSecret', SECRET);
   });
 });

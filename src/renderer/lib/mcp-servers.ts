@@ -62,10 +62,11 @@ export function hubTotals(servers: readonly McpServerView[], connectors: readonl
 export interface ServerForm {
   label: string; transport: 'stdio' | 'http'; command: string; args: string; env: string; url: string; headers: string;
   tokenName: string; tokenPrefix: string; purpose: string; enabled: boolean;
-  /** the OAuth login's client id and return port (http, ADR 0273) */
-  oauthClientId: string; oauthPort: string;
+  /** the OAuth login's client id, return port and scope (http, ADR 0273); the client secret is not here: it is typed in
+   *  its own write-only box and goes to the secret store (mcpservers:setSecret), never into the definition */
+  oauthClientId: string; oauthPort: string; oauthScope: string;
 }
-export const emptyForm = (): ServerForm => ({ label: '', transport: 'stdio', command: '', args: '', env: '', url: '', headers: '', tokenName: '', tokenPrefix: 'Bearer ', purpose: '', enabled: true, oauthClientId: '', oauthPort: '' });
+export const emptyForm = (): ServerForm => ({ label: '', transport: 'stdio', command: '', args: '', env: '', url: '', headers: '', tokenName: '', tokenPrefix: 'Bearer ', purpose: '', enabled: true, oauthClientId: '', oauthPort: '', oauthScope: '' });
 
 export function formOf(s: McpServerDef): ServerForm {
   const slot = s.secrets[0];
@@ -74,7 +75,7 @@ export function formOf(s: McpServerDef): ServerForm {
     env: Object.entries(s.env ?? {}).map(([k, v]) => `${k}=${v}`).join('\n'), url: s.url ?? '',
     headers: Object.entries(s.headers ?? {}).map(([k, v]) => `${k}: ${v}`).join('\n'),
     tokenName: slot?.name ?? '', tokenPrefix: slot?.prefix ?? (s.transport === 'http' ? 'Bearer ' : ''), purpose: s.purpose ?? '', enabled: s.enabled,
-    oauthClientId: s.oauth?.clientId ?? '', oauthPort: s.oauth?.port ? String(s.oauth.port) : '',
+    oauthClientId: s.oauth?.clientId ?? '', oauthPort: s.oauth?.port ? String(s.oauth.port) : '', oauthScope: s.oauth?.scope ?? '',
   };
 }
 
@@ -95,7 +96,8 @@ export function defOf(f: ServerForm, base?: McpServerDef): McpServerDef {
   }
   const headers = pairs(f.headers, /:/);
   const clientId = f.oauthClientId.trim(), port = f.oauthPort.trim() ? Number(f.oauthPort.trim()) : undefined;
-  const oauth = clientId || port !== undefined ? { ...(clientId ? { clientId } : {}), ...(port !== undefined ? { port } : {}) } : undefined;
+  const scope = f.oauthScope.trim();
+  const oauth = clientId || port !== undefined || scope ? { ...(clientId ? { clientId } : {}), ...(port !== undefined ? { port } : {}), ...(scope ? { scope } : {}) } : undefined;
   return { ...common, url: f.url.trim(), ...(Object.keys(headers).length ? { headers } : {}), ...(oauth ? { oauth } : {}) };
 }
 

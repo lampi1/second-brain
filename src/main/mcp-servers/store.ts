@@ -11,7 +11,7 @@ import crypto from 'node:crypto';
 import { addRedaction, log } from '../log';
 import type { SecretCipher } from '../engines/secrets';
 import { maskOf } from '../engines/secrets';
-import { MCP_ACCESS_ROLES, MCP_ID, RESERVED_IDS, SECRET_NAME, checkAccess, defaultAccess, secretLooking, slotKey, type McpSecretSlot, type McpServerDef, type McpTestResult, type McpToolAccess, type RoleMcpAccess } from '../../shared/mcp-servers';
+import { MCP_ACCESS_ROLES, MCP_ID, OAUTH_SECRET_SLOT, RESERVED_IDS, SECRET_NAME, checkAccess, defaultAccess, secretLooking, slotKey, type McpSecretSlot, type McpServerDef, type McpTestResult, type McpToolAccess, type RoleMcpAccess } from '../../shared/mcp-servers';
 import { renameWithRetry } from '../agents/local-store';
 
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
@@ -91,11 +91,16 @@ function checkOAuth(v: unknown): McpServerDef['oauth'] {
   if (clientId && !/^[\x21-\x7e]+$/.test(clientId)) throw new Error('Client ID OAuth: senza spazi.');
   if (o.port !== undefined && o.port !== null && o.port !== '' && (!Number.isInteger(o.port) || (o.port as number) < 1024 || (o.port as number) > 65535)) throw new Error('Porta di ritorno: un numero da 1024 a 65535.');
   const port = typeof o.port === 'number' ? o.port : undefined;
-  return clientId || port ? { ...(clientId ? { clientId } : {}), ...(port ? { port } : {}) } : undefined;
+  const scope = str(o.scope, 500, 'Scope OAuth', true)?.trim().split(/\s+/).filter(Boolean).join(' ');
+  if (scope && !/^[\x21-\x7e]+( [\x21-\x7e]+)*$/.test(scope)) throw new Error('Scope OAuth: parole separate da spazi, senza virgolette.');
+  return clientId || port || scope ? { ...(clientId ? { clientId } : {}), ...(port ? { port } : {}), ...(scope ? { scope } : {}) } : undefined;
 }
 
 /** The slot of a server's OAuth session in the secret file (never a def slot: masks() never shows it). */
 const OAUTH_KEY = 'oauth:session';
+/** The slot of an http server's OAuth client secret: bound to the address' origin like the session, encrypted like a
+ *  token, its mask only «set» (the secret's own characters are never shown), never in the definition. */
+const OAUTH_SECRET_KEY = OAUTH_SECRET_SLOT;
 const oauthBound = (def: McpServerDef): string => crypto.createHash('sha256').update(`oauth|${def.url ? new URL(def.url).origin : ''}`).digest('hex').slice(0, 32);
 
 function checkSlots(v: unknown, transport: 'stdio' | 'http'): McpSecretSlot[] {
@@ -239,6 +244,8 @@ export class McpServerStore {
       // the OAuth login stays while the address keeps its origin (ADR 0273)
       const login = old[OAUTH_KEY];
       if (login && def.transport === 'http' && login.bound === oauthBound(def)) kept[OAUTH_KEY] = login;
+      const clientSecret = old[OAUTH_SECRET_KEY];
+      if (clientSecret && def.transport === 'http' && clientSecret.bound === oauthBound(def)) kept[OAUTH_SECRET_KEY] = clientSecret;
       if (previousId) delete this.secrets[previousId];
       if (Object.keys(kept).length) this.secrets[def.id] = kept;
       this.saveSecrets();
@@ -309,7 +316,9 @@ export class McpServerStore {
   }
 
   setSecret(id: string, key: string, value: unknown): void {
-    const def = this.def(id), slot = def?.secrets.find(s => slotKey(s) === key);
+    const def = this.def(id);
+    if (key === OAUTH_SECRET_KEY) { this.setOAuthClientSecret(id, value); return; }
+    const slot = def?.secrets.find(s => slotKey(s) === key);
     if (!def || !slot) throw new Error('Token sconosciuto.');
     const why = this.cipher.unavailable();
     if (why) throw new Error(`Token non salvato: ${why}.`);
@@ -353,6 +362,32 @@ export class McpServerStore {
     this.saveSecrets();
   }
   deleteOAuthSession(id: string): void { this.deleteSecret(id, OAUTH_KEY); }
+
+  /** The OAuth client secret of an http server (a Google «Desktop» client, say), encrypted like a token. */
+  private setOAuthClientSecret(id: string, value: unknown): void {
+    const def = this.def(id);
+    if (!def || def.transport !== 'http') throw new Error('Il Client secret vale solo per un server remoto.');
+    const why = this.cipher.unavailable();
+    if (why) throw new Error(`Client secret non salvato: ${why}.`);
+    const v = typeof value === 'string' ? value.trim() : '';
+    if (!v || v.length > 512 || /[\s\0]/.test(v)) throw new Error('Il Client secret è vuoto, troppo lungo o contiene spazi.');
+    addRedaction(v);
+    this.secrets[id] = { ...this.secrets[id], [OAUTH_SECRET_KEY]: { cipher: this.cipher.encrypt(v).toString('base64'), mask: 'set', bound: oauthBound(def) } };
+    this.saveSecrets();
+    log.info('mcp-servers', 'MCP OAuth client secret saved', { data: { server: id } });
+  }
+  /** The flag the card shows: a client secret is saved (no decryption, no mask of the secret). */
+  oauthSecretSet(id: string): boolean {
+    const def = this.def(id), s = this.secrets[id]?.[OAUTH_SECRET_KEY];
+    return !!def && !!s && s.bound === oauthBound(def);
+  }
+  /** Main only, right before «Accedi»: the client secret, or null (none, moved, or not decryptable). */
+  oauthClientSecret(id: string): string | null {
+    const def = this.def(id), s = this.secrets[id]?.[OAUTH_SECRET_KEY];
+    if (!def || !s || s.bound !== oauthBound(def) || this.cipher.unavailable()) return null;
+    try { const v = this.cipher.decrypt(Buffer.from(s.cipher, 'base64')); addRedaction(v); return v; }
+    catch (e) { log.warn('mcp-servers', 'MCP OAuth client secret could not be decrypted', { data: { server: id }, cause: (e as Error).message, hint: 'type the Client secret again in Impostazioni → Connettori' }); return null; }
+  }
 
   /** Main only, right before the gateway opens the server: the token, or null (missing, moved, or not decryptable). */
   secret(id: string, slot: McpSecretSlot): string | null {

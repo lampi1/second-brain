@@ -126,7 +126,7 @@ export class McpServersService {
   /** The servers as the cards show them, without asking the OS keyring whether it works: the top bar's chip reads this
    *  at start (ADR 0349), and on macOS that question can reach the Keychain before the user opened anything. */
   views(): McpServerView[] {
-    return this.store.servers().map(s => ({ ...s, secretMasks: this.store.masks(s.id), lastTest: this.store.test(s.id), login: s.transport === 'http' ? this.store.oauthLabel(s.id) : null }));
+    return this.store.servers().map(s => ({ ...s, secretMasks: this.store.masks(s.id), lastTest: this.store.test(s.id), login: s.transport === 'http' ? this.store.oauthLabel(s.id) : null, ...(s.transport === 'http' ? { oauthSecretSet: this.store.oauthSecretSet(s.id) } : {}) }));
   }
 
   state(): McpServersState {
@@ -281,7 +281,7 @@ export class McpServersService {
     if (def.awaiting) throw new Error(`«${def.label}» aspetta «Attiva»: attivalo prima dalla sua scheda.`);
     const why = this.store.secretsAvailable();
     if (why) throw new Error(`Accesso non salvabile: ${why}.`);
-    try { await this.oauth.login(def.id, def.url, def.oauth ?? {}, { ...def.headers }); }
+    try { await this.oauth.login(def.id, def.url, { ...def.oauth, ...(def.oauth?.clientId ? { clientSecret: this.store.oauthClientSecret(def.id) ?? undefined } : {}) }, { ...def.headers }); }
     catch (e) { log.warn('mcp-servers', 'MCP OAuth login failed', { data: { server: def.id }, cause: errText(e) }); const d = describeError(e); throw new Error(`${d.message} ${d.fix}`); }
     this.changed(def.id);
     return this.test(def.id);

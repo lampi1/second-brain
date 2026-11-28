@@ -5,7 +5,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { defOf, emptyForm, formOf, hubTotals, monogram, rolesWith, runsAs, serverStatus } from '../../../src/renderer/lib/mcp-servers';
-import { HubTotalsRow, ServerCard } from '../../../src/renderer/components/ConnectorsHub';
+import { HubTotalsRow, ServerCard, ServerEditor } from '../../../src/renderer/components/ConnectorsHub';
 import type { McpServerView, McpServersState } from '../../../src/shared/mcp-servers';
 import { setLang } from '../../../src/renderer/i18n';
 import { connectorsEn } from '../../../src/renderer/i18n/areas/connectors.en';
@@ -62,6 +62,24 @@ describe('cards', () => {
     expect(serverStatus({ ...broken, secretMasks: { 'header:Authorization': null }, login: { who: null, at: 1 } })).toBe('failed');
     expect(defOf({ ...formOf(broken), oauthClientId: 'second-brain', oauthPort: '8765' }, broken).oauth).toEqual({ clientId: 'second-brain', port: 8765 });
     expect(formOf({ ...broken, oauth: { clientId: 'x' } })).toMatchObject({ oauthClientId: 'x', oauthPort: '' });
+  });
+  it('OAuth client secret (ADR 0373): a write-only password box, «Salvato» when set, never in the definition; the scope round-trips', () => {
+    const editor = (server: McpServerView) => renderToStaticMarkup(createElement(ServerEditor, { server, onDone() {} }));
+    const none = editor(broken);
+    expect(none).toContain('Client secret OAuth');
+    expect(none).toContain('data-testid="hub-oauth-secret"');
+    expect(none).toContain('placeholder="Nessun secret"');
+    expect(none).not.toContain('hub-oauth-secret-state');
+    const set = editor({ ...broken, oauthSecretSet: true });
+    expect(set).toContain('placeholder="Salvato: scrivi per sostituirlo"');
+    expect(set).toContain('data-testid="hub-oauth-secret-state"');
+    expect(set).toContain('>Rimuovi<');
+    expect(set).toMatch(/<input[^>]*type="password"[^>]*value=""/);
+    const withScope = { ...broken, oauth: { clientId: 'cid', scope: 'https://www.googleapis.com/auth/gmail.readonly' } };
+    expect(formOf(withScope)).toMatchObject({ oauthClientId: 'cid', oauthScope: 'https://www.googleapis.com/auth/gmail.readonly' });
+    const def = defOf(formOf(withScope), withScope);
+    expect(def.oauth).toEqual({ clientId: 'cid', scope: 'https://www.googleapis.com/auth/gmail.readonly' });
+    expect(JSON.stringify(def)).not.toMatch(/clientSecret|client-secret/i);
   });
   it('a working server splits its tools; the totals explain themselves; English too', () => {
     expect(card(ok)).toContain('1 lettura · 1 scrittura');

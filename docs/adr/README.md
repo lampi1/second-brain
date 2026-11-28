@@ -263,7 +263,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0269](0269-questions-live-in-the-orchestrator.md) Questions live in the Orchestrator; it speaks for the user — accepted; amended by 0274, 0275, 0327
 - [0270](0270-short-recap-by-default.md) The recap is short by default; the detail on request — accepted
 - [0272](0272-esegui-precheck.md) Esegui commands are checked before the user sees them — accepted
-- [0273](0273-mcp-oauth-login.md) Remote MCP connectors log in with the MCP OAuth flow — accepted
+- [0273](0273-mcp-oauth-login.md) Remote MCP connectors log in with the MCP OAuth flow — accepted; amended by 0373
 - [0274](0274-answers-in-the-users-words.md) The user answers in his own words; the Orchestrator's column has no answer box — accepted; amended by 0275, 0327, 0329
 - [0275](0275-orchestrator-counts-as-the-user.md) What the Orchestrator says counts as the user's own, always; the project maps take «Stato»'s place — accepted
 - [0277](0277-brain-documents-in-the-brain-rules-skill.md) The brain tools find the brain's own documents at the root or in the `brain-rules` skill — accepted
@@ -345,6 +345,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0370](0370-small-brain-edits-and-broken-connectors.md) The Orchestrator applies small brain edits itself; a connector that keeps failing is held back with one notice — accepted
 - [0371](0371-agent-communication-after-the-26-nov-update.md) Agent communication after the 26 Nov update: his words count, tools right the first time, short messages, told when done — accepted
 - [0372](0372-a-plan-passes-from-one-strategist-to-another.md) A plan passes from one Strategist to another, and widens on the way — accepted
+- [0373](0373-mcp-oauth-client-secret.md) A remote connector's OAuth client can carry a secret and a pinned scope (Google's Gmail MCP) — accepted; amends 0273
 
 ## Replaced
 
